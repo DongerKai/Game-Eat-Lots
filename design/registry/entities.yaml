@@ -123,7 +123,22 @@ items: []
 #   output_range[min, max], added
 # Optional: expression (the actual formula), notes
 
-formulas: []
+formulas:
+  - name: valid_record_set
+    status: active
+    source: design/gdd/data-config.md
+    referenced_by:
+      - design/gdd/data-config.md
+    variables:
+      - D_dish
+      - D_upg
+      - D_sta
+      - TAGSET
+    output_range: [0, 1]
+    expression: "uniqueIds(D_dish) and uniqueIds(D_upg) and uniqueIds(D_sta) and all R_dish and all R_upg and all R_sta"
+    notes: "Boolean validity predicate over the three record sets. 1 = valid (game starts); 0 = blocked. Per-record predicates R_dish / R_upg / R_sta are defined in the source GDD."
+    added: "2026-11-03"
+    revised: ""
 
 # Example:
 #
