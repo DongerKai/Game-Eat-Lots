@@ -26,7 +26,7 @@
 
 1. **职责边界** — 本系统拥有：钱包的加减与正负策略、升级价格曲线与等级上限的**数值语义**、等级到本局修正值的解析、购买事务的顺序与回滚、升级目录的展示数据。它不拥有：净利与回本判定（结算与入场费）、持久化与事务原子性（存档）、`UpgradeData` 的 schema 与校验（数据配置）、容量的基础值与消耗（胃容量）、腻度计数的维护（腻度与口味）、波次划分与预览上限（菜单波次）、档口解锁费用（解锁与档口）、纪录排名（纪录与里程碑）、界面绘制（界面流程）。
 
-2. **钱包只有两条流水** — `progression.wallet` 是 int64，MVP 只允许两种变化：一局结算的 `net_profit` 入账，一次升级购买扣款。没有任何系统可以直接改写钱包；没有利息、签到、每日奖励、破产救济或入场门槛。任何新的钱包流水（例如 Vertical Slice 的档口解锁扣款）都必须先在本 GDD 增加一个事务接口，再实现；不得由下游自行扣款。
+2. **钱包只有三条流水** — `progression.wallet` 是 int64，只允许三种变化：一局结算的 `net_profit` 入账、一次升级购买扣款、一次档口解锁扣款（`spend(amount, reason, extra)`，由 #13 调用）。没有任何系统可以直接改写钱包；没有利息、签到、每日奖励、破产救济或入场门槛。任何新的钱包流水都必须先在本 GDD 增加一个事务接口，再实现；不得由下游自行扣款。
 
 3. **负净利原样扣款，钱包可以为负** — 入账规则是 `wallet' = wallet + net_profit`，不取 0、不取绝对值、不做「只奖不罚」。**这是对结算 Open Question 1 的回答。** 理由：入场费 85 是本作唯一的价格压力；如果亏损被吞掉，回本与否就退化成两个数字的装饰，支柱 1（每口都是算术题）与收据上的亏损栏都会失去意义。代价是玩家可能负资产——这在机制上是合法的：没有入场门槛（结算规则 4），负钱包只意味着买不起升级，而不是不能继续玩。
 
@@ -101,7 +101,7 @@
 | 胃容量 | 下游 | 消费 `capacity_bonus`，加到基础容量上 | 硬 |
 | 菜单波次 | 下游 | 消费 `menu_vision` 作为总预览额度；上限由它执行 | 软（强） |
 | 腻度与口味 | 下游 | 消费 `cloying_resistance`；按规则 16 的表达式生效 | 硬 |
-| 解锁与档口 | 下游 | 读取钱包与等级作为解锁前置；`unlock_cost` 的扣款须经本系统的 spend 事务（接口在 #13 GDD 定义，MVP 不实现） | 软 |
+| 解锁与档口 | 下游 | 读取钱包与等级作为解锁前置；`unlock_cost` 的扣款经 `spend(amount, reason, extra)`（GDD 已写：`design/gdd/unlocks-and-stations.md`） | 软 |
 | 纪录与里程碑 | 下游 | 从 `RunResult.upgrade_snapshot.levels` 冻结历史等级；排名规则不归本系统 | 软 |
 | 首局引导 | 下游 | 读取价格与可负担性，可推荐第一笔升级；不得自动购买 | 软 |
 | 音效反馈 | 下游 | `purchase_succeeded`、`purchase_failed`、`run_result_applied` 事件 | 软 |
@@ -118,6 +118,7 @@
 | `next_price(id)` | 升级 id | int \| null | 已达上限或未知 id 返回 `null` |
 | `can_purchase(id)` | 升级 id | `{ok, reason}` | 只校验，不改状态；顺序见 Edge Cases |
 | `purchase(id)` | 升级 id | `PurchaseResult` | 事务；成功后磁盘已更新 |
+| `spend(amount, reason, extra)` | 金额 int64、原因枚举、额外上下文 | `SpendResult` | 通用扣款事务，用于档口解锁。与购买一样先落盘再确认；`amount < 0` 立即拒绝 |
 | `apply_run_result(result)` | `RunResult` | `ApplyResult` | 每局一次；内存 → commit → 返回 |
 | `resolve_upgrade_snapshot()` | — | `Dictionary` | 含三个已解析值 + `levels` 副本；每次返回新副本 |
 | `get_catalog()` | — | 升级视图数组 | 供升级页渲染：当前等级、当前效果、下一效果、下一价格 |
@@ -345,8 +346,8 @@ The `menu_vision_useful_max` formula is defined as:
 | 胃容量 | 硬 | `capacity_bonus` 加到基础容量 | GDD 已写（`design/gdd/stomach-capacity.md`） |
 | 菜单波次 | 软（强） | `menu_vision` 作为总预览额度；上限由它执行 | GDD 已写（`design/gdd/menu-waves.md`） |
 | 腻度与口味 | 硬 | `cloying_resistance`；需按本 GDD 规则 16 的表达式接入 | GDD 已写（`design/gdd/cloying-and-taste.md`，公式尚未含抗性项） |
-| 界面流程 | 硬（UI） | 升级页、收据入账、钱包与「未保存」状态 | GDD 未写 |
-| 解锁与档口 | 软 | 读取钱包与等级作为解锁前置；`unlock_cost` 扣款须经本系统的 spend 事务（接口由 #13 定义，MVP 不实现） | GDD 未写 |
+| 界面流程 | 硬（UI） | 升级页、收据入账、钱包与「未保存」状态 | GDD 已写（`design/gdd/ui-flow.md`） |
+| 解锁与档口 | 软 | 读取钱包与等级作为解锁前置；`unlock_cost` 扣款经 `spend(amount, reason, extra)` | GDD 已写（`design/gdd/unlocks-and-stations.md`） |
 | 纪录与里程碑 | 软 | 从 `upgrade_snapshot.levels` 冻结历史等级 | GDD 已写（`design/gdd/records-and-milestones.md`） |
 | 首局引导 | 软 | 价格与可负担性；可推荐、不可自动购买 | GDD 未写 |
 | 音效反馈 | 软 | `purchase_succeeded` / `purchase_failed` / `run_result_applied` | GDD 已写（`design/gdd/audio-feedback.md`） |
@@ -431,7 +432,7 @@ The `menu_vision_useful_max` formula is defined as:
 | `design/gdd/game-concept.md` | 来源 | MVP 三项升级、会话级停点、长期成长与「数字看得见地涨」 |
 | `design/gdd/systems-index.md` | 索引 | 优先级 MVP、层 Feature、设计顺序 #11、依赖 `结算与入场费 / 存档 / 数据配置` |
 
-**待回指**：界面流程、解锁与档口、首局引导的 GDD 写好后，必须在各自的 Dependencies 与 Cross-References 中列出「局外升级」，并写明「只消费快照，不重算等级」。胃容量、纪录与里程碑、音效反馈已回指。
+**待回指**：界面流程、首局引导的 GDD 写好后，必须在各自的 Dependencies 与 Cross-References 中列出「局外升级」，并写明「只消费快照，不重算等级」。胃容量、纪录与里程碑、音效反馈、解锁与档口已回指。
 
 ## Acceptance Criteria
 
@@ -497,4 +498,4 @@ The `menu_vision_useful_max` formula is defined as:
 | 8 | **`last_applied_run_id` 不持久化。** 会话级去重依赖结算的「每局一次」保证；若未来加入局史或断线续跑，需要把它写进存档，并走 schema 迁移。 | lead-programmer（存档） | 纪录与里程碑 GDD 完成时 |
 | 9 | **价格增长率是否需要按升级分别配置？已解决（2026-11-03）**：给 `UpgradeData` 增加 `cost_growth: float`（默认 1.35），每条记录自带增长率；MVP 三项均为 1.35。需数据配置 GDD 回改该字段。 | systems-designer + lead-programmer | 数据配置回改时 |
 | 10 | **升级页在会话中的位置。** 当前只从 `Menu` 进入，且收据后自然引导；是否允许玩家在任意菜单停留点打开升级页，由界面流程决定，不影响本系统事务。 | ux-designer（界面流程） | 界面流程 GDD 完成时 |
-| 11 | **档口解锁的扣款接口。** 钱包只能由本系统写，但 #13 需要扣 `unlock_cost`。需要在 #13 GDD 定义并回写到本 GDD（例如 `spend_for_unlock(station_id)`，同样先落盘再确认），而不是让 #13 直接改钱包。 | systems-designer（解锁与档口） | 解锁与档口 GDD 完成时 |
+| 11 | **档口解锁的扣款接口。** **已回答（2026-11-03）**：采用通用 `spend(amount, reason, extra)`，与购买一样先落盘再确认；见 `design/gdd/unlocks-and-stations.md`。 | systems-designer（解锁与档口） | 解锁与档口 GDD 完成时 |

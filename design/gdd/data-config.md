@@ -52,7 +52,7 @@
    - `turn_budget: int` — ≥ 1（本局允许的回合数，由「时间与回合」消费；归属见其 Open Question 2）
    - `wave_size: int` — ≥ 1，默认 4（每波菜数，由「菜单波次」消费）
 6. **id 是契约**：按类型命名空间隔离（`dish_*` / `upgrade_*` / `station_*`）。发布后不得改名——改名等于删除旧记录并新增，会让存档失效。
-7. **启动即校验**：加载全部记录 → 校验 → 建立目录 → Ready。任一规则失败就停在这里，不进入游戏。
+7. **启动即校验**：加载全部记录 → 校验 → 建立目录 → Ready。任一规则失败就停在这里，不进入游戏。建议增加一条：至少存在一个 `unlock_cost = 0` 的档口；当前由「解锁与档口」在运行期兜底（`NoPlayableStation`）。
 8. **运行时只读**：局内状态（当前饱腹、净利、剩余时间格）属于餐局流程，任何系统都不得写回数据记录。
 9. **查询走目录**：下游系统通过 `get_dish(id)` / `get_upgrade(id)` / `get_station(id)` 取记录；不得自行扫描资源目录或按文件名猜测。
 
@@ -168,17 +168,19 @@ The `valid_record_set` formula is defined as:
 |---|---|---|---|
 | 菜品数值 | 硬 | `get_dish(id)` → `price`、`satiety`、`taste_tags`、`cloying_group` | GDD 已写（`design/gdd/dish-values.md`） |
 | 腻度与口味 | 硬 | `get_dish(id)` → `taste_tags`、`cloying_group`；`get_station(id)` → `cloy_cap` | GDD 已写（`design/gdd/cloying-and-taste.md`） |
-| 菜单波次 | 硬（VS） | `get_station(id)` → `dish_pool` | GDD 未写 |
+| 菜单波次 | 硬（VS） | `get_station(id)` → `dish_pool` | GDD 已写（`design/gdd/menu-waves.md`） |
 | 局外升级 | 硬 | `get_upgrade(id)` → 全部字段（含 `cost_growth`） | GDD 已写（`design/gdd/meta-upgrades.md`） |
 | 餐局流程 | 硬 | `get_station(id)` 解析 `station_id`；`entry_fee` 由结算读取 | GDD 已写（`design/gdd/run-flow.md`） |
 | 存档 | 硬 | 持久化 id 与等级/数值；读取时不信任存档里的数值快照 | GDD 已写（`design/gdd/save-system.md`） |
 | 时间与回合 | 硬 | `StationData.turn_budget`（新增字段，int ≥ 1）；本系统不在运行时被查询 | GDD 已写（`design/gdd/time-and-turns.md`） |
 | 胃容量 | 硬 | `BalanceData.base_capacity`（C0 = 20，字段归属见胃容量 Open Question 1）；`UpgradeData.STOMACH_CAPACITY` | GDD 已写（`design/gdd/stomach-capacity.md`） |
 | 纪录与里程碑 | 硬 | `MilestoneData` 目录（第四类记录，归属见纪录 Open Question 2）；`get_station(id)` → `display_name` | GDD 已写（`design/gdd/records-and-milestones.md`） |
+| 解锁与档口 | 硬 | `get_station(id)` → `unlock_cost`、`dish_pool`；`get_dish(id)` 存在性；建议启动校验「至少一个 `unlock_cost = 0` 的档口」 | GDD 已写（`design/gdd/unlocks-and-stations.md`） |
+| 界面流程 | 硬（显示只读） | `StationData.display_name` / `entry_fee`、里程碑目录；只用于显示，不参与玩法判定 | GDD 已写（`design/gdd/ui-flow.md`） |
 | 局内 HUD | 软（间接） | 通过菜品数值/时间与回合取得数字，不直接读 catalog | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 场景与流程管理 | 硬 | `Boot` 期读取加载与校验的最终结果（`Ready` / `Failed`），决定进入 Menu 还是 Error | GDD 已写 |
 
-**双向一致要求**：以上每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「数据配置」为上游依赖。目前场景与流程管理、菜品数值、腻度与口味、菜单波次、餐局流程、存档、时间与回合、胃容量、纪录与里程碑的 GDD 已完成并已列出本系统；其余系统仍待设计，此要求记录在此供后续核对。
+**双向一致要求**：以上每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「数据配置」为上游依赖。以上下游系统的 GDD 均已完成并已列出本系统。
 
 ## Visual/Audio Requirements
 
@@ -197,7 +199,7 @@ The `valid_record_set` formula is defined as:
 
 ## Cross-References
 
-**None — this system references no other GDD.** 数据配置是最先设计的系统。场景与流程管理、菜品数值、腻度与口味、菜单波次、餐局流程、存档、时间与回合、胃容量、纪录与里程碑的 GDD 已完成并已在 Cross-References 中回指本系统；其余下游系统（局外升级、局内 HUD）在各自 GDD 写好后，需要把「数据配置」列回 Cross-References，届时在此表补充。
+**None — this system references no other GDD.** 数据配置是最先设计的系统。以上下游系统的 GDD 均已完成，并已在各自的 Cross-References 中回指本系统。
 
 ## Acceptance Criteria
 

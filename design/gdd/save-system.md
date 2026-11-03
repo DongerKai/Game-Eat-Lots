@@ -248,7 +248,7 @@ The `slots_available` formula is defined as:
 - **If 玩家删除生涯**：二次确认后隔离旧文件、建立新档；设置文件不受影响。没有确认令牌的删除请求被拒绝。
 - **If 玩家重置设置**：生涯档不受影响；设置与生涯是两个文件。
 - **If 一局被放弃、进入失败或局中退出**：不产生任何写入；存档与进入本局前逐字段相同。
-- **If 同一帧内先结算、后解锁**：合并为同一事务写入一次；要么全部生效，要么全部不生效。写入进行中到达的第二个事务排队，不交错。
+- **If 同一帧内先结算、后解锁**：仅当**结算本身**产生解锁变化时合并为同一事务；MVP/VS 中解锁只在菜单购买、且收据在结算 `commit` 之后才显示，因此两笔事务串行，不合并。其余情形按到达顺序串行写入，不交错。
 - **If 数据配置尚未 `Ready` 就调用 `load()`**：返回结构化错误 `DataNotReady`，不读写任何文件。调用方负责在 `Ready` 之后调用。
 - **If 玩家手工编辑存档**：按普通结构校验处理，不做防篡改。类型合法的新数值被接受（单机信任模型，Core Rule 25）；结构不合法走损坏路径，旧文件仍被保留。
 
@@ -265,10 +265,10 @@ The `slots_available` formula is defined as:
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
 | 局外升级 | 硬 | 拥有 `progression`（`wallet`、`upgrade_levels`）；把算完的新值经 `commit` 提交；钱包策略（正负、上下限）由它拥有 | GDD 已写（`design/gdd/meta-upgrades.md`）；入账写盘失败时 `progression` 可进入 dirty 并在下次 `flush` 重试（与购买事务的回滚策略不同） |
-| 解锁与档口 | 硬 | 拥有 `unlocks`（`stations`、`dishes`）；解锁条件、免费档口、删除条件由它拥有 | GDD 未写 |
+| 解锁与档口 | 硬 | 拥有 `unlocks`（`stations`、`dishes`）；解锁条件、免费档口、删除条件由它拥有 | GDD 已写（`design/gdd/unlocks-and-stations.md`）；空集合由它在载入后回填，标记 dirty，下一次写入时点落盘 |
 | 纪录与里程碑 | 硬 | 拥有 `records`；字段语义、排名规则、里程碑判定由它拥有；存档只提供存储与原子性 | GDD 已写（`design/gdd/records-and-milestones.md`） |
 | 在线挑战 | 软 | 拥有 `challenges`；MVP 不存在，随 schema 迁移加入；不得把本地存档当作可信排行榜数据 | GDD 未写 |
-| 界面流程 | 硬（UI） | 读取 `LoadReport` / `SaveStatus` 显示保存指示、恢复说明与 `Blocked` 提示；发起删除生涯请求 | GDD 未写 |
+| 界面流程 | 硬（UI） | 读取 `LoadReport` / `SaveStatus` 显示保存指示、恢复说明与 `Blocked` 提示；发起删除生涯请求 | GDD 已写（`design/gdd/ui-flow.md`） |
 
 **不属于依赖的关系：**
 
@@ -277,10 +277,10 @@ The `slots_available` formula is defined as:
 
 **双向一致要求**：以上每个下游系统在编写自己的 GDD 时，必须在 Dependencies 中列出「存档」为上游依赖，并写明它只通过命名空间提交、不自行写文件。目前需要回改状态的已有文档：
 
-- `data-config.md` 的下游表中「存档」一行仍为「GDD 未写」。
-- `settlement-and-entry-fee.md` 的下游表中「存档」一行仍为「GDD 未写」（软）。
-- `cloying-and-taste.md` 的「存档」条件行仍为「GDD 未写」，其 Open Question 8（中途存档格式）由本 GDD 回答：MVP 不启用，格式延后。
-- `menu-waves.md` 的「存档」条件行仍为「GDD 未写」，其 Open Question 7（种子是否持久化）由本 GDD 回答：MVP 不保存单局种子。
+- `data-config.md` 的「存档」行已回改为「GDD 已写」。
+- `settlement-and-entry-fee.md` 的「存档」行已回改为「GDD 已写（软）」。
+- `cloying-and-taste.md` 的「存档」条件行已回改；其 Open Question 8 已标记已回答（MVP 不启用中途存档）。
+- `menu-waves.md` 的「存档」条件行已回改；其 Open Question 7 已标记已回答（MVP 不保存单局种子）。
 
 **对未设计系统的前置契约（provisional）：**
 
@@ -337,7 +337,7 @@ The `slots_available` formula is defined as:
 | `design/gdd/game-concept.md` | 来源 | 长期成长「已投入的升级与纪录」、会话级停点、单机无网络 |
 | `design/gdd/systems-index.md` | 索引 | 优先级 MVP、层 Core、设计顺序 #4、下游清单 |
 
-**待回指**：局外升级、解锁与档口、纪录与里程碑、在线挑战、界面流程的 GDD 写好后，必须在各自的 Dependencies 与 Cross-References 中列出「存档」，并写明只经命名空间提交、不自行写文件。
+**待回指**：在线挑战的 GDD 写好后，必须在 Dependencies 与 Cross-References 中列出「存档」，并写明只经命名空间提交、不自行写文件。局外升级、解锁与档口、纪录与里程碑、界面流程已回指。
 
 **待回改（不在本文件执行，交由编排会话统一处理）**：
 
@@ -371,7 +371,7 @@ The `slots_available` formula is defined as:
 
 11. **GIVEN** 已成功载入，**WHEN** 在写临时文件阶段注入失败，**THEN** 主档与备份的哈希均与操作前相同，临时文件被删除，`commit` 返回失败。
 12. **GIVEN** 已成功载入，**WHEN** 在「主档改名备份」之后、「临时文件改名主档」之前注入崩溃并重新启动，**THEN** `outcome = Recovered`，载入的是崩溃前的最后一次成功内容。
-13. **GIVEN** 一次结算同时更新钱包、纪录与解锁，**WHEN** 提交，**THEN** 磁盘上只发生一次事务写入；注入写失败时三者全部不生效，内存回到事务前。
+13. **GIVEN** 一次结算同时更新钱包、纪录与**由结算本身产生的**解锁，**WHEN** 提交，**THEN** 磁盘上只发生一次事务写入；注入写失败时三者全部不生效，内存回到事务前。MVP/VS 的菜单解锁是独立事务，不并入结算。
 14. **GIVEN** 一次购买成功后立即杀掉进程（不经过退出 flush），**WHEN** 重新启动，**THEN** 钱包与等级包含这次购买——购买在界面显示成功之前已经落盘。
 15. **GIVEN** 写盘因磁盘只读而失败，**WHEN** 发起购买，**THEN** 界面显示「未保存，购买未生效」，钱包与等级保持原值，下一次启动也保持原值。
 16. **GIVEN** 结算写盘失败，**WHEN** 查看本次结算页，**THEN** 纪录在界面上按新值显示并提示「纪录可能未保存」；下一次成功写入后，磁盘上的纪录与新值一致。

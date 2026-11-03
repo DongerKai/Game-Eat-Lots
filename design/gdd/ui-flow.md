@@ -435,7 +435,7 @@ The `displayed_value` formula is defined as:
 |---|---|---|---|
 | 音效反馈 | 硬（事件契约）/ 软（播放） | 消费 `ui_button_activated`、`number_roll_started/finished`、`receipt_closed`；消费 UI 设置值 | GDD 已写（双向：本系统也消费其设置契约） |
 | 首局引导（#18） | 软 | 在本系统控件上叠加讲解与高亮，可请求 `Blocked` 上下文；不得隐藏数字、不得改变屏幕流程 | GDD 未写 |
-| 解锁与档口（#13） | 软 | 将来在主菜单提供档口选择；MVP 单档口，无选择器 | GDD 未写 |
+| 解锁与档口（#13） | 软 | 将来在主菜单提供档口选择；MVP 单档口，无选择器 | GDD 已写（`design/gdd/unlocks-and-stations.md`） |
 
 **不属于依赖的关系：**
 
@@ -444,7 +444,7 @@ The `displayed_value` formula is defined as:
 - **存档与设置**：设置不进入生涯档，删除生涯不重置设置（`存档` 规则 20）。界面流程拥有设置模型，但不把设置写进生涯档。
 - **游戏概念**：来源文档，不是系统依赖。
 
-**双向一致（待编排会话处理，本文件不修改）**：`场景与流程管理`、`餐局流程`、`结算与入场费`、`局外升级`、`纪录与里程碑`、`存档`、`音效反馈`、`输入` 的下游表中均已有「界面流程」行，状态仍是「GDD 未写」，需改为「GDD 已写（`design/gdd/ui-flow.md`）」。`数据配置` 的下游表目前**没有**「界面流程」行，需要新增一行，注明「显示只读：`StationData.display_name` / `entry_fee`、里程碑目录」。`局内 HUD` 的协调行状态需从「GDD 未写」改为已写。`systems-index.md` 第 16 行需要更新 Design Doc、Status 与 `Depends On`（补 `纪录与里程碑`、`音效反馈`、`数据配置`）。
+**双向一致（已完成，2026-11-03）**：`场景与流程管理`、`餐局流程`、`结算与入场费`、`局外升级`、`纪录与里程碑`、`存档`、`音效反馈`、`输入` 的下游表均已有「界面流程」行并改为「GDD 已写（`design/gdd/ui-flow.md`）」；`数据配置` 已新增显示只读行；`局内 HUD` 的协调行已改为已写；`systems-index.md` 第 16 行已更新 Design Doc、Status 与 `Depends On`。
 
 ## Visual/Audio Requirements
 

@@ -293,7 +293,7 @@ The `transition_cost` rule is defined as:
 | 腻度与口味 | 硬 | `run_started` / `run_ended` 生命周期；吃下时 `extra_satiety`、`effective_satiety` | GDD 已写（Designed） |
 | 结算与入场费 | 硬（回调） | `settle(RunLog) → RunResult \| 结构化错误`；每局一次 | GDD 已写（Designed） |
 | 局内 HUD | 硬 | 只读本局快照与 `run_*` 信号；不得自行求和或判定结束 | GDD 已写（`design/gdd/in-game-hud.md`） |
-| 界面流程 | 硬 | 经场景与流程管理发出 `RunConfig`、接收 `RunResult`；重开时组装新 `RunConfig` | GDD 未写 |
+| 界面流程 | 硬 | 经场景与流程管理发出 `RunConfig`、接收 `RunResult`；重开时组装新 `RunConfig` | GDD 已写（`design/gdd/ui-flow.md`） |
 | 首局引导 | 软 | `is_first_run`、`pool_override`；可压入 Blocked 上下文 | GDD 未写 |
 | 音效反馈 | 软 | 订阅 `run_started` / `run_ended` / `run_settled` / `run_discarded` / `run_faulted`；`run_settled` 不产生独立 cue，声音由结算的三个事件承载 | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 存档 | 无直接调用 | MVP 无中途存档；局外升级与纪录由下游持久化 | GDD 已写（`design/gdd/save-system.md`） |

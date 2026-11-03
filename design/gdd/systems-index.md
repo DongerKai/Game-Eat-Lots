@@ -66,10 +66,10 @@ were found.
 | 10 | 菜单波次 | Gameplay | Vertical Slice | Designed | design/gdd/menu-waves.md | 菜品数值, 数据配置, 餐局流程 |
 | 11 | 结算与入场费 | Economy | MVP | Designed | design/gdd/settlement-and-entry-fee.md | 菜品数值, 腻度与口味, 胃容量, 时间与回合, 餐局流程 |
 | 12 | 局外升级 | Progression | MVP | Designed | design/gdd/meta-upgrades.md | 结算与入场费, 存档, 数据配置 |
-| 13 | 解锁与档口 | Progression | Vertical Slice | Not Started | — | 局外升级, 存档 |
+| 13 | 解锁与档口 | Progression | Vertical Slice | Designed | design/gdd/unlocks-and-stations.md | 局外升级, 存档, 数据配置 |
 | 14 | 纪录与里程碑 | Progression | Vertical Slice | Designed | design/gdd/records-and-milestones.md | 结算与入场费, 存档, 数据配置 |
 | 15 | 局内 HUD | UI | MVP | Designed | design/gdd/in-game-hud.md | 餐局流程, 时间与回合, 胃容量, 菜品数值, 输入, 结算与入场费, 腻度与口味, 菜单波次 |
-| 16 | 界面流程 | UI | MVP | Not Started | — | 餐局流程, 结算与入场费, 局外升级, 场景与流程管理, 输入, 存档 |
+| 16 | 界面流程 | UI | MVP | Designed | design/gdd/ui-flow.md | 餐局流程, 结算与入场费, 局外升级, 场景与流程管理, 输入, 存档, 纪录与里程碑, 音效反馈, 数据配置 |
 | 17 | 音效反馈 | Audio | Vertical Slice | Designed | design/gdd/audio-feedback.md | 餐局流程, 结算与入场费, 场景与流程管理 |
 | 18 | 首局引导 | Meta | Vertical Slice | Not Started | — | 餐局流程, 局内 HUD, 输入, 场景与流程管理, 菜品数值 |
 | 19 | 在线挑战 | Meta | Full Vision | Not Started | — | 结算与入场费, 存档 |
@@ -109,6 +109,12 @@ were found.
 >
 > 局外升级 imposes UI requirements on 界面流程（升级页、收据入账、钱包与「未保存」
 > 状态）。`/ux-design` must cover the upgrade screen before its epic is written.
+>
+> 解锁与档口 imposes UI requirements on 界面流程（档口选择页的锁定态、价格与差额、
+> 解锁确认、`COMMIT_FAILED` 提示、解锁进度）。`/ux-design` must cover them.
+>
+> 界面流程 owns the menu, receipt, upgrade, records, settings, pause and error screens;
+> `/ux-design` must cover each screen before its epic is written.
 
 ---
 
@@ -159,18 +165,18 @@ Vertical Slice tier, and the rest are Full Vision.
 
 ### Feature Layer (depends on core)
 
-1. **腻度与口味** — depends on: 菜品数值
-2. **菜单波次** — depends on: 菜品数值, 数据配置
-3. **结算与入场费** — depends on: 菜品数值, 腻度与口味, 胃容量, 时间与回合
+1. **腻度与口味** — depends on: 菜品数值, 餐局流程
+2. **菜单波次** — depends on: 菜品数值, 数据配置, 餐局流程
+3. **结算与入场费** — depends on: 菜品数值, 腻度与口味, 胃容量, 时间与回合, 餐局流程
 4. **局外升级** — depends on: 结算与入场费, 存档, 数据配置
-5. **解锁与档口** — depends on: 局外升级, 存档
-6. **纪录与里程碑** — depends on: 结算与入场费, 存档
+5. **解锁与档口** — depends on: 局外升级, 存档, 数据配置
+6. **纪录与里程碑** — depends on: 结算与入场费, 存档, 数据配置
 
 ### Presentation Layer (depends on features)
 
-1. **局内 HUD** — depends on: 餐局流程, 时间与回合, 胃容量, 菜品数值, 输入, 结算与入场费
-2. **界面流程** — depends on: 餐局流程, 结算与入场费, 局外升级, 场景与流程管理, 输入
-3. **音效反馈** — depends on: 餐局流程, 结算与入场费
+1. **局内 HUD** — depends on: 餐局流程, 时间与回合, 胃容量, 菜品数值, 输入, 结算与入场费, 腻度与口味, 菜单波次
+2. **界面流程** — depends on: 餐局流程, 结算与入场费, 局外升级, 场景与流程管理, 输入, 存档, 纪录与里程碑, 音效反馈, 数据配置
+3. **音效反馈** — depends on: 餐局流程, 结算与入场费, 场景与流程管理
 
 ### Polish Layer (depends on everything)
 
@@ -230,15 +236,15 @@ Vertical Slice tier, and the rest are Full Vision.
 | Metric | Count |
 |--------|-------|
 | Total systems identified | 20 |
-| Design docs started | 15 |
+| Design docs started | 17 |
 | Design docs reviewed | 2 |
 | Design docs approved | 1 |
 
 > 场景与流程管理于 2026-11-03 通过设计评审（Approved），随后补写了 Formulas 章节并在
 > 输入 GDD 中定名了上下文切换接口，两处都是评审后才出现的改动，因此状态回到 **In Review**
 > 等待复审。复审通过后改回 Approved。
-| MVP systems designed | 12/13 |
-| Vertical Slice systems designed | 3/5 |
+| MVP systems designed | 13/13 |
+| Vertical Slice systems designed | 4/5 |
 
 ---
 

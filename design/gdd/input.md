@@ -163,7 +163,7 @@ The `stick_engaged` formula is defined as:
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 界面流程 | 硬 | 导航、`ui_accept`、`ui_cancel`、初始焦点、双焦点状态 | GDD 未写 |
+| 界面流程 | 硬 | 导航、`ui_accept`、`ui_cancel`、初始焦点、双焦点状态 | GDD 已写（`design/gdd/ui-flow.md`） |
 | 餐局流程 | 硬 | 每回合的 `ui_accept`、`game_skip_dish`、`ui_pause` | GDD 已写（`design/gdd/run-flow.md`） |
 | 局内 HUD | 硬 | 菜品卡的悬停、点击、右键 | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 首局引导 | 软 | 请求 Blocked 上下文，只放行指定动作 | GDD 未写 |

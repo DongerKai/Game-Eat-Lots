@@ -357,7 +357,7 @@ The `duck_db` formula is defined as:
 | 系统 | 硬 / 软 | 接口 | 状态 |
 |---|---|---|---|
 | 局内 HUD（#15） | 软 | 必须发出 `dish_action_rejected(reason)`、`number_roll_started(field, from, to, duration_ms)`、`number_roll_finished(field, skipped: bool)`；不得直接调用音频内部接口 | GDD 已写（`design/gdd/in-game-hud.md`） |
-| 界面流程（#16） | 软 | 必须发出 `ui_button_activated(control_id)`、收据的 `number_roll_started/finished`、收据关闭通知；拥有主音量 / 音效音量 / 静音 / “减少重复音效”设置 | GDD 未写 |
+| 界面流程（#16） | 软 | 必须发出 `ui_button_activated(control_id)`、收据的 `number_roll_started/finished`、收据关闭通知；拥有主音量 / 音效音量 / 静音 / “减少重复音效”设置 | GDD 已写（`design/gdd/ui-flow.md`） |
 
 **对未设计系统的前置契约（provisional）：**
 

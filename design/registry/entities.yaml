@@ -447,6 +447,7 @@ formulas:
       - design/gdd/cloying-and-taste.md
       - design/gdd/menu-waves.md
       - design/gdd/meta-upgrades.md
+      - design/gdd/unlocks-and-stations.md
     variables:
       - M
       - C
@@ -610,6 +611,7 @@ formulas:
     referenced_by:
       - design/gdd/settlement-and-entry-fee.md
       - design/gdd/meta-upgrades.md
+      - design/gdd/unlocks-and-stations.md
     variables:
       - total_value
       - entry_fee
@@ -994,6 +996,98 @@ formulas:
     output_range: [0, 7]
     expression: "ceil((wave_size(s) - 1) / u.effect_value)"
     notes: "Highest level that still adds preview for a station. Buying past it is rejected as NO_EFFECT; menu-waves still clamps the actual preview."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: station_available
+    status: active
+    source: design/gdd/unlocks-and-stations.md
+    referenced_by:
+      - design/gdd/unlocks-and-stations.md
+      - design/gdd/ui-flow.md
+    variables:
+      - s.unlock_cost
+      - s.id
+      - U.stations
+    output_range: "true | false"
+    expression: "(s.unlock_cost = 0) or (s.id in U.stations)"
+    notes: "A station is playable when it is free or explicitly unlocked. Unknown ids are rejected before this formula."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: effective_unlocks
+    status: active
+    source: design/gdd/unlocks-and-stations.md
+    referenced_by:
+      - design/gdd/unlocks-and-stations.md
+      - design/gdd/save-system.md
+    variables:
+      - U
+      - S
+    output_range: "stations[] + dishes[]"
+    expression: "S_eff = S_free + {s in S : s.id in U.stations}; stations = sort(ids(S_eff) + (U.stations - S_ids)); dishes = sort(U.dishes + union(dish_pool of S_eff))"
+    notes: "Normalizes the unlock set and backfills free stations/dishes. Monotonic: never removes an id. Unknown ids are preserved."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: unlock_decision
+    status: active
+    source: design/gdd/unlocks-and-stations.md
+    referenced_by:
+      - design/gdd/unlocks-and-stations.md
+      - design/gdd/ui-flow.md
+    variables:
+      - s.unlock_cost
+      - U
+      - L
+      - wallet
+    output_range: "OK | ALREADY_UNLOCKED | PREREQUISITE_LOCKED | INSUFFICIENT_FUNDS | INVALID_STATION_DATA"
+    expression: "INVALID_STATION_DATA if s.unlock_cost < 0; ALREADY_UNLOCKED if station_available; PREREQUISITE_LOCKED if any requires(s) level < 1; INSUFFICIENT_FUNDS if wallet < s.unlock_cost; else OK"
+    notes: "INVALID_STATION_DATA must precede INSUFFICIENT_FUNDS so a negative price can never reach spend(). requires(s) is empty until StationData.unlock_requires exists."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: station_unlock_cost
+    status: active
+    source: design/gdd/unlocks-and-stations.md
+    referenced_by:
+      - design/gdd/unlocks-and-stations.md
+      - design/gdd/meta-upgrades.md
+    variables:
+      - s.unlock_cost
+    output_range: [0, 2147483647]
+    expression: "station_unlock_cost(s) = s.unlock_cost"
+    notes: "One-time price; no level, count or state input. Free stations never reach the purchase path."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: runs_to_unlock
+    status: active
+    source: design/gdd/unlocks-and-stations.md
+    referenced_by:
+      - design/gdd/unlocks-and-stations.md
+    variables:
+      - s.unlock_cost
+      - opt_net_profit(p)
+    output_range: "0..INT32_MAX | null"
+    expression: "null if opt_net_profit(p) <= 0 else ceil(s.unlock_cost / opt_net_profit(p))"
+    notes: "Design-time pacing only. Target band 4-8 runs. opt_net_profit(p) = opt_value(p) - entry_fee; MVP 104 - 85 = 19."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: unlock_progress
+    status: active
+    source: design/gdd/unlocks-and-stations.md
+    referenced_by:
+      - design/gdd/unlocks-and-stations.md
+      - design/gdd/ui-flow.md
+    variables:
+      - U
+      - S
+      - D
+    output_range: "stations/stations_total + dishes/dishes_total"
+    expression: "S_eff = {s in S : s.unlock_cost = 0 or s.id in U.stations}; stations=|S_eff|, stations_total=|S|, dishes=sum(|s.dish_pool| for s in S_eff), dishes_total=|D|"
+    notes: "Display counters. An empty station list yields NoPlayableStation; the UI shows that error instead of 0/0."
     added: "2026-11-03"
     revised: ""
 

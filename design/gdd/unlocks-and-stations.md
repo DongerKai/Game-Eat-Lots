@@ -363,7 +363,7 @@ unlock_progress(U, S) =
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 界面流程 | 硬（UI） | 档口目录与锁定原因、`can_unlock` / `unlock`、解锁进度、档口选择 | GDD 未写 |
+| 界面流程 | 硬（UI） | 档口目录与锁定原因、`can_unlock` / `unlock`、解锁进度、档口选择 | GDD 已写（`design/gdd/ui-flow.md`） |
 | 餐局流程 | 软（协调） | 界面流程只传可用档口；现有 `station_id` 存在性校验不构成授权校验 | GDD 已写（`design/gdd/run-flow.md`） |
 | 菜单波次 | 软（间接） | 读所选档口的 `dish_pool`；本设计下无需过滤 | GDD 已写（`design/gdd/menu-waves.md`） |
 | 纪录与里程碑 | 软 | 解锁进度用于展示；按 `station_id` 归档；不发放解锁 | GDD 已写（`design/gdd/records-and-milestones.md`） |
@@ -371,7 +371,7 @@ unlock_progress(U, S) =
 | 音效反馈 | 软 | 无直接调用；解锁音效（若有）由界面流程触发 | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 场景与流程管理 | 软（编排） | 解锁只在 `Menu`；本系统不驱动顶层切换 | GDD 已写（`design/gdd/scene-flow.md`） |
 
-**双向一致要求**：以上每个上游必须在其 Dependencies 中列出本系统，并在 Cross-References 中回指；下游必须写明「只读取可用性/进度，不自行判定解锁」。数据配置已在其下游表列出本系统（状态待改），存档与局外升级已列出本系统。
+**双向一致要求**：以上每个上游必须在其 Dependencies 中列出本系统，并在 Cross-References 中回指；下游必须写明「只读取可用性/进度，不自行判定解锁」。数据配置、存档与局外升级已在下游表列出本系统并标记已写。
 
 **待回改（不在本文件执行，交由编排会话统一处理）**：
 

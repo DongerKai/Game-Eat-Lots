@@ -294,7 +294,7 @@ The `career_complete` formula is defined as:
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 界面流程 | 硬（UI） | 只读 `RecordsSnapshot` 与 `milestone_progress`；纪录页、里程碑列表、完成横幅；收据屏「新纪录」标记 | GDD 未写 |
+| 界面流程 | 硬（UI） | 只读 `RecordsSnapshot` 与 `milestone_progress`；纪录页、里程碑列表、完成横幅；收据屏「新纪录」标记 | GDD 已写（`design/gdd/ui-flow.md`） |
 | 音效反馈 | 软 | `record_broken`、`milestone_earned`、`career_completed` | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 在线挑战 | 软（未来） | 只读展示；不得信任本地纪录作为排行榜数据 | GDD 未写 |
 
@@ -380,7 +380,7 @@ The `career_complete` formula is defined as:
 | `design/gdd/game-concept.md` | 来源 | 长期目标「吃遍所有档口、达成里程碑」、最高净利纪录、完成全部档口挑战即通关 |
 | `design/gdd/systems-index.md` | 索引 | 优先级 Vertical Slice、层 Feature、设计顺序 #16 |
 
-**待回指**：结算与入场费、存档、数据配置、界面流程、音效反馈、在线挑战的 GDD 必须在上表中列出「纪录与里程碑」；其中数据配置需要新增 `MilestoneData` 类型与下游表一行，结算与存档需要更新本系统一行的状态与对应 Open Question。
+**待回指**：在线挑战的 GDD 写好后，必须在上表中列出「纪录与里程碑」。结算与入场费、存档、界面流程、音效反馈已完成回指；数据配置的 `MilestoneData` 仍待其 Open Question 2 定归属。
 
 ## Acceptance Criteria
 
@@ -442,7 +442,7 @@ The `career_complete` formula is defined as:
 | 1 | **谁拥有「结算提交编排者」？** 本系统返回新的 `records` 值，但把 `progression`、`records`、`unlocks` 合并为同一事务的调用者尚未指定。由界面流程、局外升级还是场景流程承担？该决定同时决定混合事务的失败策略（见 Dependencies 的存档契约澄清）。 | lead-programmer + technical-director | 架构阶段 |
 | 2 | **`MilestoneData` 放进数据配置，还是纪录系统自带资源加载器？** 本 GDD 假定数据配置新增第四类记录，但数据配置的「三类记录、唯一数值来源」表述需要同步修订。两条路只能选一条。 | technical-director（数据配置 + 纪录） | 架构阶段 |
 | 3 | **里程碑阈值如何校准？** 当前基线的 1100 / 1200 依据食堂静态最优 1223；多档口、升级生效后可达上限会变化。需要 economy-designer 在 `/prototype` 后按每档口的 `calibration_ratio` 重算，并保证每条必需里程碑可达。 | economy-designer + prototyper | Vertical Slice 设计前 |
-| 4 | **完成条件是否应该解锁内容？** 当前通关只是纪录页状态与横幅，不解锁档口、不发放奖励。若产品希望「通关」有实质后果，需要与解锁与档口（#13）定义接口；本系统不擅自授予。 | game-designer（解锁与档口 + 纪录） | 解锁与档口 GDD 完成时 |
+| 4 | **完成条件是否应该解锁内容？** **已回答（2026-11-03）**：MVP/VS 完成条件不发放解锁；若未来发放，必须并入结算事务——见 `design/gdd/unlocks-and-stations.md`。 | game-designer（解锁与档口 + 纪录） | 解锁与档口 GDD 完成时 |
 | 5 | **是否需要跨档口的生涯最佳（而非每档口最佳）？** 当前只存每档口最佳，纪录页可派生「所有档口里的最高净利」。若界面要单独展示「生涯最高一局」，需明确跨档口比较是否公平（不同入场费下的绝对净利不可比）。 | ux-designer（界面流程 + 纪录） | 纪录页 UX 规格时 |
 | 6 | **逐局历史是否在 Full Vision 重启？** 当前明确不存。若未来要「最近 10 局」或回放，需要 schema 版本升级与单独的容量上限；`run_id` 目前是会话内唯一，跨会话历史需要持久化计数器或全局 id。 | game-designer + lead-programmer | Full Vision 规划时 |
 | 7 | **时间戳的展示时区与格式由谁决定？** 存储为 UTC ISO-8601；纪录页显示本地时间还是 UTC、是否显示相对时间（「3 天前」），属于 UX 规格。任何显示格式都不得参与逻辑。 | ux-designer | `/ux-design` 纪录页时 |
