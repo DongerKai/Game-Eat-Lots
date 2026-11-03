@@ -140,6 +140,37 @@ formulas:
     added: "2026-11-03"
     revised: ""
 
+  - name: nav_steps
+    status: active
+    source: design/gdd/input.md
+    referenced_by:
+      - design/gdd/input.md
+    variables:
+      - T
+      - D
+      - I
+    output_range: [1, 999]
+    expression: "1 + max(0, floor((T - D) / I) + 1)"
+    notes: "Navigation steps produced by a directional hold of T seconds. D = repeat_delay (0.35 s start), I = repeat_interval (0.12 s start). Unbounded in formula; the 999 ceiling is the practical clamp for a hold of ~2 minutes."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: stick_engaged
+    status: active
+    source: design/gdd/input.md
+    referenced_by:
+      - design/gdd/input.md
+    variables:
+      - m
+      - E
+      - R
+      - stick_engaged_prev
+    output_range: [0, 1]
+    expression: "(m >= E) or (stick_engaged_prev and m >= R)"
+    notes: "Boolean hysteresis for analog-stick navigation. E = 0.60 engage, R = 0.40 release; constraint R <= E - 0.10. 1 = counts as navigation input, 0 = does not."
+    added: "2026-11-03"
+    revised: ""
+
 # Example:
 #
 # formulas:

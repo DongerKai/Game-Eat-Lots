@@ -53,10 +53,10 @@ progression system, and 餐局流程 is the skeleton that 时间与回合, 胃�
 | # | System Name | Category | Priority | Status | Design Doc | Depends On |
 |---|-------------|----------|----------|--------|------------|------------|
 | 1 | 数据配置 | Core | MVP | Designed | design/gdd/data-config.md | — |
-| 2 | 输入 | Core | MVP | Not Started | — | — |
+| 2 | 输入 | Core | MVP | Designed | design/gdd/input.md | — |
 | 3 | 场景与流程管理 | Core | MVP | Not Started | — | — |
 | 4 | 存档 | Persistence | MVP | Not Started | — | 数据配置 |
-| 5 | 餐局流程 | Core | MVP | Not Started | — | 场景与流程管理, 数据配置 |
+| 5 | 餐局流程 | Core | MVP | Not Started | — | 场景与流程管理, 数据配置, 输入 |
 | 6 | 时间与回合 | Core | MVP | Not Started | — | 餐局流程 |
 | 7 | 胃容量 | Gameplay | MVP | Not Started | — | 餐局流程, 数据配置 |
 | 8 | 菜品数值 | Gameplay | MVP | Not Started | — | 数据配置 |
@@ -66,10 +66,10 @@ progression system, and 餐局流程 is the skeleton that 时间与回合, 胃�
 | 12 | 局外升级 | Progression | MVP | Not Started | — | 结算与入场费, 存档, 数据配置 |
 | 13 | 解锁与档口 | Progression | Vertical Slice | Not Started | — | 局外升级, 存档 |
 | 14 | 纪录与里程碑 | Progression | Vertical Slice | Not Started | — | 结算与入场费, 存档 |
-| 15 | 局内 HUD | UI | MVP | Not Started | — | 餐局流程, 时间与回合, 胃容量, 菜品数值 |
-| 16 | 界面流程 | UI | MVP | Not Started | — | 餐局流程, 结算与入场费, 局外升级, 场景与流程管理 |
+| 15 | 局内 HUD | UI | MVP | Not Started | — | 餐局流程, 时间与回合, 胃容量, 菜品数值, 输入 |
+| 16 | 界面流程 | UI | MVP | Not Started | — | 餐局流程, 结算与入场费, 局外升级, 场景与流程管理, 输入 |
 | 17 | 音效反馈 | Audio | Vertical Slice | Not Started | — | 餐局流程, 结算与入场费 |
-| 18 | 首局引导 | Meta | Vertical Slice | Not Started | — | 餐局流程, 局内 HUD |
+| 18 | 首局引导 | Meta | Vertical Slice | Not Started | — | 餐局流程, 局内 HUD, 输入 |
 | 19 | 在线挑战 | Meta | Full Vision | Not Started | — | 结算与入场费, 存档 |
 | 20 | 同屏合作 | Meta | Full Vision | Not Started | — | 几乎全部系统（延后） |
 
@@ -115,7 +115,7 @@ Vertical Slice tier, and the rest are Full Vision.
 ### Core Layer (depends on foundation)
 
 1. **存档** — depends on: 数据配置（字段 schema）
-2. **餐局流程** — depends on: 场景与流程管理, 数据配置
+2. **餐局流程** — depends on: 场景与流程管理, 数据配置, 输入
 3. **时间与回合** — depends on: 餐局流程
 4. **胃容量** — depends on: 餐局流程, 数据配置
 5. **菜品数值** — depends on: 数据配置
@@ -131,13 +131,13 @@ Vertical Slice tier, and the rest are Full Vision.
 
 ### Presentation Layer (depends on features)
 
-1. **局内 HUD** — depends on: 餐局流程, 时间与回合, 胃容量, 菜品数值
-2. **界面流程** — depends on: 餐局流程, 结算与入场费, 局外升级, 场景与流程管理
+1. **局内 HUD** — depends on: 餐局流程, 时间与回合, 胃容量, 菜品数值, 输入
+2. **界面流程** — depends on: 餐局流程, 结算与入场费, 局外升级, 场景与流程管理, 输入
 3. **音效反馈** — depends on: 餐局流程, 结算与入场费
 
 ### Polish Layer (depends on everything)
 
-1. **首局引导** — depends on: 餐局流程, 局内 HUD
+1. **首局引导** — depends on: 餐局流程, 局内 HUD, 输入
 2. **在线挑战** — depends on: 结算与入场费, 存档
 3. **同屏合作** — depends on: 几乎全部系统（延后）
 
@@ -193,10 +193,10 @@ Vertical Slice tier, and the rest are Full Vision.
 | Metric | Count |
 |--------|-------|
 | Total systems identified | 20 |
-| Design docs started | 1 |
+| Design docs started | 2 |
 | Design docs reviewed | 0 |
 | Design docs approved | 0 |
-| MVP systems designed | 1/13 |
+| MVP systems designed | 2/13 |
 | Vertical Slice systems designed | 0/5 |
 
 ---
