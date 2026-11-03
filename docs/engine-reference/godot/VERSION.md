@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **Engine Version** | Godot 4.7 |
-| **Installed at pin time** | NOT DETERMINED — `/setup-engine` §3 probes the installed editor and records the result here. |
+| **Installed at pin time** | NOT DETERMINED — 2026-11-03 probe: no `godot` on PATH, no `Godot*.app` in `/Applications`; user confirms Godot is not installed yet. |
 | **Release Date** | June 2026 (latest patch: 4.7.2, August 2026) |
 | **Project Pinned** | 2026-10-17 |
 | **Last Docs Verified** | 2026-10-17 (release timeline and 4.7 changes); 2026-02-12 (4.4-4.6 content) |

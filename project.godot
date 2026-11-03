@@ -1,0 +1,13 @@
+; run/main_scene is intentionally unset: no scene exists yet.
+; /dev-story (or the developer) sets it once the first scene is created.
+
+config_version=5
+
+[application]
+
+config/name="回本 (Break Even)"
+config/features=PackedStringArray("4.7", "Forward Plus")
+
+[rendering]
+
+renderer/rendering_method="forward_plus"
