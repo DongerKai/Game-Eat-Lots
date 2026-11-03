@@ -101,6 +101,7 @@ items:
     referenced_by:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
+      - design/gdd/menu-waves.md
     price: 4
     satiety: 1
     unit_value: 4.0
@@ -116,6 +117,7 @@ items:
     referenced_by:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
+      - design/gdd/menu-waves.md
     price: 5
     satiety: 1
     unit_value: 5.0
@@ -131,6 +133,7 @@ items:
     referenced_by:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
+      - design/gdd/menu-waves.md
     price: 6
     satiety: 1
     unit_value: 6.0
@@ -146,6 +149,7 @@ items:
     referenced_by:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
+      - design/gdd/menu-waves.md
     price: 7
     satiety: 1
     unit_value: 7.0
@@ -161,6 +165,7 @@ items:
     referenced_by:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
+      - design/gdd/menu-waves.md
     price: 6
     satiety: 2
     unit_value: 3.0
@@ -176,6 +181,7 @@ items:
     referenced_by:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
+      - design/gdd/menu-waves.md
     price: 8
     satiety: 2
     unit_value: 4.0
@@ -191,6 +197,7 @@ items:
     referenced_by:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
+      - design/gdd/menu-waves.md
     price: 12
     satiety: 2
     unit_value: 6.0
@@ -206,6 +213,7 @@ items:
     referenced_by:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
+      - design/gdd/menu-waves.md
     price: 13
     satiety: 2
     unit_value: 6.5
@@ -221,6 +229,7 @@ items:
     referenced_by:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
+      - design/gdd/menu-waves.md
     price: 15
     satiety: 3
     unit_value: 5.0
@@ -236,6 +245,7 @@ items:
     referenced_by:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
+      - design/gdd/menu-waves.md
     price: 16
     satiety: 3
     unit_value: 5.333333333333333
@@ -251,6 +261,7 @@ items:
     referenced_by:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
+      - design/gdd/menu-waves.md
     price: 18
     satiety: 4
     unit_value: 4.5
@@ -266,6 +277,7 @@ items:
     referenced_by:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
+      - design/gdd/menu-waves.md
     price: 20
     satiety: 6
     unit_value: 3.3333333333333335
@@ -432,6 +444,7 @@ formulas:
     referenced_by:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
+      - design/gdd/menu-waves.md
     variables:
       - M
       - C
@@ -512,6 +525,66 @@ formulas:
     added: "2026-11-03"
     revised: ""
 
+  - name: wave_partition
+    status: active
+    source: design/gdd/menu-waves.md
+    referenced_by:
+      - design/gdd/menu-waves.md
+    variables:
+      - M
+      - seed
+      - wave_size
+    output_range: [1, 12]
+    expression: "wave_count = ceil(|M|/wave_size); W_i = shuffled(M, seed)[i*wave_size:(i+1)*wave_size]"
+    notes: "Deterministic ordered partition of the station pool; every dish appears in exactly one wave. MVP: 12 dishes, wave_size 4 -> 3 waves."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: preview_dishes
+    status: active
+    source: design/gdd/menu-waves.md
+    referenced_by:
+      - design/gdd/menu-waves.md
+    variables:
+      - menu_vision
+      - wave_size
+    output_range: [0, 7]
+    expression: "min(menu_vision, wave_size - 1, |W_next|)"
+    notes: "Dishes of the next wave revealed by MENU_VISION. Never a whole wave: with 12 unique dishes, seeing two full waves lets the player deduce the third."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: wave_reachable_opt
+    status: active
+    source: design/gdd/menu-waves.md
+    referenced_by:
+      - design/gdd/menu-waves.md
+    variables:
+      - M
+      - seed
+      - C
+      - T
+      - menu_vision
+    output_range: [0, 99999]
+    expression: "max sum(price(d)) over legal wave play sequences (ordered subsets per wave; each skip costs 1 turn; eats + skips <= T; sum(effective_satiety) <= C)"
+    notes: "Generation-time only. Small search space at MVP (65 ordered subsets per wave). 104 with no skips, 100 with one, 95 with two."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: wave_healthy
+    status: active
+    source: design/gdd/menu-waves.md
+    referenced_by:
+      - design/gdd/menu-waves.md
+    variables:
+      - M
+      - seed
+    output_range: [0, 1]
+    expression: "(all waves non-empty) and (waves partition M) and (wave_reachable_opt >= ceil(0.9 * opt_value(M, C, T)))"
+    notes: "Boolean gate for a generated partition. MVP threshold 94 (0.9 x 104). Reroll up to 20 seeds; accept the best with a warning rather than blocking the run."
+    added: "2026-11-03"
+    revised: ""
+
 # Example:
 #
 # formulas:
@@ -562,6 +635,26 @@ constants:
       - design/gdd/data-config.md
     value: 3
     unit: 格
+    added: "2026-11-03"
+    revised: ""
+
+  - name: wave_size_default
+    status: active
+    source: design/gdd/menu-waves.md
+    referenced_by:
+      - design/gdd/menu-waves.md
+    value: 4
+    unit: 道菜/波
+    added: "2026-11-03"
+    revised: ""
+
+  - name: wave_advance_cost
+    status: active
+    source: design/gdd/menu-waves.md
+    referenced_by:
+      - design/gdd/menu-waves.md
+    value: 1
+    unit: 回合
     added: "2026-11-03"
     revised: ""
 

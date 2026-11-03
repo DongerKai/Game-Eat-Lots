@@ -63,7 +63,7 @@ were found.
 | 7 | 胃容量 | Gameplay | MVP | Not Started | — | 餐局流程, 数据配置 |
 | 8 | 菜品数值 | Gameplay | MVP | Approved | design/gdd/dish-values.md | 数据配置 |
 | 9 | 腻度与口味 | Gameplay | MVP | Designed | design/gdd/cloying-and-taste.md | 菜品数值 |
-| 10 | 菜单波次 | Gameplay | Vertical Slice | Not Started | — | 菜品数值, 数据配置 |
+| 10 | 菜单波次 | Gameplay | Vertical Slice | Designed | design/gdd/menu-waves.md | 菜品数值, 数据配置 |
 | 11 | 结算与入场费 | Economy | MVP | Not Started | — | 菜品数值, 腻度与口味, 胃容量, 时间与回合 |
 | 12 | 局外升级 | Progression | MVP | Not Started | — | 结算与入场费, 存档, 数据配置 |
 | 13 | 解锁与档口 | Progression | Vertical Slice | Not Started | — | 局外升级, 存档 |
@@ -81,6 +81,9 @@ were found.
 >
 > 腻度与口味 also imposes UI requirements on 局内 HUD（菜品卡的实际饱腹与解腻预览、
 > 腻度面板）。`/ux-design` 需覆盖这两块，相关 story 引用 `design/ux/hud.md`。
+>
+> 菜单波次 also imposes UI requirements on 局内 HUD（波次条与 `?` 占位、下一波预览、
+> 跳过/结束取餐的确认框）。`/ux-design` 需一并覆盖。
 
 ---
 
@@ -202,7 +205,7 @@ Vertical Slice tier, and the rest are Full Vision.
 | Metric | Count |
 |--------|-------|
 | Total systems identified | 20 |
-| Design docs started | 5 |
+| Design docs started | 6 |
 | Design docs reviewed | 2 |
 | Design docs approved | 1 |
 
@@ -210,7 +213,7 @@ Vertical Slice tier, and the rest are Full Vision.
 > 输入 GDD 中定名了上下文切换接口，两处都是评审后才出现的改动，因此状态回到 **In Review**
 > 等待复审。复审通过后改回 Approved。
 | MVP systems designed | 5/13 |
-| Vertical Slice systems designed | 0/5 |
+| Vertical Slice systems designed | 1/5 |
 
 ---
 
