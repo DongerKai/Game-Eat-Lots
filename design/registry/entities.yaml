@@ -690,6 +690,7 @@ formulas:
     source: design/gdd/settlement-and-entry-fee.md
     referenced_by:
       - design/gdd/settlement-and-entry-fee.md
+      - design/gdd/stomach-capacity.md
     variables:
       - effective_satiety
     output_range: [0, 999]
@@ -869,6 +870,71 @@ formulas:
     added: "2026-11-03"
     revised: ""
 
+  - name: capacity_total
+    status: active
+    source: design/gdd/stomach-capacity.md
+    referenced_by:
+      - design/gdd/stomach-capacity.md
+      - design/gdd/run-flow.md
+      - design/gdd/settlement-and-entry-fee.md
+    variables:
+      - C0
+      - capacity_bonus
+    output_range: [1, 999]
+    expression: "capacity_total = C0 + capacity_bonus"
+    notes: "C0 = BalanceData.base_capacity (MVP 20; data ownership is stomach Open Question 1). capacity_bonus comes from the run's frozen upgrade snapshot."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: can_fit
+    status: active
+    source: design/gdd/stomach-capacity.md
+    referenced_by:
+      - design/gdd/stomach-capacity.md
+      - design/gdd/run-flow.md
+    variables:
+      - e
+      - capacity_used
+      - capacity_total
+    output_range: "true | false"
+    expression: "(e is integer and e >= 1) and (capacity_used + e <= capacity_total)"
+    notes: "Equal-to-capacity is allowed. e < 1 is a defensive error; e > capacity_total is legal and returns false."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: record_is_better
+    status: active
+    source: design/gdd/records-and-milestones.md
+    referenced_by:
+      - design/gdd/records-and-milestones.md
+      - design/gdd/settlement-and-entry-fee.md
+    variables:
+      - r_new.net_profit
+      - r_old.net_profit
+    output_range: "true | false"
+    expression: "(r_old is null) or (r_new.net_profit > r_old.net_profit)"
+    notes: "Net profit only; ties keep the old record. Never compares time, total value or return ratio."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: milestone_met
+    status: active
+    source: design/gdd/records-and-milestones.md
+    referenced_by:
+      - design/gdd/records-and-milestones.md
+      - design/gdd/save-system.md
+    variables:
+      - m.metric
+      - m.threshold
+      - m.station_id
+      - u
+      - c
+    output_range: "true | false"
+    expression: "station_ok(m, u) and metric_met(m.metric, m.threshold, u, c)"
+    notes: "Metrics: NET_PROFIT, RETURN_RATIO_X10, LIFETIME_NET_PROFIT, RUNS_SETTLED. Thresholds live in MilestoneData, not in the formula."
+    added: "2026-11-03"
+    revised: ""
+
 constants:
   - name: uv_span_min
     status: active
@@ -972,6 +1038,32 @@ constants:
     value: 0
     unit: 格
     notes: "Internal run-flow transitions never spend capacity; only eating does."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: station_canteen_turn_budget
+    status: active
+    source: design/gdd/time-and-turns.md
+    referenced_by:
+      - design/gdd/time-and-turns.md
+      - design/gdd/dish-values.md
+      - design/gdd/menu-waves.md
+    value: 10
+    unit: 回合
+    notes: "Symbol StationData.turn_budget for station_canteen. Safe band is 10 +/- 1; changing it requires re-running opt_value and calibration_ratio."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: base_capacity
+    status: active
+    source: design/gdd/stomach-capacity.md
+    referenced_by:
+      - design/gdd/stomach-capacity.md
+      - design/gdd/dish-values.md
+      - design/gdd/menu-waves.md
+    value: 20
+    unit: 格
+    notes: "C0. Data ownership is still a stomach Open Question (suggested BalanceData.base_capacity). The 104-yuan optimal meal fills exactly these 20 cells."
     added: "2026-11-03"
     revised: ""
 

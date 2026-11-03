@@ -220,7 +220,7 @@ The `menu_cloy_pressure` formula is defined as:
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 胃容量 | 硬 | `effective_satiety(d)` 作为唯一可吃性判据 | GDD 未写 |
+| 胃容量 | 硬 | `effective_satiety(d)` 作为唯一可吃性判据 | GDD 已写（`design/gdd/stomach-capacity.md`） |
 | 局内 HUD | 硬 | `extra_satiety(d)`、`cleanse_target(d)` 预览、各组计数、不可选原因 | GDD 未写 |
 | 结算与入场费 | 硬 | 本局实际占用格数；设计期用它复核 `opt_value` 与 `calibration_ratio` | GDD 未写 |
 | 菜单波次 | 软（强） | 单次可见集合必须小于全池，否则本系统退化为顺序谜题 | GDD 未写 |
@@ -275,7 +275,7 @@ The `menu_cloy_pressure` formula is defined as:
 | `design/gdd/game-concept.md` | 来源 | 支柱 1/3；"被算穿"风险；"解腻流"与"连吃同类不划算"的动态 |
 | `design/gdd/systems-index.md` | 索引 | 优先级 MVP、层 Feature、上下游清单与设计顺序 |
 
-**待回指**：胃容量、局内 HUD、首局引导的 GDD 写好后，需要在各自的 Cross-References 中列出「腻度与口味」。结算与入场费、菜单波次、存档的 GDD 已写并已回指。菜品数值的下游表中本系统状态需从「GDD 未写」改为已写。
+**待回指**：局内 HUD、首局引导的 GDD 写好后，需要在各自的 Cross-References 中列出「腻度与口味」。结算与入场费、菜单波次、存档、胃容量的 GDD 已写并已回指。菜品数值的下游表中本系统状态需从「GDD 未写」改为已写。
 
 **回改状态**：`dish-values.md` 的下游表状态与校准说明、`data-config.md` 的 `StationData.cloy_cap` 字段，均已于 2026-11-03 回改。
 

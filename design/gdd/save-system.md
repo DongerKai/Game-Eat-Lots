@@ -266,7 +266,7 @@ The `slots_available` formula is defined as:
 |---|---|---|---|
 | 局外升级 | 硬 | 拥有 `progression`（`wallet`、`upgrade_levels`）；把算完的新值经 `commit` 提交；钱包策略（正负、上下限）由它拥有 | GDD 未写 |
 | 解锁与档口 | 硬 | 拥有 `unlocks`（`stations`、`dishes`）；解锁条件、免费档口、删除条件由它拥有 | GDD 未写 |
-| 纪录与里程碑 | 硬 | 拥有 `records`；字段语义、排名规则、里程碑判定由它拥有；存档只提供存储与原子性 | GDD 未写 |
+| 纪录与里程碑 | 硬 | 拥有 `records`；字段语义、排名规则、里程碑判定由它拥有；存档只提供存储与原子性 | GDD 已写（`design/gdd/records-and-milestones.md`） |
 | 在线挑战 | 软 | 拥有 `challenges`；MVP 不存在，随 schema 迁移加入；不得把本地存档当作可信排行榜数据 | GDD 未写 |
 | 界面流程 | 硬（UI） | 读取 `LoadReport` / `SaveStatus` 显示保存指示、恢复说明与 `Blocked` 提示；发起删除生涯请求 | GDD 未写 |
 

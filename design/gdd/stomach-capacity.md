@@ -67,7 +67,7 @@
 | 结算与入场费 | 下游 | 从 `RunLog` 读 `capacity_total`；校验 `capacity_used = Σ effective_satiety` | 硬 |
 | 菜单波次 | 设计期下游 | `wave_reachable_opt` 的 `C` 参数；运行期不读 | 软（设计期） |
 | 菜品数值 | 设计期下游 | `opt_value` / `calibration_ratio` 的 `C0` 审计参数 | 软（设计期） |
-| 纪录与里程碑 | 下游（软） | 可存本局 `capacity_total` 用于展示；不参与判定 | 软（GDD 未写） |
+| 纪录与里程碑 | 下游（软） | 可存本局 `capacity_total` 用于展示；不参与判定 | 软（GDD 已写：`design/gdd/records-and-milestones.md`） |
 | 存档 | 无直接调用 | MVP 无中途存档；容量是局内状态，不持久化 | 条件 |
 
 **接口所有权**：本系统拥有 `capacity_total`、`capacity_used`、`capacity_remaining`、`can_fit` 与 `consume`；餐局流程拥有**何时调用它们、按什么顺序调用**；腻度与口味拥有 `effective_satiety`；局外升级拥有 `capacity_bonus` 的解析。下游不得自己推算剩余容量，也不得把 `capacity_used` 当作可变字段写回。
@@ -206,7 +206,7 @@ The `capacity_bonus` formula is defined as:
 | 结算与入场费 | 下游 | 从 `RunLog` 读 `capacity_total`；校验 `capacity_used = Σ effective_satiety` | 硬 |
 | 菜单波次 | 设计期下游 | `wave_reachable_opt` 的 `C` 参数；运行期不读 | 软（设计期） |
 | 菜品数值 | 设计期下游 | `opt_value` / `calibration_ratio` 的 `C0` 审计参数 | 软（设计期） |
-| 纪录与里程碑 | 下游（软） | 可存 `capacity_total` 用于展示；不参与判定 | 软（GDD 未写） |
+| 纪录与里程碑 | 下游（软） | 可存 `capacity_total` 用于展示；不参与判定 | 软（GDD 已写：`design/gdd/records-and-milestones.md`） |
 | 存档 | 无直接调用 | MVP 无中途存档；容量不持久化 | 条件 |
 
 **方向说明**：索引里「胃容量 → 餐局流程」按**设计依赖**记录，而运行期是餐局流程调用本系统；这与 run-flow GDD 对其它子系统的处理一致——它们按生命周期所有权方向记录，避免形成环。本系统与腻度之间没有直接调用边：腻度给出 `effective_satiety`，餐局流程把它交给本系统判定，因此索引中不新增「胃容量 → 腻度」的边。

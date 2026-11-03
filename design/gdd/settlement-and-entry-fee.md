@@ -323,8 +323,8 @@ The `shortfall` formula is defined as:
 | 数据配置 | 硬 | `get_station(id)` → `entry_fee`；`get_dish(id)` → `price`、`satiety`；前提 `Ready`；int64 求和规则 | GDD 已写 |
 | 菜品数值 | 硬 | `price(d)`、`unit_value(d)`（静态单位价值 = `price / satiety`）；本系统不重算 | GDD 已写（Approved 2026-11-03） |
 | 腻度与口味 | 硬 | 每个 `EatenEntry` 的 `extra_satiety` 与 `effective_satiety`（吃下时记录，结算不重放） | GDD 已写（Designed 2026-11-03） |
-| 胃容量 | 硬 | `capacity_total`；可吃性判定在结算之前完成 | GDD 未写 |
-| 时间与回合 | 硬 | `turns_total`、`turns_used`、`end_reason` | GDD 未写 |
+| 胃容量 | 硬 | `capacity_total`；可吃性判定在结算之前完成 | GDD 已写（`design/gdd/stomach-capacity.md`） |
+| 时间与回合 | 硬 | `turns_total`、`turns_used`、`end_reason` | GDD 已写（`design/gdd/time-and-turns.md`） |
 | 餐局流程 | 硬 | 本局结束时调用一次 `settle(RunLog)`；放弃 / 进入失败 / 退出不调用 | GDD 已写（`design/gdd/run-flow.md`） |
 
 **下游依赖方：**
@@ -332,7 +332,7 @@ The `shortfall` formula is defined as:
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
 | 局外升级 | 硬 | `net_profit`（有符号）、`broke_even`；钱包策略与是否钳制由它拥有 | GDD 未写 |
-| 纪录与里程碑 | 硬 | `net_profit`、`total_value`、`return_ratio`、`station_id`、`end_reason`；时间戳由它添加 | GDD 未写 |
+| 纪录与里程碑 | 硬 | `net_profit`、`total_value`、`return_ratio`、`station_id`、`end_reason`；时间戳由它添加 | GDD 已写（`design/gdd/records-and-milestones.md`） |
 | 界面流程 | 硬 | `RunResult` → 收据屏；在 `Run → Menu` 同帧接收 | GDD 未写 |
 | 局内 HUD | 硬 | `running_net(k)` 与共享的 int64 累加器；不得自行求和 | GDD 未写 |
 | 首局引导 | 软 | 每行的静态 / 实际单位价值，用于讲解与替换建议 | GDD 未写 |

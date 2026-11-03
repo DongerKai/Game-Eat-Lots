@@ -48,6 +48,7 @@
    - `unlock_cost: int` — ≥ 0（0 表示开局可用）
    - `dish_pool: Array[StringName]` — 至少 1 项，每项必须存在，且每道菜的 `station_id` 必须指回本档口（双向一致）
    - `cloy_cap: int` — ≥ 1，默认 3；单道菜因同组重复最多追加的饱腹格（由「腻度与口味」消费）
+   - `turn_budget: int` — ≥ 1（本局允许的回合数，由「时间与回合」消费；归属见其 Open Question 2）
 6. **id 是契约**：按类型命名空间隔离（`dish_*` / `upgrade_*` / `station_*`）。发布后不得改名——改名等于删除旧记录并新增，会让存档失效。
 7. **启动即校验**：加载全部记录 → 校验 → 建立目录 → Ready。任一规则失败就停在这里，不进入游戏。
 8. **运行时只读**：局内状态（当前饱腹、净利、剩余时间格）属于餐局流程，任何系统都不得写回数据记录。
@@ -76,7 +77,7 @@
 | 餐局流程 / 结算与入场费 | 下游读取 | 餐局流程解析 `station_id`；结算读取 `entry_fee` | 硬 |
 | 存档 | 下游引用 | 只存 id 与等级/数值，不存记录本身 | 硬 |
 
-**接口所有权**：数据配置拥有三个 catalog 的查询与校验；下游只读，不拥有写入路径。
+**接口所有权**：数据配置拥有全部已定义记录类型的查询与校验；下游只读，不拥有写入路径。
 
 ## Formulas
 
@@ -169,10 +170,13 @@ The `valid_record_set` formula is defined as:
 | 局外升级 | 硬 | `get_upgrade(id)` → 全部字段 | GDD 未写 |
 | 餐局流程 | 硬 | `get_station(id)` 解析 `station_id`；`entry_fee` 由结算读取 | GDD 已写（`design/gdd/run-flow.md`） |
 | 存档 | 硬 | 持久化 id 与等级/数值；读取时不信任存档里的数值快照 | GDD 已写（`design/gdd/save-system.md`） |
+| 时间与回合 | 硬 | `StationData.turn_budget`（新增字段，int ≥ 1）；本系统不在运行时被查询 | GDD 已写（`design/gdd/time-and-turns.md`） |
+| 胃容量 | 硬 | `BalanceData.base_capacity`（C0 = 20，字段归属见胃容量 Open Question 1）；`UpgradeData.STOMACH_CAPACITY` | GDD 已写（`design/gdd/stomach-capacity.md`） |
+| 纪录与里程碑 | 硬 | `MilestoneData` 目录（第四类记录，归属见纪录 Open Question 2）；`get_station(id)` → `display_name` | GDD 已写（`design/gdd/records-and-milestones.md`） |
 | 局内 HUD | 软（间接） | 通过菜品数值/时间与回合取得数字，不直接读 catalog | GDD 未写 |
 | 场景与流程管理 | 硬 | `Boot` 期读取加载与校验的最终结果（`Ready` / `Failed`），决定进入 Menu 还是 Error | GDD 已写 |
 
-**双向一致要求**：以上每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「数据配置」为上游依赖。目前场景与流程管理、菜品数值、腻度与口味、菜单波次、餐局流程、存档的 GDD 已完成并已列出本系统；其余系统仍待设计，此要求记录在此供后续核对。
+**双向一致要求**：以上每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「数据配置」为上游依赖。目前场景与流程管理、菜品数值、腻度与口味、菜单波次、餐局流程、存档、时间与回合、胃容量、纪录与里程碑的 GDD 已完成并已列出本系统；其余系统仍待设计，此要求记录在此供后续核对。
 
 ## Visual/Audio Requirements
 
@@ -191,7 +195,7 @@ The `valid_record_set` formula is defined as:
 
 ## Cross-References
 
-**None — this system references no other GDD.** 数据配置是最先设计的系统。场景与流程管理、菜品数值、腻度与口味、菜单波次、餐局流程、存档的 GDD 已完成并已在 Cross-References 中回指本系统；其余下游系统（局外升级、局内 HUD）在各自 GDD 写好后，需要把「数据配置」列回 Cross-References，届时在此表补充。
+**None — this system references no other GDD.** 数据配置是最先设计的系统。场景与流程管理、菜品数值、腻度与口味、菜单波次、餐局流程、存档、时间与回合、胃容量、纪录与里程碑的 GDD 已完成并已在 Cross-References 中回指本系统；其余下游系统（局外升级、局内 HUD）在各自 GDD 写好后，需要把「数据配置」列回 Cross-References，届时在此表补充。
 
 ## Acceptance Criteria
 

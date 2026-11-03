@@ -115,7 +115,7 @@
 | 数据配置 | 上游 | 前提 `Ready`；`get_station(station_id)` 必须存在；不读取菜品数值 | 硬 |
 | 输入 | 上游 | 每次动作读取 `ui_accept`、`game_skip_dish`；**不读取 `ui_pause`**（由场景与流程管理消费） | 硬 |
 | 时间与回合 | 协调（下游） | `initialize(...) → turns_total`、`spend_turn()`、`turns_remaining`、`turns_used`；提供 `TIME_EXHAUSTED` 判据 | 硬 |
-| 胃容量 | 协调（下游） | `initialize(upgrade_snapshot) → capacity_total`、`capacity_used`、`can_fit(effective_satiety)` | 硬 |
+| 胃容量 | 协调（下游） | `initialize(upgrade_snapshot) → capacity_total`、`capacity_used`、`can_fit(effective_satiety)`、`consume(e)` | 硬 |
 | 菜单波次 | 协调（下游） | `initialize(station_id, seed, turns_total, menu_vision[, pool_override])`；`visible_dishes`；`advance()`；无菜可吃信号 | 硬 |
 | 腻度与口味 | 协调（下游） | `run_started` / `run_ended` 生命周期；吃下前返回 `extra_satiety`、`effective_satiety` 供容量判定，吃下时记录同一组值；组计数 | 硬 |
 | 结算与入场费 | 协调（下游） | `settle(RunLog) → RunResult \| 结构化错误`；每局恰好一次 | 硬 |
@@ -287,8 +287,8 @@ The `transition_cost` rule is defined as:
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 时间与回合 | 硬 | `initialize(...) → turns_total`、`spend_turn()`、`turns_remaining`、`turns_used`；`TIME_EXHAUSTED` 判据 | GDD 未写 |
-| 胃容量 | 硬 | `initialize(upgrade_snapshot) → capacity_total`、`capacity_used`、`can_fit(effective_satiety)` | GDD 未写 |
+| 时间与回合 | 硬 | `initialize(...) → turns_total`、`spend_turn()`、`turns_remaining`、`turns_used`；`TIME_EXHAUSTED` 判据 | GDD 已写（`design/gdd/time-and-turns.md`） |
+| 胃容量 | 硬 | `initialize(upgrade_snapshot) → capacity_total`、`capacity_used`、`can_fit(effective_satiety)`、`consume(e)` | GDD 已写（`design/gdd/stomach-capacity.md`） |
 | 菜单波次 | 硬 | `initialize(station_id, seed, turns_total, menu_vision[, pool_override])`；`visible_dishes`；`advance()`；无菜可吃信号 | GDD 已写（Designed） |
 | 腻度与口味 | 硬 | `run_started` / `run_ended` 生命周期；吃下时 `extra_satiety`、`effective_satiety` | GDD 已写（Designed） |
 | 结算与入场费 | 硬（回调） | `settle(RunLog) → RunResult \| 结构化错误`；每局一次 | GDD 已写（Designed） |
@@ -373,7 +373,7 @@ The `transition_cost` rule is defined as:
 | 音效反馈 | 未写 | 下游（软）：`run_*` 事件 |
 | 存档 | 未写 | 无直接调用：MVP 无中途存档 |
 
-**待回指（不由本文件修改）**：时间与回合、胃容量、局内 HUD、界面流程、首局引导、音效反馈、存档的 GDD 写好后，需在各自的 Cross-References 与 Dependencies 中列出「餐局流程」。菜单波次与腻度与口味已回指。
+**待回指（不由本文件修改）**：局内 HUD、界面流程、首局引导、音效反馈的 GDD 写好后，需在各自的 Cross-References 与 Dependencies 中列出「餐局流程」。时间与回合、胃容量、菜单波次、腻度与口味、存档已回指。
 
 ## Acceptance Criteria
 
