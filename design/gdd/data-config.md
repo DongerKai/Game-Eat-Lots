@@ -160,8 +160,8 @@ The `valid_record_set` formula is defined as:
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 菜品数值 | 硬 | `get_dish(id)` → `price`、`satiety` | GDD 未写 |
-| 腻度与口味 | 硬 | `get_dish(id)` → `taste_tags`、`cloying_group` | GDD 未写 |
+| 菜品数值 | 硬 | `get_dish(id)` → `price`、`satiety`、`taste_tags`、`cloying_group` | GDD 已写（`design/gdd/dish-values.md`） |
+| 腻度与口味 | 硬 | `get_dish(id)` → `taste_tags`、`cloying_group` | GDD 已写（`design/gdd/cloying-and-taste.md`） |
 | 菜单波次 | 硬（VS） | `get_station(id)` → `dish_pool` | GDD 未写 |
 | 局外升级 | 硬 | `get_upgrade(id)` → 全部字段 | GDD 未写 |
 | 餐局流程 | 硬 | `get_station(id)` → `entry_fee` | GDD 未写 |
@@ -188,7 +188,7 @@ The `valid_record_set` formula is defined as:
 
 ## Cross-References
 
-**None — this system references no other GDD.** 数据配置是最先设计的系统。场景与流程管理的 GDD 已完成并已在 Cross-References 中回指本系统；其余下游系统（菜品数值、腻度与口味、菜单波次、局外升级、餐局流程、存档、局内 HUD）在各自 GDD 写好后，需要把「数据配置」列回 Cross-References，届时在此表补充。
+**None — this system references no other GDD.** 数据配置是最先设计的系统。场景与流程管理、菜品数值与腻度与口味的 GDD 已完成并已在 Cross-References 中回指本系统；其余下游系统（菜单波次、局外升级、餐局流程、存档、局内 HUD）在各自 GDD 写好后，需要把「数据配置」列回 Cross-References，届时在此表补充。
 
 ## Acceptance Criteria
 

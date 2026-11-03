@@ -54,7 +54,7 @@
 #   in any other shape is reported as unsupported layout, with its number.
 
 version: 1
-last_updated: ""
+last_updated: "2026-11-03"
 
 # ─── ENTITIES ────────────────────────────────────────────────────────────────
 # Named game-world objects: enemies, NPCs, characters, factions, bosses.
@@ -94,7 +94,186 @@ entities: []
 # Attribute fields: value_gold, weight, stackable, category, and any stat
 #   modifiers that another system (e.g., economy, crafting) might reference.
 
-items: []
+items:
+  - name: dish_white_rice
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+      - design/gdd/cloying-and-taste.md
+    price: 4
+    satiety: 1
+    unit_value: 4.0
+    cloying_group: 主食
+    taste_tags: []
+    station_id: station_canteen
+    added: "2026-11-03"
+    revised: ""
+
+  - name: dish_cucumber
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+      - design/gdd/cloying-and-taste.md
+    price: 5
+    satiety: 1
+    unit_value: 5.0
+    cloying_group: 蔬菜
+    taste_tags: [酸]
+    station_id: station_canteen
+    added: "2026-11-03"
+    revised: ""
+
+  - name: dish_cola
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+      - design/gdd/cloying-and-taste.md
+    price: 6
+    satiety: 1
+    unit_value: 6.0
+    cloying_group: 饮料
+    taste_tags: [甜, 冰]
+    station_id: station_canteen
+    added: "2026-11-03"
+    revised: ""
+
+  - name: dish_ice_cream
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+      - design/gdd/cloying-and-taste.md
+    price: 7
+    satiety: 1
+    unit_value: 7.0
+    cloying_group: 甜
+    taste_tags: [甜, 冰]
+    station_id: station_canteen
+    added: "2026-11-03"
+    revised: ""
+
+  - name: dish_greens
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+      - design/gdd/cloying-and-taste.md
+    price: 6
+    satiety: 2
+    unit_value: 3.0
+    cloying_group: 蔬菜
+    taste_tags: [鲜]
+    station_id: station_canteen
+    added: "2026-11-03"
+    revised: ""
+
+  - name: dish_tomato_egg
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+      - design/gdd/cloying-and-taste.md
+    price: 8
+    satiety: 2
+    unit_value: 4.0
+    cloying_group: 蛋
+    taste_tags: [酸, 鲜]
+    station_id: station_canteen
+    added: "2026-11-03"
+    revised: ""
+
+  - name: dish_mapo_tofu
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+      - design/gdd/cloying-and-taste.md
+    price: 12
+    satiety: 2
+    unit_value: 6.0
+    cloying_group: 辣
+    taste_tags: [辣, 鲜, 油]
+    station_id: station_canteen
+    added: "2026-11-03"
+    revised: ""
+
+  - name: dish_fried_chicken
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+      - design/gdd/cloying-and-taste.md
+    price: 13
+    satiety: 2
+    unit_value: 6.5
+    cloying_group: 油
+    taste_tags: [油, 鲜]
+    station_id: station_canteen
+    added: "2026-11-03"
+    revised: ""
+
+  - name: dish_steamed_fish
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+      - design/gdd/cloying-and-taste.md
+    price: 15
+    satiety: 3
+    unit_value: 5.0
+    cloying_group: 鲜
+    taste_tags: [鲜]
+    station_id: station_canteen
+    added: "2026-11-03"
+    revised: ""
+
+  - name: dish_braised_pork
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+      - design/gdd/cloying-and-taste.md
+    price: 16
+    satiety: 3
+    unit_value: 5.333333333333333
+    cloying_group: 肉
+    taste_tags: [甜, 油]
+    station_id: station_canteen
+    added: "2026-11-03"
+    revised: ""
+
+  - name: dish_sweet_sour_pork
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+      - design/gdd/cloying-and-taste.md
+    price: 18
+    satiety: 4
+    unit_value: 4.5
+    cloying_group: 肉
+    taste_tags: [甜, 酸, 油]
+    station_id: station_canteen
+    added: "2026-11-03"
+    revised: ""
+
+  - name: dish_seafood_pot
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+      - design/gdd/cloying-and-taste.md
+    price: 20
+    satiety: 6
+    unit_value: 3.3333333333333335
+    cloying_group: 鲜
+    taste_tags: [鲜, 油]
+    station_id: station_canteen
+    added: "2026-11-03"
+    revised: ""
 
 # Example:
 #
@@ -171,6 +350,168 @@ formulas:
     added: "2026-11-03"
     revised: ""
 
+  - name: unit_value
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+      - design/gdd/cloying-and-taste.md
+    variables:
+      - price
+      - satiety
+    output_range: [0, 9999]
+    expression: "float64(price) / float64(satiety)"
+    notes: "元/格. The only cross-dish comparison scale. Displayed at two decimals at settlement only; never shown in-run and never used for gameplay comparison."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: uv_cmp
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+      - design/gdd/cloying-and-taste.md
+    variables:
+      - price_a
+      - satiety_a
+      - price_b
+      - satiety_b
+    output_range: [-1, 1]
+    expression: "sign(price_a * satiety_b - price_b * satiety_a)"
+    notes: "Exact integer comparison; -1/0/+1. 0 means exact equality, never a rounding artefact. int64 product is safe for INT32_MAX inputs."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: uv_span
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+    variables:
+      - M
+    output_range: [0, 9999]
+    expression: "uv_max(M) - uv_min(M)"
+    notes: "Spread of unit value inside a menu. Max/min chosen by uv_cmp; healthy threshold 1.5 with 1e-9 tolerance."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: menu_healthy
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+    variables:
+      - M
+    output_range: [0, 1]
+    expression: "(uv_span(M) >= 1.5 - 1e-9) and (same_group_dominated_pairs(M) = 0) and tier_coverage(M)"
+    notes: "1 = the station dish_pool may ship; not applied to single wave menus. tier_coverage requires satiety 1, 2-4 and >=5 all present. Balance audit only; never blocks startup."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: dominates
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+    variables:
+      - price_a
+      - satiety_a
+      - cloying_group_a
+      - price_b
+      - satiety_b
+      - cloying_group_b
+    output_range: [0, 1]
+    expression: "same_group(A,B) and price(B) >= price(A) and satiety(B) <= satiety(A) and (price(B) > price(A) or satiety(B) < satiety(A))"
+    notes: "Strict dominance within one cloying_group; two empty groups count as the same group. Any same-group dominated pair is a design error."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: opt_value
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+      - design/gdd/cloying-and-taste.md
+    variables:
+      - M
+      - C
+      - T
+    output_range: [0, 99999]
+    expression: "max sum(price(d) for d in S) subject to S subset M, |S| <= T, sum(satiety(d)) <= C"
+    notes: "0/1 knapsack. Design-time and CI only; never runs in-game. 12 dishes, C=20, T=10 gives 104."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: calibration_ratio
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+      - design/gdd/cloying-and-taste.md
+    variables:
+      - opt_value
+      - entry_fee
+    output_range: [0, 999]
+    expression: "opt_value(M, C0, T) / entry_fee"
+    notes: "Target band [1.15, 1.35]; use 1.15-1.25 until the cloying system lands, because opt_value ignores cloying penalties."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: extra_satiety
+    status: active
+    source: design/gdd/cloying-and-taste.md
+    referenced_by:
+      - design/gdd/cloying-and-taste.md
+    variables:
+      - group_cloy
+      - cloy_cap
+    output_range: [0, 3]
+    expression: "min(group_cloy(group(d)), cloy_cap)"
+    notes: "Extra capacity charged for a repeated cloying group, using the count BEFORE this dish. cloy_cap = 3 is a safety bound; the MVP pool's largest group is 2, so the cap never binds."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: effective_satiety
+    status: active
+    source: design/gdd/cloying-and-taste.md
+    referenced_by:
+      - design/gdd/cloying-and-taste.md
+    variables:
+      - satiety
+      - extra_satiety
+    output_range: [1, 9]
+    expression: "satiety(d) + extra_satiety(d)"
+    notes: "The only capacity gate in-run. Settlement must sum effective_satiety, not raw satiety. unit_value stays price/raw satiety."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: cleanse_target
+    status: active
+    source: design/gdd/cloying-and-taste.md
+    referenced_by:
+      - design/gdd/cloying-and-taste.md
+    variables:
+      - group_cloy
+      - group
+    output_range: [0, 9]
+    expression: "argmax over g != group(d) with group_cloy(g) >= 1 of group_cloy(g), tie-break by canonical group order"
+    notes: "Canonical order: 主食, 蔬菜, 饮料, 甜, 蛋, 辣, 油, 鲜, 肉. No target when none qualifies. A dish can never cleanse its own group."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: menu_cloy_pressure
+    status: active
+    source: design/gdd/cloying-and-taste.md
+    referenced_by:
+      - design/gdd/cloying-and-taste.md
+    variables:
+      - M
+    output_range: [0, 12]
+    expression: "sum over groups g in M of (count of d in M with group(d)=g) - 1"
+    notes: "How many dishes in a menu can ever trigger a repeat surcharge. 0 means the cloying layer is inert on that menu. Current 12-dish pool = 3."
+    added: "2026-11-03"
+    revised: ""
+
 # Example:
 #
 # formulas:
@@ -202,7 +543,26 @@ formulas:
 #
 # Required fields: name, status, source, referenced_by, value, unit, added
 
-constants: []
+constants:
+  - name: uv_span_min
+    status: active
+    source: design/gdd/dish-values.md
+    referenced_by:
+      - design/gdd/dish-values.md
+    value: 1.5
+    unit: 元/格
+    added: "2026-11-03"
+    revised: ""
+
+  - name: cloy_cap
+    status: active
+    source: design/gdd/cloying-and-taste.md
+    referenced_by:
+      - design/gdd/cloying-and-taste.md
+    value: 3
+    unit: 格
+    added: "2026-11-03"
+    revised: ""
 
 # Example:
 #

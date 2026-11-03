@@ -61,8 +61,8 @@ were found.
 | 5 | 餐局流程 | Core | MVP | Not Started | — | 场景与流程管理, 数据配置, 输入 |
 | 6 | 时间与回合 | Core | MVP | Not Started | — | 餐局流程 |
 | 7 | 胃容量 | Gameplay | MVP | Not Started | — | 餐局流程, 数据配置 |
-| 8 | 菜品数值 | Gameplay | MVP | Not Started | — | 数据配置 |
-| 9 | 腻度与口味 | Gameplay | MVP | Not Started | — | 菜品数值 |
+| 8 | 菜品数值 | Gameplay | MVP | Approved | design/gdd/dish-values.md | 数据配置 |
+| 9 | 腻度与口味 | Gameplay | MVP | Designed | design/gdd/cloying-and-taste.md | 菜品数值 |
 | 10 | 菜单波次 | Gameplay | Vertical Slice | Not Started | — | 菜品数值, 数据配置 |
 | 11 | 结算与入场费 | Economy | MVP | Not Started | — | 菜品数值, 腻度与口味, 胃容量, 时间与回合 |
 | 12 | 局外升级 | Progression | MVP | Not Started | — | 结算与入场费, 存档, 数据配置 |
@@ -71,13 +71,16 @@ were found.
 | 15 | 局内 HUD | UI | MVP | Not Started | — | 餐局流程, 时间与回合, 胃容量, 菜品数值, 输入 |
 | 16 | 界面流程 | UI | MVP | Not Started | — | 餐局流程, 结算与入场费, 局外升级, 场景与流程管理, 输入 |
 | 17 | 音效反馈 | Audio | Vertical Slice | Not Started | — | 餐局流程, 结算与入场费, 场景与流程管理 |
-| 18 | 首局引导 | Meta | Vertical Slice | Not Started | — | 餐局流程, 局内 HUD, 输入, 场景与流程管理 |
+| 18 | 首局引导 | Meta | Vertical Slice | Not Started | — | 餐局流程, 局内 HUD, 输入, 场景与流程管理, 菜品数值 |
 | 19 | 在线挑战 | Meta | Full Vision | Not Started | — | 结算与入场费, 存档 |
 | 20 | 同屏合作 | Meta | Full Vision | Not Started | — | 几乎全部系统（延后） |
 
 > **UX note**: 场景与流程管理 imposes UI requirements on screens owned by 界面流程
 > (Error screen, Pause overlay, Quit-confirm modal). Run `/ux-design` for them
 > before writing epics; stories should cite the UX spec, not the GDD directly.
+>
+> 腻度与口味 also imposes UI requirements on 局内 HUD（菜品卡的实际饱腹与解腻预览、
+> 腻度面板）。`/ux-design` 需覆盖这两块，相关 story 引用 `design/ux/hud.md`。
 
 ---
 
@@ -199,14 +202,14 @@ Vertical Slice tier, and the rest are Full Vision.
 | Metric | Count |
 |--------|-------|
 | Total systems identified | 20 |
-| Design docs started | 3 |
-| Design docs reviewed | 1 |
-| Design docs approved | 0 |
+| Design docs started | 5 |
+| Design docs reviewed | 2 |
+| Design docs approved | 1 |
 
 > 场景与流程管理于 2026-11-03 通过设计评审（Approved），随后补写了 Formulas 章节并在
 > 输入 GDD 中定名了上下文切换接口，两处都是评审后才出现的改动，因此状态回到 **In Review**
 > 等待复审。复审通过后改回 Approved。
-| MVP systems designed | 3/13 |
+| MVP systems designed | 5/13 |
 | Vertical Slice systems designed | 0/5 |
 
 ---
