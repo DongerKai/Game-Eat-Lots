@@ -368,6 +368,7 @@ formulas:
     referenced_by:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
+      - design/gdd/settlement-and-entry-fee.md
     variables:
       - price
       - satiety
@@ -461,20 +462,22 @@ formulas:
     referenced_by:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
+      - design/gdd/settlement-and-entry-fee.md
     variables:
       - opt_value
       - entry_fee
     output_range: [0, 999]
     expression: "opt_value(M, C0, T) / entry_fee"
-    notes: "Target band [1.15, 1.35]; use 1.15-1.25 until the cloying system lands, because opt_value ignores cloying penalties."
+    notes: "Target band [1.15, 1.35]. opt_value ignores cloying penalties, but the 12-dish pool has a zero-penalty witness order (红烧肉 -> 拍黄瓜 -> 糖醋里脊 -> rest), so 104 and 85 remain valid: 1.224. Recompute after any capacity or cloying-resistance upgrade."
     added: "2026-11-03"
-    revised: ""
+    revised: "2026-11-03"
 
   - name: extra_satiety
     status: active
     source: design/gdd/cloying-and-taste.md
     referenced_by:
       - design/gdd/cloying-and-taste.md
+      - design/gdd/settlement-and-entry-fee.md
     variables:
       - group_cloy
       - cloy_cap
@@ -489,6 +492,7 @@ formulas:
     source: design/gdd/cloying-and-taste.md
     referenced_by:
       - design/gdd/cloying-and-taste.md
+      - design/gdd/settlement-and-entry-fee.md
     variables:
       - satiety
       - extra_satiety
@@ -582,6 +586,142 @@ formulas:
     output_range: [0, 1]
     expression: "(all waves non-empty) and (waves partition M) and (wave_reachable_opt >= ceil(0.9 * opt_value(M, C, T)))"
     notes: "Boolean gate for a generated partition. MVP threshold 94 (0.9 x 104). Reroll up to 20 seeds; accept the best with a warning rather than blocking the run."
+  - name: total_value
+    status: active
+    source: design/gdd/settlement-and-entry-fee.md
+    referenced_by:
+      - design/gdd/settlement-and-entry-fee.md
+    variables:
+      - R
+      - price
+    output_range: [0, 999999]
+    expression: "sum of price(d_i) for i in 1..n"
+    notes: "Run total eaten value in int64. Rows follow eaten order. Checked addition; overflow returns OVERFLOW, never wraps. Empty run = 0."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: net_profit
+    status: active
+    source: design/gdd/settlement-and-entry-fee.md
+    referenced_by:
+      - design/gdd/settlement-and-entry-fee.md
+    variables:
+      - total_value
+      - entry_fee
+    output_range: [-99999, 999999]
+    expression: "total_value(R) - entry_fee(station_id)"
+    notes: "Signed int64. Never clamped. Wallet application (including whether loss is charged) is owned by 局外升级, not by settlement."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: broke_even
+    status: active
+    source: design/gdd/settlement-and-entry-fee.md
+    referenced_by:
+      - design/gdd/settlement-and-entry-fee.md
+    variables:
+      - net_profit
+    output_range: [0, 1]
+    expression: "net_profit(R) >= 0"
+    notes: "Derived predicate, never a stored field. Exactly 0 counts as break-even. Downstream must read the predicate, not re-derive it from displayed text."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: return_ratio
+    status: active
+    source: design/gdd/settlement-and-entry-fee.md
+    referenced_by:
+      - design/gdd/settlement-and-entry-fee.md
+    variables:
+      - total_value
+      - entry_fee
+    output_range: [0, 999]
+    expression: "total_value(R) / entry_fee(station_id); undefined when entry_fee = 0"
+    notes: "Actual run value over fee, not the design-time calibration upper bound. Display via return_percent_x10 = floor(1000 * total / fee), one decimal percent. Fee 0 renders 免单."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: effective_unit_value
+    status: active
+    source: design/gdd/settlement-and-entry-fee.md
+    referenced_by:
+      - design/gdd/settlement-and-entry-fee.md
+    variables:
+      - price
+      - effective_satiety
+    output_range: [0, 9999]
+    expression: "price(d) / effective_satiety(d)"
+    notes: "Receipt-only counterpart of unit_value. unit_value keeps price/raw satiety and stays the cross-dish scale; this one shows what a repeated dish actually cost per cell. Never used for sorting or gate decisions."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: running_net
+    status: active
+    source: design/gdd/settlement-and-entry-fee.md
+    referenced_by:
+      - design/gdd/settlement-and-entry-fee.md
+    variables:
+      - price
+      - entry_fee
+      - k
+    output_range: [-99999, 999999]
+    expression: "sum(price(d_i) for i in 1..k) - entry_fee"
+    notes: "Live HUD net profit. Must start at -entry_fee before the first dish. HUD must call this instead of summing prices itself, or the in-run and settlement numbers drift."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: shortfall
+    status: active
+    source: design/gdd/settlement-and-entry-fee.md
+    referenced_by:
+      - design/gdd/settlement-and-entry-fee.md
+    variables:
+      - entry_fee
+      - price
+      - k
+    output_range: [0, 99999]
+    expression: "max(0, entry_fee - sum(price(d_i) for i in 1..k))"
+    notes: "How much is still needed to break even; monotonically non-increasing, 0 after break-even. Paired with running_net on the HUD."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: capacity_used
+    status: active
+    source: design/gdd/settlement-and-entry-fee.md
+    referenced_by:
+      - design/gdd/settlement-and-entry-fee.md
+    variables:
+      - effective_satiety
+    output_range: [0, 999]
+    expression: "sum(effective_satiety(d_i) for i in 1..n)"
+    notes: "Must equal RunLog.capacity_used; mismatch returns CAPACITY_MISMATCH. Exceeding capacity_total returns CAPACITY_OVERFLOW and is never clamped."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: wasted_capacity
+    status: active
+    source: design/gdd/settlement-and-entry-fee.md
+    referenced_by:
+      - design/gdd/settlement-and-entry-fee.md
+    variables:
+      - capacity_total
+      - capacity_used
+    output_range: [0, 999]
+    expression: "capacity_total(R) - capacity_used(R)"
+    notes: "Unused capacity. Paired with cloy_extra_total so the receipt separates avoidable repetition cost from turns running out."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: cloy_extra_total
+    status: active
+    source: design/gdd/settlement-and-entry-fee.md
+    referenced_by:
+      - design/gdd/settlement-and-entry-fee.md
+    variables:
+      - extra_satiety
+    output_range: [0, 99]
+    expression: "sum(extra_satiety(d_i) for i in 1..n)"
+    notes: "Total capacity paid to the cloying system this run. Uses the per-row snapshot recorded at eat time; settlement never replays the cloying sequence."
     added: "2026-11-03"
     revised: ""
 
@@ -655,6 +795,15 @@ constants:
       - design/gdd/menu-waves.md
     value: 1
     unit: 回合
+  - name: station_canteen_entry_fee
+    status: active
+    source: design/gdd/settlement-and-entry-fee.md
+    referenced_by:
+      - design/gdd/settlement-and-entry-fee.md
+      - design/gdd/dish-values.md
+    value: 85
+    unit: 元
+    notes: "Confirmed by the settlement GDD against opt_value 104 (calibration_ratio 1.224). Stored as StationData.entry_fee; retune if the prototype median falls outside the 88-96 target band."
     added: "2026-11-03"
     revised: ""
 
