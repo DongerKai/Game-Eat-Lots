@@ -167,8 +167,9 @@ The `valid_record_set` formula is defined as:
 | 餐局流程 | 硬 | `get_station(id)` → `entry_fee` | GDD 未写 |
 | 存档 | 硬 | 持久化 id 与等级/数值；读取时不信任存档里的数值快照 | GDD 未写 |
 | 局内 HUD | 软（间接） | 通过菜品数值/时间与回合取得数字，不直接读 catalog | GDD 未写 |
+| 场景与流程管理 | 硬 | `Boot` 期读取加载与校验的最终结果（`Ready` / `Failed`），决定进入 Menu 还是 Error | GDD 已写 |
 
-**双向一致要求**：以上每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「数据配置」为上游依赖。当前它们都还没有 GDD，此要求记录在此，供后续设计时核对。
+**双向一致要求**：以上每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「数据配置」为上游依赖。目前只有场景与流程管理的 GDD 已完成并已列出本系统；其余系统仍待设计，此要求记录在此供后续核对。
 
 ## Visual/Audio Requirements
 
@@ -187,7 +188,7 @@ The `valid_record_set` formula is defined as:
 
 ## Cross-References
 
-**None — this system references no other GDD.** 数据配置是最先设计的系统；下游系统（菜品数值、腻度与口味、菜单波次、局外升级、餐局流程、存档、局内 HUD）在各自 GDD 写好后，需要把「数据配置」列回 Cross-References，届时在此表补充。
+**None — this system references no other GDD.** 数据配置是最先设计的系统。场景与流程管理的 GDD 已完成并已在 Cross-References 中回指本系统；其余下游系统（菜品数值、腻度与口味、菜单波次、局外升级、餐局流程、存档、局内 HUD）在各自 GDD 写好后，需要把「数据配置」列回 Cross-References，届时在此表补充。
 
 ## Acceptance Criteria
 

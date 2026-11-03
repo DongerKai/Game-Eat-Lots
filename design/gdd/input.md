@@ -52,10 +52,10 @@ Godot 4.6 起鼠标焦点与键盘/手柄焦点分离，因此输入层负责分
 | Blocked | 加载、首局引导、结算动画 | `ui_pause`（若该界面允许） | 其余全部 |
 | Menu | 主菜单、结算、升级、设置 | 导航、`ui_accept`、`ui_cancel` | `game_skip_dish`、`ui_pause` |
 | Run | 一局进行中且无弹窗 | 导航、`ui_accept`、`game_skip_dish`、`ui_pause` | — |
-| Paused | Run 中按 `ui_pause` | `ui_pause` / `ui_accept`（恢复）、`ui_cancel`（打开退出确认） | `game_skip_dish` |
+| Paused | Run 中按 `ui_pause` | `ui_pause`（恢复）、`ui_accept`（激活焦点控件，默认「继续」）、`ui_cancel`（打开退出确认） | `game_skip_dish` |
 | Modal | 任意弹窗（设置、确认框） | 导航、`ui_accept`、`ui_cancel` | 其余全部 |
 
-**转换**：Run → Paused（`ui_pause`）；Paused → Run（`ui_pause` 或 `ui_accept`）；任意 → Modal（界面请求）；Modal → 来源上下文（`ui_accept` 确认或 `ui_cancel` 关闭）；Run → Menu（结算完成）；Menu → Run（开始一局）。
+**转换**：Run → Paused（`ui_pause`）；Paused → Run（`ui_pause`，或界面流程消费 `ui_accept` 后请求）；任意 → Modal（界面请求）；Modal → 来源上下文（`ui_accept` 确认或 `ui_cancel` 关闭）；Run → Menu（结算完成）；Menu → Run（开始一局）。
 
 ### Interactions with Other Systems
 
@@ -129,8 +129,8 @@ The `stick_engaged` formula is defined as:
 
 ## Edge Cases
 
-- **If 窗口失去焦点**（Alt-Tab、点击别的窗口）：局内自动进入 Paused，一局的状态完整保留；菜单保持原状态。
-- **If 手柄在局中拔出**：自动进入 Paused 并显示"请重新连接手柄"；键盘仍可操作，可继续游戏。
+- **If 窗口失去焦点**（Alt-Tab、点击别的窗口）：输入层不生成任何动作，上下文保持不变。是否暂停由场景与流程管理决定（当前设计：**不自动暂停**——回合制没有实时压力，见 scene-flow.md）。
+- **If 手柄在局中拔出**：输入层停止接受该设备的事件，按下中的动作按释放处理，上下文保持不变。是否暂停由场景与流程管理决定（当前设计：**不自动暂停**）；重连后继续，键盘仍可操作。
 - **If 手柄在局中接入**：不改变当前状态，新设备立即开始工作。
 - **If 鼠标与键盘/手柄同时操作**：双焦点各自记录；以最近一次输入的方式决定当前绘制哪种焦点样式，任何动作都不会丢失。
 - **If 长按 `ui_accept` 或 `game_skip_dish`**：只触发一次，不重复。
@@ -158,8 +158,9 @@ The `stick_engaged` formula is defined as:
 | 局内 HUD | 硬 | 菜品卡的悬停、点击、右键 | GDD 未写 |
 | 首局引导 | 软 | 请求 Blocked 上下文，只放行指定动作 | GDD 未写 |
 | 音效反馈 | 软 | 动作触发事件 | GDD 未写 |
+| 场景与流程管理 | 硬 | 顶层状态切换时通知进入默认上下文并清空临时栈；由它订阅 `ui_pause` 驱动 `Run ⇄ Paused` | GDD 已写 |
 
-**双向一致要求**：以上系统编写 GDD 时必须列出「输入」为上游依赖。当前 `design/gdd/systems-index.md` 的依赖列**没有记录这些依赖**——本 GDD 完成后需要把「根系统索引补上 输入 → 界面流程 / 餐局流程 / 局内 HUD」作为索引修正项。
+**双向一致（已完成）**：索引第 5、15、16 行的 `Depends On` 已分别记录「输入」；场景与流程管理的 GDD 也已完成并把「输入」列为上游依赖，索引第 3 行已记为「数据配置, 输入」。以上系统编写各自 GDD 时必须同样列出「输入」为上游依赖。
 
 ## Visual/Audio Requirements
 
@@ -191,7 +192,7 @@ The `stick_engaged` formula is defined as:
 
 ## Cross-References
 
-**None — this system references no other GDD.** 输入不依赖数据配置或其他已写文档；它被界面流程、餐局流程、局内 HUD 引用，这些文档写好后需要在本表补充反向链接。
+**None — this system references no other GDD.** 输入不依赖数据配置或其他已写文档；它被界面流程、餐局流程、局内 HUD 引用。场景与流程管理的 GDD 已完成并已回指本系统；其余文档写好后需要在本表补充反向链接。
 
 ## Acceptance Criteria
 
@@ -208,7 +209,7 @@ The `stick_engaged` formula is defined as:
 9. **GIVEN** F7，**WHEN** 合成 `device=0` 的 `InputEventKey` 与 `InputEventMouseMotion`，**THEN** 按事件类型判为键盘/鼠标；**GIVEN** `device=0` 的手柄事件，**THEN** 不误判。源码搜索 `device ==` 命中 0 次。
 10. **GIVEN** F2，**WHEN** 扫描 InputMap 的写入点，**THEN** 只有中央表 1 处、8 个动作，重绑入口为 0。
 11. **GIVEN** 下游探针场景，**WHEN** 调用输入 API，**THEN** 只暴露 `is_action_just_pressed(action) -> bool`；静态扫描中 `InputEvent` 引用只出现在输入层。
-12. **GIVEN** F8，**WHEN** Run → Paused → Run、Run → Modal → 来源上下文，**THEN** 动作白名单与状态表一致，Blocked 上下文全部丢弃；Alt-Tab 使 Run → Paused 且局面保留；手柄拔出 → Paused 且键盘仍能完成 accept。
+12. **GIVEN** F8，**WHEN** Run → Paused → Run、Run → Modal → 来源上下文，**THEN** 动作白名单与状态表一致，Blocked 上下文全部丢弃；**WHEN** 窗口失焦或手柄拔出，**THEN** 上下文不变、不产生任何动作；手柄拔出后键盘仍能完成 `ui_accept`。
 13. **GIVEN** 方向键保持按住，**WHEN** 切换上下文再切回，**THEN** 不产生导航，必须释放后重按。
 14. **GIVEN** 同一帧按下手柄 A 与 Enter，**WHEN** 两者映射到同一动作，**THEN** 动作计数为 1。
 15. **GIVEN** 60 FPS 目标与同帧轮询，**WHEN** 从 F1 时间戳到消费者查询，**THEN** 延迟 ≤ 1 帧（16.7 ms）。该预算依赖 `project.yaml` 的目标帧率与输入轮询方式，不测主观手感。

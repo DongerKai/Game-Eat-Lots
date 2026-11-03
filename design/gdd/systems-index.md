@@ -44,7 +44,9 @@ daily challenges and a leaderboard; 同屏合作 is the deferred co-op system.
 **Dependency notes** — 数据配置 and 菜品数值 are the widest bottlenecks: a change to
 the dish schema reaches 腻度, 菜单波次, 结算 and HUD. 结算与入场费 feeds every
 progression system, and 餐局流程 is the skeleton that 时间与回合, 胃容量, HUD and
-首局引导 hang from. No circular dependencies were found.
+首局引导 hang from. 场景与流程管理 is the app shell: 数据配置 and 输入 feed it, and
+界面流程 and 餐局流程 both hang from its Menu/Run states. No circular dependencies
+were found.
 
 ---
 
@@ -54,7 +56,7 @@ progression system, and 餐局流程 is the skeleton that 时间与回合, 胃�
 |---|-------------|----------|----------|--------|------------|------------|
 | 1 | 数据配置 | Core | MVP | Designed | design/gdd/data-config.md | — |
 | 2 | 输入 | Core | MVP | Designed | design/gdd/input.md | — |
-| 3 | 场景与流程管理 | Core | MVP | Not Started | — | — |
+| 3 | 场景与流程管理 | Core | MVP | Approved | design/gdd/scene-flow.md | 数据配置, 输入 |
 | 4 | 存档 | Persistence | MVP | Not Started | — | 数据配置 |
 | 5 | 餐局流程 | Core | MVP | Not Started | — | 场景与流程管理, 数据配置, 输入 |
 | 6 | 时间与回合 | Core | MVP | Not Started | — | 餐局流程 |
@@ -68,10 +70,14 @@ progression system, and 餐局流程 is the skeleton that 时间与回合, 胃�
 | 14 | 纪录与里程碑 | Progression | Vertical Slice | Not Started | — | 结算与入场费, 存档 |
 | 15 | 局内 HUD | UI | MVP | Not Started | — | 餐局流程, 时间与回合, 胃容量, 菜品数值, 输入 |
 | 16 | 界面流程 | UI | MVP | Not Started | — | 餐局流程, 结算与入场费, 局外升级, 场景与流程管理, 输入 |
-| 17 | 音效反馈 | Audio | Vertical Slice | Not Started | — | 餐局流程, 结算与入场费 |
-| 18 | 首局引导 | Meta | Vertical Slice | Not Started | — | 餐局流程, 局内 HUD, 输入 |
+| 17 | 音效反馈 | Audio | Vertical Slice | Not Started | — | 餐局流程, 结算与入场费, 场景与流程管理 |
+| 18 | 首局引导 | Meta | Vertical Slice | Not Started | — | 餐局流程, 局内 HUD, 输入, 场景与流程管理 |
 | 19 | 在线挑战 | Meta | Full Vision | Not Started | — | 结算与入场费, 存档 |
 | 20 | 同屏合作 | Meta | Full Vision | Not Started | — | 几乎全部系统（延后） |
+
+> **UX note**: 场景与流程管理 imposes UI requirements on screens owned by 界面流程
+> (Error screen, Pause overlay, Quit-confirm modal). Run `/ux-design` for them
+> before writing epics; stories should cite the UX spec, not the GDD directly.
 
 ---
 
@@ -106,11 +112,11 @@ Vertical Slice tier, and the rest are Full Vision.
 
 ## Dependency Map
 
-### Foundation Layer (no dependencies)
+### Foundation Layer
 
-1. **数据配置** — every dish, upgrade and station value lives here; nothing else can be tuned without it
-2. **输入** — keyboard/mouse and partial gamepad; no gameplay dependency
-3. **场景与流程管理** — the app-level state machine; no gameplay dependency
+1. **数据配置** — every dish, upgrade and station value lives here; nothing else can be tuned without it. No dependencies.
+2. **输入** — keyboard/mouse and partial gamepad; no gameplay dependency.
+3. **场景与流程管理** — the app-level state machine. Depends only on 数据配置（校验结果）and 输入（上下文切换）, so it stays in this layer; both edges are same-layer and do not change the design order.
 
 ### Core Layer (depends on foundation)
 
@@ -193,10 +199,10 @@ Vertical Slice tier, and the rest are Full Vision.
 | Metric | Count |
 |--------|-------|
 | Total systems identified | 20 |
-| Design docs started | 2 |
-| Design docs reviewed | 0 |
-| Design docs approved | 0 |
-| MVP systems designed | 2/13 |
+| Design docs started | 3 |
+| Design docs reviewed | 1 |
+| Design docs approved | 1 |
+| MVP systems designed | 3/13 |
 | Vertical Slice systems designed | 0/5 |
 
 ---
