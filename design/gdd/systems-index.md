@@ -71,7 +71,7 @@ were found.
 | 15 | 局内 HUD | UI | MVP | Designed | design/gdd/in-game-hud.md | 餐局流程, 时间与回合, 胃容量, 菜品数值, 输入, 结算与入场费, 腻度与口味, 菜单波次 |
 | 16 | 界面流程 | UI | MVP | Designed | design/gdd/ui-flow.md | 餐局流程, 结算与入场费, 局外升级, 场景与流程管理, 输入, 存档, 纪录与里程碑, 音效反馈, 数据配置 |
 | 17 | 音效反馈 | Audio | Vertical Slice | Designed | design/gdd/audio-feedback.md | 餐局流程, 结算与入场费, 场景与流程管理 |
-| 18 | 首局引导 | Meta | Vertical Slice | Not Started | — | 餐局流程, 局内 HUD, 输入, 场景与流程管理, 菜品数值 |
+| 18 | 首局引导 | Meta | Vertical Slice | Designed | design/gdd/first-run-onboarding.md | 餐局流程, 局内 HUD, 输入, 场景与流程管理, 菜品数值, 结算与入场费 |
 | 19 | 在线挑战 | Meta | Full Vision | Not Started | — | 结算与入场费, 存档 |
 | 20 | 同屏合作 | Meta | Full Vision | Not Started | — | 几乎全部系统（延后） |
 
@@ -115,6 +115,10 @@ were found.
 >
 > 界面流程 owns the menu, receipt, upgrade, records, settings, pause and error screens;
 > `/ux-design` must cover each screen before its epic is written.
+>
+> 首局引导 imposes UI requirements on 局内 HUD（教学气泡、锚点高亮、Blocked 输入）
+> and 界面流程（首局预置与 `is_first_run` 的组装）。`/ux-design` must cover the
+> onboarding overlay and its skip affordance.
 
 ---
 
@@ -180,7 +184,7 @@ Vertical Slice tier, and the rest are Full Vision.
 
 ### Polish Layer (depends on everything)
 
-1. **首局引导** — depends on: 餐局流程, 局内 HUD, 输入
+1. **首局引导** — depends on: 餐局流程, 局内 HUD, 输入, 场景与流程管理, 菜品数值, 结算与入场费
 2. **在线挑战** — depends on: 结算与入场费, 存档
 3. **同屏合作** — depends on: 几乎全部系统（延后）
 
@@ -236,7 +240,7 @@ Vertical Slice tier, and the rest are Full Vision.
 | Metric | Count |
 |--------|-------|
 | Total systems identified | 20 |
-| Design docs started | 17 |
+| Design docs started | 18 |
 | Design docs reviewed | 2 |
 | Design docs approved | 1 |
 
@@ -244,7 +248,7 @@ Vertical Slice tier, and the rest are Full Vision.
 > 输入 GDD 中定名了上下文切换接口，两处都是评审后才出现的改动，因此状态回到 **In Review**
 > 等待复审。复审通过后改回 Approved。
 | MVP systems designed | 13/13 |
-| Vertical Slice systems designed | 4/5 |
+| Vertical Slice systems designed | 5/5 |
 
 ---
 

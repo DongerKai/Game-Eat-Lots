@@ -349,7 +349,7 @@ The `menu_vision_useful_max` formula is defined as:
 | 界面流程 | 硬（UI） | 升级页、收据入账、钱包与「未保存」状态 | GDD 已写（`design/gdd/ui-flow.md`） |
 | 解锁与档口 | 软 | 读取钱包与等级作为解锁前置；`unlock_cost` 扣款经 `spend(amount, reason, extra)` | GDD 已写（`design/gdd/unlocks-and-stations.md`） |
 | 纪录与里程碑 | 软 | 从 `upgrade_snapshot.levels` 冻结历史等级 | GDD 已写（`design/gdd/records-and-milestones.md`） |
-| 首局引导 | 软 | 价格与可负担性；可推荐、不可自动购买 | GDD 未写 |
+| 首局引导 | 软 | 价格与可负担性；可推荐、不可自动购买 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 | 音效反馈 | 软 | `purchase_succeeded` / `purchase_failed` / `run_result_applied` | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 场景与流程管理 | 软（编排） | 购买只在 `Menu`；本系统不驱动顶层状态 | GDD 已写（`design/gdd/scene-flow.md`） |
 

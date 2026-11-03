@@ -277,7 +277,7 @@ The `calibration_ratio` formula is defined as:
 | 菜单波次 | 硬（VS） | 菜池：`uv_span(M)`、`same_group_dominated_pairs(M)`；单次刷新：`opt_value(M, C, T)` | GDD 已写（`design/gdd/menu-waves.md`） |
 | 结算与入场费 | 硬 | `price(d)`、`unit_value(d)`；一局求和由结算在 int64 中完成 | GDD 已写（`design/gdd/settlement-and-entry-fee.md`） |
 | 局内 HUD | 硬 | `price(d)`、`satiety(d)`；局内不请求 `unit_value` | GDD 已写（`design/gdd/in-game-hud.md`） |
-| 首局引导 | 软 | 结算期 `unit_value` 讲解数据 | GDD 未写 |
+| 首局引导 | 软 | 结算期 `unit_value` 讲解数据 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 
 **双向一致要求**：以上每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「菜品数值」为上游依赖。数据配置的 GDD 已在上游侧列出本系统；其余系统仍待设计，此要求记录在此供后续核对。
 
@@ -323,7 +323,7 @@ The `calibration_ratio` formula is defined as:
 | `design/gdd/systems-index.md` | 索引 | 优先级 MVP、层 Core、下游系统清单与设计顺序 |
 | `design/gdd/input.md` | 无直接接口 | 选菜输入由场景/餐局流程转译，本系统不读取输入 |
 
-**待回指**：首局引导的 GDD 写好后，需要在 Cross-References 中列出「菜品数值」。菜单波次、结算与入场费、局内 HUD、腻度与口味已完成回指。
+**待回指**：所有列出本系统的下游 GDD 已完成并已回指。
 
 ## Acceptance Criteria
 

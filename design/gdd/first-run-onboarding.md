@@ -366,7 +366,7 @@ uv_gap      = unit_value(best_menu) − worst_eaten.effective_unit_value
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 界面流程 | 硬（UI） | 取首局预置；渲染 `FirstRunExplanation`；据 `onboarding_finished` 决定下一次 `is_first_run` | GDD 未写 |
+| 界面流程 | 硬（UI） | 取首局预置；渲染 `FirstRunExplanation`；据 `onboarding_finished` 决定下一次 `is_first_run` | GDD 已写（`design/gdd/ui-flow.md`） |
 | 菜单波次 | 软 | 接收并应用 `pool_override`（当前只读 `StationData.dish_pool`，见 Open Questions） | GDD 已写（`design/gdd/menu-waves.md`） |
 | 腻度与口味 | 软 | 提供焦点菜的组计数与 `extra_satiety` 供 B3 触发；不接受任何写入 | GDD 已写（`design/gdd/cloying-and-taste.md`） |
 | 局外升级 | 软（仅文案） | `B4` 的首笔升级建议读目录与钱包，只出文字 | GDD 已写（`design/gdd/meta-upgrades.md`） |
@@ -390,7 +390,7 @@ uv_gap      = unit_value(best_menu) − worst_eaten.effective_unit_value
 
 **双向一致核对**：
 
-- 五份上游 GDD 的交互表都已有一行「首局引导」，状态为「GDD 未写」；本文件写好后应统一改为「GDD 已写（`design/gdd/first-run-onboarding.md`）」。
+- 上游 GDD 的交互表都已有「首局引导」行，现已统一改为「GDD 已写（`design/gdd/first-run-onboarding.md`）」。
 - `menu-waves.md`、`cloying-and-taste.md`、`meta-upgrades.md`、`settlement-and-entry-fee.md` 已把本系统列为软下游，本文件已逐条列出接口，双向成立。
 - **契约缺口（需要在共享文件里补，不在本文件修改）**：`input.md` 的 `Blocked` 上下文只放行 `ui_pause`，与本 GDD 需要的「白名单」不一致；`run-flow.md` 的 `RunConfig` 没有 `entry_fee_override`；`menu-waves.md` 的 `initialize` 未接受 `pool_override`。三项都在 Open Questions 里给出建议落点。
 

@@ -1091,6 +1091,55 @@ formulas:
     added: "2026-11-03"
     revised: ""
 
+  - name: onboarding_active
+    status: active
+    source: design/gdd/first-run-onboarding.md
+    referenced_by:
+      - design/gdd/first-run-onboarding.md
+      - design/gdd/run-flow.md
+      - design/gdd/in-game-hud.md
+    variables:
+      - is_first_run
+      - run_state
+      - finished
+    output_range: "true | false"
+    expression: "is_first_run and (run_state in {Active, Ending}) and not finished"
+    notes: "Only draws on Active/Ending frames; skipping sets finished=true for the rest of the run."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: first_run_pool
+    status: active
+    source: design/gdd/first-run-onboarding.md
+    referenced_by:
+      - design/gdd/first-run-onboarding.md
+      - design/gdd/menu-waves.md
+      - design/gdd/dish-values.md
+      - design/gdd/run-flow.md
+    variables:
+      - station.dish_pool
+    output_range: "6 dish ids"
+    expression: "dish_seafood_pot, dish_sweet_sour_pork, dish_braised_pork, dish_steamed_fish, dish_fried_chicken, dish_mapo_tofu"
+    notes: "Teaching pool: base satiety 20 equals capacity, two repeated groups (鲜, 肉), teaching entry fee 40. Any change requires re-running the four-part derivation."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: replacement_hint
+    status: active
+    source: design/gdd/first-run-onboarding.md
+    referenced_by:
+      - design/gdd/first-run-onboarding.md
+      - design/gdd/settlement-and-entry-fee.md
+    variables:
+      - RunResult.rows
+      - station.dish_pool
+      - eaten
+    output_range: "uv_gap in [-7, 7] or null"
+    expression: "worst_eaten = argmin effective_unit_value; best_menu = argmax unit_value over skipped; uv_gap = unit_value(best_menu) - worst_eaten.effective_unit_value"
+    notes: "Per-cell comparison only; never claims the replacement's total score. Ties break by dish_id lexicographic order."
+    added: "2026-11-03"
+    revised: ""
+
 constants:
   - name: uv_span_min
     status: active
@@ -1220,6 +1269,31 @@ constants:
     value: 20
     unit: 格
     notes: "C0. Data ownership is still a stomach Open Question (suggested BalanceData.base_capacity). The 104-yuan optimal meal fills exactly these 20 cells."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: first_run_entry_fee
+    status: active
+    source: design/gdd/first-run-onboarding.md
+    referenced_by:
+      - design/gdd/first-run-onboarding.md
+      - design/gdd/settlement-and-entry-fee.md
+      - design/gdd/meta-upgrades.md
+    value: 40
+    unit: 元
+    notes: "Teaching-only entry fee. Lower than the real 85 so the first optimal run is profitable and the first upgrade is affordable; the receipt must label it as a teaching price."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: first_run_pool_size
+    status: active
+    source: design/gdd/first-run-onboarding.md
+    referenced_by:
+      - design/gdd/first-run-onboarding.md
+      - design/gdd/menu-waves.md
+    value: 6
+    unit: 道
+    notes: "Six teaching dishes, base satiety 20 (equals capacity), two repeated groups. The player must give up exactly one dish."
     added: "2026-11-03"
     revised: ""
 

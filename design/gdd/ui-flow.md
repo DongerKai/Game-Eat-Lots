@@ -434,7 +434,7 @@ The `displayed_value` formula is defined as:
 | 系统 | 硬 / 软 | 接口 | 状态 |
 |---|---|---|---|
 | 音效反馈 | 硬（事件契约）/ 软（播放） | 消费 `ui_button_activated`、`number_roll_started/finished`、`receipt_closed`；消费 UI 设置值 | GDD 已写（双向：本系统也消费其设置契约） |
-| 首局引导（#18） | 软 | 在本系统控件上叠加讲解与高亮，可请求 `Blocked` 上下文；不得隐藏数字、不得改变屏幕流程 | GDD 未写 |
+| 首局引导（#18） | 软 | 在本系统控件上叠加讲解与高亮，可请求 `Blocked` 上下文；不得隐藏数字、不得改变屏幕流程 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 | 解锁与档口（#13） | 软 | 将来在主菜单提供档口选择；MVP 单档口，无选择器 | GDD 已写（`design/gdd/unlocks-and-stations.md`） |
 
 **不属于依赖的关系：**

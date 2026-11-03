@@ -225,7 +225,7 @@ The `menu_cloy_pressure` formula is defined as:
 | 局内 HUD | 硬 | `extra_satiety(d)`、`cleanse_target(d)` 预览、各组计数、不可选原因 | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 结算与入场费 | 硬 | 本局实际占用格数；设计期用它复核 `opt_value` 与 `calibration_ratio` | GDD 已写（`design/gdd/settlement-and-entry-fee.md`） |
 | 菜单波次 | 软（强） | 单次可见集合必须小于全池，否则本系统退化为顺序谜题 | GDD 已写（`design/gdd/menu-waves.md`） |
-| 首局引导 | 软 | "重复加格 / 酸冰解腻"的教学数据 | GDD 未写 |
+| 首局引导 | 软 | "重复加格 / 酸冰解腻"的教学数据 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 | 存档 | 条件 | 若启用中途存档，计数表与规范组序必须持久化 | GDD 已写（MVP 无中途存档；见 `design/gdd/save-system.md`） |
 
 **双向一致要求**：以上每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「腻度与口味」为上游依赖。菜品数值已在下游侧列出本系统并标记为已写。
@@ -276,7 +276,7 @@ The `menu_cloy_pressure` formula is defined as:
 | `design/gdd/game-concept.md` | 来源 | 支柱 1/3；"被算穿"风险；"解腻流"与"连吃同类不划算"的动态 |
 | `design/gdd/systems-index.md` | 索引 | 优先级 MVP、层 Feature、上下游清单与设计顺序 |
 
-**待回指**：首局引导的 GDD 写好后，需要在各自的 Cross-References 中列出「腻度与口味」。结算与入场费、菜单波次、存档、胃容量、局内 HUD 的 GDD 已写并已回指。菜品数值的下游表中本系统状态需从「GDD 未写」改为已写。
+**待回指**：所有列出本系统的下游 GDD 已完成并已回指。
 
 **回改状态**：`dish-values.md` 的下游表状态与校准说明、`data-config.md` 的 `StationData.cloy_cap` 字段，均已于 2026-11-03 回改。
 

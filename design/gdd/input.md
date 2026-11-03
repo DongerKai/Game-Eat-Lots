@@ -166,7 +166,7 @@ The `stick_engaged` formula is defined as:
 | 界面流程 | 硬 | 导航、`ui_accept`、`ui_cancel`、初始焦点、双焦点状态 | GDD 已写（`design/gdd/ui-flow.md`） |
 | 餐局流程 | 硬 | 每回合的 `ui_accept`、`game_skip_dish`、`ui_pause` | GDD 已写（`design/gdd/run-flow.md`） |
 | 局内 HUD | 硬 | 菜品卡的悬停、点击、右键 | GDD 已写（`design/gdd/in-game-hud.md`） |
-| 首局引导 | 软 | 请求 Blocked 上下文，只放行指定动作 | GDD 未写 |
+| 首局引导 | 软 | 请求 Blocked 上下文，只放行指定动作 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 | 音效反馈 | 软 | 动作触发事件 | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 场景与流程管理 | 硬 | 顶层状态切换时调用 `request_context(default_ctx, clear_stack := true)`；订阅 `context_changed`；由它订阅 `ui_pause` 驱动 `Run ⇄ Paused` | GDD 已写 |
 

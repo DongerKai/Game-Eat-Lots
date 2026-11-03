@@ -335,7 +335,7 @@ The `shortfall` formula is defined as:
 | 纪录与里程碑 | 硬 | `net_profit`、`total_value`、`return_ratio`、`station_id`、`end_reason`；时间戳由它添加 | GDD 已写（`design/gdd/records-and-milestones.md`） |
 | 界面流程 | 硬 | `RunResult` → 收据屏；在 `Run → Menu` 同帧接收 | GDD 已写（`design/gdd/ui-flow.md`） |
 | 局内 HUD | 硬 | `running_net(k)` 与共享的 int64 累加器；不得自行求和 | GDD 已写（`design/gdd/in-game-hud.md`） |
-| 首局引导 | 软 | 每行的静态 / 实际单位价值，用于讲解与替换建议 | GDD 未写 |
+| 首局引导 | 软 | 每行的静态 / 实际单位价值，用于讲解与替换建议 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 | 音效反馈 | 软 | `settlement_started` / `broke_even` / `loss` 事件；结果 cue 在数字滚动结束时起播 | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 存档 | 软（间接） | 只持久化局外升级与纪录保留下来的字段；结算无 I/O | GDD 已写（`design/gdd/save-system.md`） |
 | 菜单波次 | 软（未来） | 若允许同一道菜重复出现，结算按次计价 | GDD 已写（`design/gdd/menu-waves.md`） |
@@ -418,7 +418,7 @@ The `shortfall` formula is defined as:
 | `design/gdd/game-concept.md` | 来源 | 四支柱、核心循环「总价值 − 入场费 = 净利」、视觉锚点 |
 | `design/gdd/input.md` | 无直接接口 | 结算屏的导航由输入上下文与界面流程处理 |
 
-**待回指**：首局引导的 GDD 写好后，必须在 Dependencies 与 Cross-References 中列出「结算与入场费」。局外升级、纪录与里程碑、界面流程、局内 HUD、音效反馈已完成回指；局内 HUD 的索引依赖行已补。
+**待回指**：所有列出本系统的下游 GDD 已完成并已回指。
 
 ## Acceptance Criteria
 

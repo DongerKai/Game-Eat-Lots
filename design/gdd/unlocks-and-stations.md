@@ -367,7 +367,7 @@ unlock_progress(U, S) =
 | 餐局流程 | 软（协调） | 界面流程只传可用档口；现有 `station_id` 存在性校验不构成授权校验 | GDD 已写（`design/gdd/run-flow.md`） |
 | 菜单波次 | 软（间接） | 读所选档口的 `dish_pool`；本设计下无需过滤 | GDD 已写（`design/gdd/menu-waves.md`） |
 | 纪录与里程碑 | 软 | 解锁进度用于展示；按 `station_id` 归档；不发放解锁 | GDD 已写（`design/gdd/records-and-milestones.md`） |
-| 首局引导 | 软 | 锁定档口与价格；可高亮、不可自动解锁 | GDD 未写 |
+| 首局引导 | 软 | 锁定档口与价格；可高亮、不可自动解锁 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 | 音效反馈 | 软 | 无直接调用；解锁音效（若有）由界面流程触发 | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 场景与流程管理 | 软（编排） | 解锁只在 `Menu`；本系统不驱动顶层切换 | GDD 已写（`design/gdd/scene-flow.md`） |
 
