@@ -81,10 +81,12 @@ The `extra_satiety` formula is defined as:
 | `d` | DishData | — | 数据配置 `get_dish(id)` | 被评估的菜 |
 | `group(d)` | string | 非空；空串视为同一组 | `DishData.cloying_group` | 该菜所属的腻度组 |
 | `group_cloy(g)` | int | 0–N | 本系统局内状态 | 本局已经吃掉的、属于组 g 的菜数量（不含当前这道） |
-| `cloy_cap` | int | 1–5 | constant | 单道菜最多被追加的饱腹；MVP = 3 |
+| `cloy_cap` | int | 1–5（设计带）；schema 只要求 ≥ 1 | `StationData.cloy_cap` | 单道菜最多被追加的饱腹；当前值 3 |
 | `extra_satiety` | int | 0–`cloy_cap` | calculated | 这道菜此刻多占的容量格 |
 
 **Output Range:** `[0, cloy_cap]`。MVP 菜单里最大的组只有 2 道菜，所以 `group_cloy` 最多到 1，**上限 3 在 MVP 中永远不生效**；它是为后续档口更大的组保留的安全阀，不是当前平衡参数。`group_cloy ≥ 0` 由解腻的下限钳制保证。
+
+> **未接入：抗性。** 数据配置的 `UpgradeData` 已定义 `CLOYING_RESISTANCE` 升级类型，概念文档也把「解腻」列为 MVP 三项升级之一，但本公式目前**不含抗性项**。在「局外升级」GDD 定义其数值语义之前，本系统按抗性 = 0 计算。接入时，抗性必须由「餐局流程」在开局时作为一局的修正传入，本系统不直接依赖「局外升级」——否则会与 `局外升级 → 结算与入场费 → 腻度与口味` 形成环。
 
 **Example:** 本局已经吃过红烧肉（`肉`），再点糖醋里脊：`group_cloy(肉) = 1` → `extra_satiety = min(1, 3) = 1`，糖醋里脊实际占用 `4 + 1 = 5` 格。
 
@@ -100,7 +102,7 @@ The `effective_satiety` formula is defined as:
 |---|---|---|---|---|
 | `satiety(d)` | int | 1–6 | `DishData.satiety` | 静态饱腹 |
 | `extra_satiety(d)` | int | 0–`cloy_cap` | calculated | 腻度追加 |
-| `effective_satiety` | int | 1–9 | calculated | 局内实际占用格数，也是可吃性判据 |
+| `effective_satiety` | int | 1–(satiety_max + cloy_cap) | calculated | 局内实际占用格数，也是可吃性判据 |
 
 **Output Range:** `[1, satiety_max + cloy_cap]`（MVP 为 1–7）。这是唯一允许参与容量判定的饱腹值；`satiety(d)` 只在展示"基础值"时出现。
 
@@ -212,7 +214,7 @@ The `menu_cloy_pressure` formula is defined as:
 |---|---|---|---|
 | 菜品数值 | 硬 | `get_dish(id)` → `price`、`satiety`、`taste_tags`、`cloying_group`；`unit_value(d)`、`uv_cmp` | GDD 已写（Approved 2026-11-03） |
 | 餐局流程 | 硬 | 餐局开始 / 结束 / 重开三个生命周期事件 | GDD 未写 |
-| 数据配置 | 硬 | `StationData.cloy_cap`（新增字段，int ≥ 1，默认 3） | GDD 已写；**字段为新增，需回改** |
+| 数据配置 | 硬 | `get_station(id)` → `cloy_cap`（int ≥ 1，默认 3） | GDD 已写（字段已回改） |
 
 **下游依赖方：**
 
@@ -269,15 +271,13 @@ The `menu_cloy_pressure` formula is defined as:
 | 文档 | 关系 | 本系统引用/依据 |
 |---|---|---|
 | `design/gdd/dish-values.md` | 上游 | `price`、`satiety`、`taste_tags`、`cloying_group`；`unit_value`；"同组惩罚相同"的支配审查前提；`opt_value = 104` 的校准基线 |
-| `design/gdd/data-config.md` | 上游 | `DishData` 字段；`StationData.cloy_cap` 为**新增字段请求**，需回改 |
+| `design/gdd/data-config.md` | 上游 | `DishData` 字段；`StationData.cloy_cap`（2026-11-03 已回改） |
 | `design/gdd/game-concept.md` | 来源 | 支柱 1/3；"被算穿"风险；"解腻流"与"连吃同类不划算"的动态 |
 | `design/gdd/systems-index.md` | 索引 | 优先级 MVP、层 Feature、上下游清单与设计顺序 |
 
 **待回指**：胃容量、局内 HUD、结算与入场费、菜单波次、首局引导、存档的 GDD 写好后，需要在各自的 Cross-References 中列出「腻度与口味」。菜品数值的下游表中本系统状态需从「GDD 未写」改为已写。
 
-**待回改（不在本文件执行）**：
-1. `dish-values.md` — 下游表状态、`opt_value` 的"零惩罚顺序"说明。
-2. `data-config.md` — `StationData.cloy_cap` 字段（int ≥ 1，默认 3）。
+**回改状态**：`dish-values.md` 的下游表状态与校准说明、`data-config.md` 的 `StationData.cloy_cap` 字段，均已于 2026-11-03 回改。
 
 ## Acceptance Criteria
 
@@ -336,3 +336,4 @@ The `menu_cloy_pressure` formula is defined as:
 | 6 | 完整的口味偏好系统（流派加成、当季口味）是否进入 Vertical Slice。当前明确推迟，`口味` 只承担解腻。 | creative-director + game-designer | Vertical Slice 规划时 |
 | 7 | 是否允许重复抽取同一道菜（菜品数值 Open Question #5）。若允许，腻度按出现次数计，本 GDD 的实现依据已写好，但 `cloy_cap` 的语义要复查。 | game-designer（菜单波次） | 菜单波次 GDD 完成时 |
 | 8 | 若启用中途存档，计数表与规范组序的序列化格式由「存档」定义。 | lead-programmer（存档） | 存档 GDD 完成时 |
+| 9 | **`CLOYING_RESISTANCE` 的数值语义未定。** 数据配置里已有该升级类型，概念文档也把「解腻」列为 MVP 三项升级之一，但本 GDD 的公式不含抗性项（当前按 0 计算）。它到底是「每级减少 1 点追加饱腹」还是「按百分比缩放」，决定了数值曲线与升级定价。 | systems-designer（局外升级）+ economy-designer | 局外升级 GDD 完成时 |

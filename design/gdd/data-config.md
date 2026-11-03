@@ -47,6 +47,7 @@
    - `entry_fee: int` — ≥ 0
    - `unlock_cost: int` — ≥ 0（0 表示开局可用）
    - `dish_pool: Array[StringName]` — 至少 1 项，每项必须存在，且每道菜的 `station_id` 必须指回本档口（双向一致）
+   - `cloy_cap: int` — ≥ 1，默认 3；单道菜因同组重复最多追加的饱腹格（由「腻度与口味」消费）
 6. **id 是契约**：按类型命名空间隔离（`dish_*` / `upgrade_*` / `station_*`）。发布后不得改名——改名等于删除旧记录并新增，会让存档失效。
 7. **启动即校验**：加载全部记录 → 校验 → 建立目录 → Ready。任一规则失败就停在这里，不进入游戏。
 8. **运行时只读**：局内状态（当前饱腹、净利、剩余时间格）属于餐局流程，任何系统都不得写回数据记录。
@@ -89,7 +90,7 @@ The `valid_record_set` formula is defined as:
 
 - `R_dish(d) = d.price ≥ 0 ∧ d.satiety ≥ 1 ∧ d.taste_tags ⊆ TAGSET ∧ d.station_id ∈ S_ids ∧ d.id ∈ dish_pool(d.station_id)`
 - `R_upg(u) = u.cost ≥ 0 ∧ u.max_level ≥ 1 ∧ u.effect_value > 0 ∧ (u.effect_type ∈ {STOMACH_CAPACITY, MENU_VISION} → u.effect_value ∈ ℤ⁺) ∧ (u.prerequisite_id = "" ∨ (u.prerequisite_id ∈ U_ids ∧ ¬cyclic(u)))`
-- `R_sta(s) = s.entry_fee ≥ 0 ∧ s.unlock_cost ≥ 0 ∧ |s.dish_pool| ≥ 1 ∧ (∀p ∈ s.dish_pool: p ∈ D_ids ∧ dish(p).station_id = s.id)`
+- `R_sta(s) = s.entry_fee ≥ 0 ∧ s.unlock_cost ≥ 0 ∧ s.cloy_cap ≥ 1 ∧ |s.dish_pool| ≥ 1 ∧ (∀p ∈ s.dish_pool: p ∈ D_ids ∧ dish(p).station_id = s.id)`
 
 **Variables:**
 
@@ -103,12 +104,13 @@ The `valid_record_set` formula is defined as:
 | `effect_value` | float | (0, +∞) | data file | 每级增量；离散类型必须为正整数 |
 | `taste_tags` | StringName[] | TAGSET 子集，可为空 | data file | 口味标签 |
 | `dish_pool` | StringName[] | ≥ 1 项 | data file | 档口菜池 |
+| `cloy_cap` | int | 1–INT32_MAX | data file | 腻度重复惩罚的单道上限（格）；默认 3 |
 | `TAGSET` | StringName[7] | 固定 | constant | 酸 / 甜 / 苦 / 辣 / 鲜 / 冰 / 油 |
 | `valid(D)` | bool | {true, false} | calculated | 是否允许启动 |
 
 **Output Range:** `valid(D) ∈ {true, false}`，无中间态。false 时阻断启动，并输出每一条违反项的记录 id 与字段名。
 
-**Example:** 2 个档口、4 道菜、2 项升级。档口 `station_canteen` 的 `entry_fee=30`、`dish_pool=[dish_fried_rice, dish_braised_pork]`；`dish_fried_rice` 的 `price=8`、`satiety=2`、`taste_tags=[oil]`、`station_id=station_canteen`；`upgrade_capacity` 的 `cost=40`、`max_level=3`、`effect_type=STOMACH_CAPACITY`、`effect_value=1`。所有引用互相指回，`valid(D)=true`。
+**Example:** 2 个档口、4 道菜、2 项升级。档口 `station_canteen` 的 `entry_fee=30`、`cloy_cap=3`、`dish_pool=[dish_fried_rice, dish_braised_pork]`；`dish_fried_rice` 的 `price=8`、`satiety=2`、`taste_tags=[oil]`、`station_id=station_canteen`；`upgrade_capacity` 的 `cost=40`、`max_level=3`、`effect_type=STOMACH_CAPACITY`、`effect_value=1`。所有引用互相指回，`valid(D)=true`。
 
 ### 加载期派生量
 
@@ -141,6 +143,7 @@ The `valid_record_set` formula is defined as:
 - **If `station_id` 指向不存在的档口**：校验失败。
 - **If 某档口 `dish_pool` 为空**：校验失败。
 - **If `dish_pool` 含不存在的 id**：校验失败，列出全部缺失 id。
+- **If 档口 `cloy_cap < 1`**：校验失败，报出档口 id 与字段名。上限为 0 或负会让「腻度与口味」静默失效或产生负惩罚，不钳制。
 - **If 某道菜不属于任何档口**：校验失败——它永远无法出现在游戏中，是死数据。MVP 采用严格策略。
 - **If `prerequisite_id` 指向不存在的升级**：校验失败。
 - **If `prerequisite_id` 形成环**（A 需要 B、B 需要 A）：校验失败，并打印环路径。
@@ -161,7 +164,7 @@ The `valid_record_set` formula is defined as:
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
 | 菜品数值 | 硬 | `get_dish(id)` → `price`、`satiety`、`taste_tags`、`cloying_group` | GDD 已写（`design/gdd/dish-values.md`） |
-| 腻度与口味 | 硬 | `get_dish(id)` → `taste_tags`、`cloying_group` | GDD 已写（`design/gdd/cloying-and-taste.md`） |
+| 腻度与口味 | 硬 | `get_dish(id)` → `taste_tags`、`cloying_group`；`get_station(id)` → `cloy_cap` | GDD 已写（`design/gdd/cloying-and-taste.md`） |
 | 菜单波次 | 硬（VS） | `get_station(id)` → `dish_pool` | GDD 未写 |
 | 局外升级 | 硬 | `get_upgrade(id)` → 全部字段 | GDD 未写 |
 | 餐局流程 | 硬 | `get_station(id)` → `entry_fee` | GDD 未写 |
@@ -216,6 +219,7 @@ The `valid_record_set` formula is defined as:
 20. **GIVEN** 夹具含 12 条 dish、2 个档口（池分别 5 / 7 条），**WHEN** 查询派生量，**THEN** `dish_count=12`，每个 `dishes_per_station(s)` 等于该档口 `dish_pool.size()`，前置链 A→B→C 的 `prereq_depth=2`。
 21. **GIVEN** `price` 写成 `"abc"` 或 `1e30`（超出 int 范围），**WHEN** 解析，**THEN** Failed，日志含文件路径与字段名。
 22. **GIVEN** 300 条记录的夹具，**WHEN** 冷启动校验，**THEN** Validating 阶段 p95 ≤ 100 ms（最小规格 PC、非调试构建）。该预算依赖记录条数、磁盘 I/O 与构建类型，超预算时用同一夹具重测确认。
+23. **GIVEN** 档口 `cloy_cap=0`（或 `-1`），**WHEN** 校验，**THEN** Failed，报出档口 id 与字段名；**GIVEN** `cloy_cap=1`，**WHEN** 校验，**THEN** Ready。
 23. **GIVEN** 把某道菜的 `price` 从 8 改成 12（只改 `.tres`，不改代码），**WHEN** 启动并进入该档口，**THEN** 读取到的价格与结算都使用 12——证明数值确实来自数据层。
 24. **GIVEN** 仓库中已发布的 id 清单（首个发布版时生成并纳入版本管理），**WHEN** 对比当前数据，**THEN** 没有任何已发布 id 被删除或改名；新增 id 不受限制。
 

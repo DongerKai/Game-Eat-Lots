@@ -559,6 +559,7 @@ constants:
     source: design/gdd/cloying-and-taste.md
     referenced_by:
       - design/gdd/cloying-and-taste.md
+      - design/gdd/data-config.md
     value: 3
     unit: 格
     added: "2026-11-03"
