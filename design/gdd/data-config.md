@@ -73,7 +73,7 @@
 | 腻度与口味 | 下游读取 | `DishData` 的 `taste_tags`、`cloying_group` | 硬 |
 | 菜单波次 | 下游读取 | `StationData` 的 `dish_pool` | 硬（Vertical Slice 期） |
 | 局外升级 | 下游读取 | `UpgradeData` 的全部字段 | 硬 |
-| 餐局流程 | 下游读取 | `StationData` 的 `entry_fee` | 硬 |
+| 餐局流程 / 结算与入场费 | 下游读取 | 餐局流程解析 `station_id`；结算读取 `entry_fee` | 硬 |
 | 存档 | 下游引用 | 只存 id 与等级/数值，不存记录本身 | 硬 |
 
 **接口所有权**：数据配置拥有三个 catalog 的查询与校验；下游只读，不拥有写入路径。
@@ -167,12 +167,12 @@ The `valid_record_set` formula is defined as:
 | 腻度与口味 | 硬 | `get_dish(id)` → `taste_tags`、`cloying_group`；`get_station(id)` → `cloy_cap` | GDD 已写（`design/gdd/cloying-and-taste.md`） |
 | 菜单波次 | 硬（VS） | `get_station(id)` → `dish_pool` | GDD 未写 |
 | 局外升级 | 硬 | `get_upgrade(id)` → 全部字段 | GDD 未写 |
-| 餐局流程 | 硬 | `get_station(id)` → `entry_fee` | GDD 未写 |
-| 存档 | 硬 | 持久化 id 与等级/数值；读取时不信任存档里的数值快照 | GDD 未写 |
+| 餐局流程 | 硬 | `get_station(id)` 解析 `station_id`；`entry_fee` 由结算读取 | GDD 已写（`design/gdd/run-flow.md`） |
+| 存档 | 硬 | 持久化 id 与等级/数值；读取时不信任存档里的数值快照 | GDD 已写（`design/gdd/save-system.md`） |
 | 局内 HUD | 软（间接） | 通过菜品数值/时间与回合取得数字，不直接读 catalog | GDD 未写 |
 | 场景与流程管理 | 硬 | `Boot` 期读取加载与校验的最终结果（`Ready` / `Failed`），决定进入 Menu 还是 Error | GDD 已写 |
 
-**双向一致要求**：以上每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「数据配置」为上游依赖。目前只有场景与流程管理的 GDD 已完成并已列出本系统；其余系统仍待设计，此要求记录在此供后续核对。
+**双向一致要求**：以上每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「数据配置」为上游依赖。目前场景与流程管理、菜品数值、腻度与口味、菜单波次、餐局流程、存档的 GDD 已完成并已列出本系统；其余系统仍待设计，此要求记录在此供后续核对。
 
 ## Visual/Audio Requirements
 
@@ -191,7 +191,7 @@ The `valid_record_set` formula is defined as:
 
 ## Cross-References
 
-**None — this system references no other GDD.** 数据配置是最先设计的系统。场景与流程管理、菜品数值与腻度与口味的 GDD 已完成并已在 Cross-References 中回指本系统；其余下游系统（菜单波次、局外升级、餐局流程、存档、局内 HUD）在各自 GDD 写好后，需要把「数据配置」列回 Cross-References，届时在此表补充。
+**None — this system references no other GDD.** 数据配置是最先设计的系统。场景与流程管理、菜品数值、腻度与口味、菜单波次、餐局流程、存档的 GDD 已完成并已在 Cross-References 中回指本系统；其余下游系统（局外升级、局内 HUD）在各自 GDD 写好后，需要把「数据配置」列回 Cross-References，届时在此表补充。
 
 ## Acceptance Criteria
 

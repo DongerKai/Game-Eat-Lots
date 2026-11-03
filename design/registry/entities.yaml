@@ -756,6 +756,119 @@ formulas:
 #
 # Required fields: name, status, source, referenced_by, value, unit, added
 
+  - name: load_outcome
+    status: active
+    source: design/gdd/save-system.md
+    referenced_by:
+      - design/gdd/save-system.md
+    variables:
+      - P
+      - B
+      - V
+      - L
+    output_range: "Fresh | Loaded | Migrated | Recovered | Blocked"
+    expression: "Blocked if L = live; Fresh if P empty and B empty; Blocked if readable(P) and version(P) > V; Loaded if readable(P) and valid(P) and version(P) = V; Migrated if readable(P) and valid(P) and 1 <= version(P) < V and migrate succeeds; Recovered if backup valid and migratable; else Blocked"
+    notes: "Load decision for the save system. P = primary file, B = backup, V = SAVE_SCHEMA_VERSION, L = lock state. A higher-than-current version never falls back to the backup."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: migrate
+    status: active
+    source: design/gdd/save-system.md
+    referenced_by:
+      - design/gdd/save-system.md
+    variables:
+      - s
+      - v_src
+      - v_dst
+    output_range: "SaveFile | MigrationError"
+    expression: "(m_v_dst o ... o m_{v_src+1})(s)"
+    notes: "One step per schema version, upward only. Each step is a pure function; unknown top-level keys are preserved under extensions."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: save_bytes
+    status: active
+    source: design/gdd/save-system.md
+    referenced_by:
+      - design/gdd/save-system.md
+    variables:
+      - B_base
+      - n_upg
+      - U
+      - n_sta
+      - S
+      - n_dish
+      - D
+      - n_rec
+      - R
+      - n_ms
+      - M
+      - ext_bytes
+    output_range: [0, 262144]
+    expression: "B_base + n_upg*U + n_sta*S + n_dish*D + n_rec*R + n_ms*M + ext_bytes"
+    notes: "Serialized save-size upper bound. Full Vision load is about 8.5 KiB against a 256 KiB hard cap."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: slots_available
+    status: active
+    source: design/gdd/save-system.md
+    referenced_by:
+      - design/gdd/save-system.md
+    variables:
+      - MAX_SLOTS
+      - used_slots
+    output_range: [0, 8]
+    expression: "MAX_SLOTS - used_slots"
+    notes: "Career slots left. MVP uses MAX_SLOTS = 1; 0 is the normal state after the first career is created."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: run_id_alloc
+    status: active
+    source: design/gdd/run-flow.md
+    referenced_by:
+      - design/gdd/run-flow.md
+      - design/gdd/settlement-and-entry-fee.md
+    variables:
+      - max_seen_run_id
+    output_range: "1..INT64_MAX"
+    expression: "run_id = max_seen_run_id + 1"
+    notes: "Session-scoped in MVP, starts at 1, never wraps. Settlement uses run_id as its dedup key."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: run_seed
+    status: active
+    source: design/gdd/run-flow.md
+    referenced_by:
+      - design/gdd/run-flow.md
+      - design/gdd/menu-waves.md
+    variables:
+      - RunConfig.seed
+      - session_rng
+    output_range: "int64"
+    expression: "RunConfig.seed if not null else int64(next_u64(session_rng))"
+    notes: "0 is a valid explicit seed. The same seed plus the same action sequence must reproduce the same RunLog."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: end_reason
+    status: active
+    source: design/gdd/run-flow.md
+    referenced_by:
+      - design/gdd/run-flow.md
+      - design/gdd/settlement-and-entry-fee.md
+    variables:
+      - turns_remaining
+      - no_eatable
+    output_range: "NONE | TIME_EXHAUSTED | NO_EATABLE_DISH"
+    expression: "TIME_EXHAUSTED if turns_remaining = 0 else (NO_EATABLE_DISH if no_eatable else NONE)"
+    notes: "TIME_EXHAUSTED wins when both conditions hold. Evaluated once after init and once after each committed action."
+    added: "2026-11-03"
+    revised: ""
+
 constants:
   - name: uv_span_min
     status: active
@@ -804,6 +917,61 @@ constants:
     value: 85
     unit: 元
     notes: "Confirmed by the settlement GDD against opt_value 104 (calibration_ratio 1.224). Stored as StationData.entry_fee; retune if the prototype median falls outside the 88-96 target band."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: save_schema_version
+    status: active
+    source: design/gdd/save-system.md
+    referenced_by:
+      - design/gdd/save-system.md
+    value: 1
+    unit: 版本
+    notes: "Symbol SAVE_SCHEMA_VERSION. MVP schema version; any new persisted field must ship a migration step."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: save_bytes_max
+    status: active
+    source: design/gdd/save-system.md
+    referenced_by:
+      - design/gdd/save-system.md
+    value: 262144
+    unit: 字节
+    notes: "Symbol SAVE_BYTES_MAX. 256 KiB hard cap per save file; exceeding it rejects the write instead of truncating."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: save_max_slots
+    status: active
+    source: design/gdd/save-system.md
+    referenced_by:
+      - design/gdd/save-system.md
+    value: 1
+    unit: 个
+    notes: "Symbol MAX_SLOTS. Career slots in MVP; raising it changes only this constant and the UI, not the envelope format."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: transition_turn_cost
+    status: active
+    source: design/gdd/run-flow.md
+    referenced_by:
+      - design/gdd/run-flow.md
+    value: 0
+    unit: 回合
+    notes: "Internal run-flow transitions never spend a turn; only eating and skipping do."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: transition_capacity_cost
+    status: active
+    source: design/gdd/run-flow.md
+    referenced_by:
+      - design/gdd/run-flow.md
+    value: 0
+    unit: 格
+    notes: "Internal run-flow transitions never spend capacity; only eating does."
     added: "2026-11-03"
     revised: ""
 

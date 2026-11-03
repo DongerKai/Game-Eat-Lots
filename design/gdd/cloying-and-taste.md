@@ -213,7 +213,7 @@ The `menu_cloy_pressure` formula is defined as:
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
 | 菜品数值 | 硬 | `get_dish(id)` → `price`、`satiety`、`taste_tags`、`cloying_group`；`unit_value(d)`、`uv_cmp` | GDD 已写（Approved 2026-11-03） |
-| 餐局流程 | 硬 | 餐局开始 / 结束 / 重开三个生命周期事件 | GDD 未写 |
+| 餐局流程 | 硬 | 餐局开始 / 结束 / 重开三个生命周期事件 | GDD 已写（`design/gdd/run-flow.md`） |
 | 数据配置 | 硬 | `get_station(id)` → `cloy_cap`（int ≥ 1，默认 3） | GDD 已写（字段已回改） |
 
 **下游依赖方：**
@@ -225,7 +225,7 @@ The `menu_cloy_pressure` formula is defined as:
 | 结算与入场费 | 硬 | 本局实际占用格数；设计期用它复核 `opt_value` 与 `calibration_ratio` | GDD 未写 |
 | 菜单波次 | 软（强） | 单次可见集合必须小于全池，否则本系统退化为顺序谜题 | GDD 未写 |
 | 首局引导 | 软 | "重复加格 / 酸冰解腻"的教学数据 | GDD 未写 |
-| 存档 | 条件 | 若启用中途存档，计数表与规范组序必须持久化 | GDD 未写 |
+| 存档 | 条件 | 若启用中途存档，计数表与规范组序必须持久化 | GDD 已写（MVP 无中途存档；见 `design/gdd/save-system.md`） |
 
 **双向一致要求**：以上每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「腻度与口味」为上游依赖。菜品数值已经在下游侧列出本系统，但状态仍是「GDD 未写」，需要在它下次修订时改为已写——本 GDD 不直接修改菜品数值。
 
@@ -275,7 +275,7 @@ The `menu_cloy_pressure` formula is defined as:
 | `design/gdd/game-concept.md` | 来源 | 支柱 1/3；"被算穿"风险；"解腻流"与"连吃同类不划算"的动态 |
 | `design/gdd/systems-index.md` | 索引 | 优先级 MVP、层 Feature、上下游清单与设计顺序 |
 
-**待回指**：胃容量、局内 HUD、结算与入场费、菜单波次、首局引导、存档的 GDD 写好后，需要在各自的 Cross-References 中列出「腻度与口味」。菜品数值的下游表中本系统状态需从「GDD 未写」改为已写。
+**待回指**：胃容量、局内 HUD、首局引导的 GDD 写好后，需要在各自的 Cross-References 中列出「腻度与口味」。结算与入场费、菜单波次、存档的 GDD 已写并已回指。菜品数值的下游表中本系统状态需从「GDD 未写」改为已写。
 
 **回改状态**：`dish-values.md` 的下游表状态与校准说明、`data-config.md` 的 `StationData.cloy_cap` 字段，均已于 2026-11-03 回改。
 
@@ -335,5 +335,5 @@ The `menu_cloy_pressure` formula is defined as:
 | 5 | `cloy_cap = 3` 在 MVP 中永不生效（组最大 2 道）。后续档口出现 4–5 道同组时，线性 `+1/+2/+3` 是否仍然成立，还是需要边际递增曲线？ | systems-designer | 第二个档口设计时 |
 | 6 | 完整的口味偏好系统（流派加成、当季口味）是否进入 Vertical Slice。当前明确推迟，`口味` 只承担解腻。 | creative-director + game-designer | Vertical Slice 规划时 |
 | 7 | 是否允许重复抽取同一道菜（菜品数值 Open Question #5）。若允许，腻度按出现次数计，本 GDD 的实现依据已写好，但 `cloy_cap` 的语义要复查。 | game-designer（菜单波次） | 菜单波次 GDD 完成时 |
-| 8 | 若启用中途存档，计数表与规范组序的序列化格式由「存档」定义。 | lead-programmer（存档） | 存档 GDD 完成时 |
+| 8 | 若启用中途存档，计数表与规范组序的序列化格式由「存档」定义。**已回答（2026-11-03）**：MVP 不启用中途存档，格式延后——见 `design/gdd/save-system.md`。 | lead-programmer（存档） | 存档 GDD 完成时 |
 | 9 | **`CLOYING_RESISTANCE` 的数值语义未定。** 数据配置里已有该升级类型，概念文档也把「解腻」列为 MVP 三项升级之一，但本 GDD 的公式不含抗性项（当前按 0 计算）。它到底是「每级减少 1 点追加饱腹」还是「按百分比缩放」，决定了数值曲线与升级定价。 | systems-designer（局外升级）+ economy-designer | 局外升级 GDD 完成时 |

@@ -325,7 +325,7 @@ The `shortfall` formula is defined as:
 | 腻度与口味 | 硬 | 每个 `EatenEntry` 的 `extra_satiety` 与 `effective_satiety`（吃下时记录，结算不重放） | GDD 已写（Designed 2026-11-03） |
 | 胃容量 | 硬 | `capacity_total`；可吃性判定在结算之前完成 | GDD 未写 |
 | 时间与回合 | 硬 | `turns_total`、`turns_used`、`end_reason` | GDD 未写 |
-| 餐局流程 | 硬 | 本局结束时调用一次 `settle(RunLog)`；放弃 / 进入失败 / 退出不调用 | GDD 未写 |
+| 餐局流程 | 硬 | 本局结束时调用一次 `settle(RunLog)`；放弃 / 进入失败 / 退出不调用 | GDD 已写（`design/gdd/run-flow.md`） |
 
 **下游依赖方：**
 
@@ -337,7 +337,7 @@ The `shortfall` formula is defined as:
 | 局内 HUD | 硬 | `running_net(k)` 与共享的 int64 累加器；不得自行求和 | GDD 未写 |
 | 首局引导 | 软 | 每行的静态 / 实际单位价值，用于讲解与替换建议 | GDD 未写 |
 | 音效反馈 | 软 | `settlement_started` / `broke_even` / `loss` 事件 | GDD 未写 |
-| 存档 | 软（间接） | 只持久化局外升级与纪录保留下来的字段；结算无 I/O | GDD 未写 |
+| 存档 | 软（间接） | 只持久化局外升级与纪录保留下来的字段；结算无 I/O | GDD 已写（`design/gdd/save-system.md`） |
 | 菜单波次 | 软（未来） | 若允许同一道菜重复出现，结算按次计价 | GDD 未写 |
 
 **双向一致要求**：上表每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「结算与入场费」。已知需要回指的两处：

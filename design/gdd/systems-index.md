@@ -57,19 +57,19 @@ were found.
 | 1 | 数据配置 | Core | MVP | Designed | design/gdd/data-config.md | — |
 | 2 | 输入 | Core | MVP | Designed | design/gdd/input.md | — |
 | 3 | 场景与流程管理 | Core | MVP | In Review | design/gdd/scene-flow.md | 数据配置, 输入 |
-| 4 | 存档 | Persistence | MVP | Not Started | — | 数据配置 |
-| 5 | 餐局流程 | Core | MVP | Not Started | — | 场景与流程管理, 数据配置, 输入 |
+| 4 | 存档 | Persistence | MVP | Designed | design/gdd/save-system.md | 数据配置 |
+| 5 | 餐局流程 | Core | MVP | Designed | design/gdd/run-flow.md | 场景与流程管理, 数据配置, 输入 |
 | 6 | 时间与回合 | Core | MVP | Not Started | — | 餐局流程 |
 | 7 | 胃容量 | Gameplay | MVP | Not Started | — | 餐局流程, 数据配置 |
 | 8 | 菜品数值 | Gameplay | MVP | Approved | design/gdd/dish-values.md | 数据配置 |
-| 9 | 腻度与口味 | Gameplay | MVP | Designed | design/gdd/cloying-and-taste.md | 菜品数值 |
-| 10 | 菜单波次 | Gameplay | Vertical Slice | Designed | design/gdd/menu-waves.md | 菜品数值, 数据配置 |
+| 9 | 腻度与口味 | Gameplay | MVP | Designed | design/gdd/cloying-and-taste.md | 菜品数值, 餐局流程 |
+| 10 | 菜单波次 | Gameplay | Vertical Slice | Designed | design/gdd/menu-waves.md | 菜品数值, 数据配置, 餐局流程 |
 | 11 | 结算与入场费 | Economy | MVP | Designed | design/gdd/settlement-and-entry-fee.md | 菜品数值, 腻度与口味, 胃容量, 时间与回合, 餐局流程 |
 | 12 | 局外升级 | Progression | MVP | Not Started | — | 结算与入场费, 存档, 数据配置 |
 | 13 | 解锁与档口 | Progression | Vertical Slice | Not Started | — | 局外升级, 存档 |
 | 14 | 纪录与里程碑 | Progression | Vertical Slice | Not Started | — | 结算与入场费, 存档 |
 | 15 | 局内 HUD | UI | MVP | Not Started | — | 餐局流程, 时间与回合, 胃容量, 菜品数值, 输入, 结算与入场费 |
-| 16 | 界面流程 | UI | MVP | Not Started | — | 餐局流程, 结算与入场费, 局外升级, 场景与流程管理, 输入 |
+| 16 | 界面流程 | UI | MVP | Not Started | — | 餐局流程, 结算与入场费, 局外升级, 场景与流程管理, 输入, 存档 |
 | 17 | 音效反馈 | Audio | Vertical Slice | Not Started | — | 餐局流程, 结算与入场费, 场景与流程管理 |
 | 18 | 首局引导 | Meta | Vertical Slice | Not Started | — | 餐局流程, 局内 HUD, 输入, 场景与流程管理, 菜品数值 |
 | 19 | 在线挑战 | Meta | Full Vision | Not Started | — | 结算与入场费, 存档 |
@@ -88,6 +88,14 @@ were found.
 > 结算与入场费 imposes UI requirements on a receipt-style settlement screen and on
 > the run HUD's live net profit / break-even shortfall. `/ux-design` must cover both;
 > stories should cite `design/ux/settlement.md` and `design/ux/hud.md`.
+>
+> 存档 imposes UI requirements on 界面流程（保存指示、恢复说明、`Blocked` 模态、
+> 删除生涯确认）。`/ux-design` must cover them; stories should cite the matching
+> `design/ux/` spec.
+>
+> 餐局流程 constrains 局内 HUD flow states（活动/冻结/结束/交接）and the receipt
+> screen's opening timing. `/ux-design` must cover `design/ux/hud.md` and
+> `design/ux/settlement.md`.
 
 ---
 
@@ -209,14 +217,14 @@ Vertical Slice tier, and the rest are Full Vision.
 | Metric | Count |
 |--------|-------|
 | Total systems identified | 20 |
-| Design docs started | 7 |
+| Design docs started | 9 |
 | Design docs reviewed | 2 |
 | Design docs approved | 1 |
 
 > 场景与流程管理于 2026-11-03 通过设计评审（Approved），随后补写了 Formulas 章节并在
 > 输入 GDD 中定名了上下文切换接口，两处都是评审后才出现的改动，因此状态回到 **In Review**
 > 等待复审。复审通过后改回 Approved。
-| MVP systems designed | 6/13 |
+| MVP systems designed | 8/13 |
 | Vertical Slice systems designed | 1/5 |
 
 ---

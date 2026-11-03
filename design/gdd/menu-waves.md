@@ -215,7 +215,7 @@ The `wave_healthy` formula is defined as:
 |---|---|---|---|
 | 数据配置 | 硬 | `get_station(id)` → `dish_pool`、`wave_size`（新增字段，int ≥ 1，默认 4） | GDD 已写；**字段为新增，需回改** |
 | 菜品数值 | 硬 | 各菜 `price` / `satiety`、`opt_value(M, C, T)` | GDD 已写（Approved） |
-| 餐局流程 | 硬 | 传入 `seed`、回合预算 `T`、`menu_vision`；接收"无可吃菜"信号 | GDD 未写 |
+| 餐局流程 | 硬 | 传入 `seed`、回合预算 `T`、`menu_vision`；接收"无可吃菜"信号 | GDD 已写（`design/gdd/run-flow.md`） |
 | 腻度与口味 | 软（强） | 生成校验时把 `effective_satiety` 计入可达最优；本系统不写腻度状态 | GDD 已写 |
 
 **下游依赖方：**
@@ -226,7 +226,7 @@ The `wave_healthy` formula is defined as:
 | 结算与入场费 | 硬 | 本局实际吃到的菜、剩余回合 | GDD 未写 |
 | 局外升级 | 软 | `MENU_VISION` 的数值语义由局外升级拥有；本系统只消费整数等级 | GDD 未写 |
 | 首局引导 | 软 | "波次会推进、跳过的菜不会回来"的教学数据 | GDD 未写 |
-| 存档 | 条件 | 中途存档需保存 `seed`、`wave_index`、本波剩余 | GDD 未写 |
+| 存档 | 条件 | 中途存档需保存 `seed`、`wave_index`、本波剩余 | GDD 已写（MVP 无中途存档；种子不持久化——见 `design/gdd/save-system.md`） |
 
 **双向一致要求**：以上每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「菜单波次」为上游依赖。菜品数值的下游表中本系统仍是「GDD 未写」，需要在其下次修订时改为已写——本 GDD 不直接修改菜品数值。
 
@@ -277,7 +277,7 @@ The `wave_healthy` formula is defined as:
 | `design/gdd/game-concept.md` | 来源 | "分批取餐窗口"、"后面的档口不可全见"、"为等下一波而跳过" |
 | `design/gdd/systems-index.md` | 索引 | 优先级 Vertical Slice、层 Feature、上下游清单 |
 
-**待回指**：局内 HUD、结算与入场费、餐局流程、局外升级、首局引导、存档的 GDD 写好后，需要在各自的 Cross-References 中列出「菜单波次」。
+**待回指**：局内 HUD、结算与入场费、局外升级、首局引导、存档的 GDD 写好后，需要在各自的 Cross-References 中列出「菜单波次」。
 
 **待回改（不在本文件执行）**：
 1. `data-config.md` — `StationData.wave_size` 字段（int ≥ 1，默认 4）。
@@ -335,5 +335,5 @@ The `wave_healthy` formula is defined as:
 | 4 | 0.9 的健康阈值在 12 / 10 参数下很少触发（两次跳过仍有 95）。是否应针对 MVP 收紧到 0.95，让生成更严格？ | systems-designer | 原型后 |
 | 5 | 当菜池大于回合预算（后续档口）时，波次才真正制造供给稀缺。届时是否需要"重复抽取"或"跨波混合"，以及它与腻度 `cloy_cap` 的交互。 | game-designer | 第二个档口设计时 |
 | 6 | 波次是否应该随机，还是用策划编排的固定序列？纯随机可能生成"前三波全是不想要的菜"，编排能保证节奏但牺牲重复可玩性。 | game-designer | Vertical Slice 前 |
-| 7 | 本局种子的来源与展示：是否给玩家看种子、是否允许手动重开同一 seed（会影响"刷开局"）。 | producer + lead-programmer | 存档 GDD 完成时 |
+| 7 | 本局种子的来源与展示：是否给玩家看种子、是否允许手动重开同一 seed（会影响"刷开局"）。**已回答（2026-11-03）**：MVP 不保存单局种子——见 `design/gdd/save-system.md`。 | producer + lead-programmer | 存档 GDD 完成时 |
 | 8 | 跳过确认是否可以让玩家关闭（熟练玩家会觉得每次确认很慢）？若可关闭，代价的可见性如何保证。 | ux-designer | 首轮试玩后 |
