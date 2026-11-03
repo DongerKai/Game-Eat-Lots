@@ -295,7 +295,7 @@ The `career_complete` formula is defined as:
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
 | 界面流程 | 硬（UI） | 只读 `RecordsSnapshot` 与 `milestone_progress`；纪录页、里程碑列表、完成横幅；收据屏「新纪录」标记 | GDD 未写 |
-| 音效反馈 | 软 | `record_broken`、`milestone_earned`、`career_completed` | GDD 未写 |
+| 音效反馈 | 软 | `record_broken`、`milestone_earned`、`career_completed` | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 在线挑战 | 软（未来） | 只读展示；不得信任本地纪录作为排行榜数据 | GDD 未写 |
 
 **不属于依赖的关系：**

@@ -61,9 +61,9 @@
 |---|---|---|---|
 | 餐局流程 | 上游 | `initialize(upgrade_snapshot) → capacity_total \| 结构化错误`；`can_fit(e)`；`consume(e)`；读取 `capacity_total` / `capacity_used` / `capacity_remaining` | 硬 |
 | 数据配置 | 上游 | `BalanceData.base_capacity`（`C0`，MVP 20）；**不读取 `DishData`** | 硬（字段缺口见 Open Questions 1） |
-| 局外升级 | 上游（经快照） | `upgrade_snapshot.capacity_bonus: int ≥ 0`（已解析值）；购买时保证 `C0 + 最大加成 ≤ 999` | 硬（GDD 未写） |
+| 局外升级 | 上游（经快照） | `upgrade_snapshot.capacity_bonus: int ≥ 0`（已解析值）；购买时保证 `C0 + 最大加成 ≤ 999` | 硬（GDD 已写：`design/gdd/meta-upgrades.md`） |
 | 腻度与口味 | 间接上游 | `effective_satiety` 经餐局流程传入；本系统不直接调用、不重算 | 硬（值依赖，无调用边） |
-| 局内 HUD | 下游 | 只读 `capacity_total` / `capacity_used` / `capacity_remaining` / `can_fit`；不得写、不得自建计数器 | 硬（GDD 未写） |
+| 局内 HUD | 下游 | 只读 `capacity_total` / `capacity_used` / `capacity_remaining` / `can_fit`；不得写、不得自建计数器 | 硬（GDD 已写：`design/gdd/in-game-hud.md`） |
 | 结算与入场费 | 下游 | 从 `RunLog` 读 `capacity_total`；校验 `capacity_used = Σ effective_satiety` | 硬 |
 | 菜单波次 | 设计期下游 | `wave_reachable_opt` 的 `C` 参数；运行期不读 | 软（设计期） |
 | 菜品数值 | 设计期下游 | `opt_value` / `calibration_ratio` 的 `C0` 审计参数 | 软（设计期） |
@@ -200,9 +200,9 @@ The `capacity_bonus` formula is defined as:
 |---|---|---|---|
 | 餐局流程 | 上游 | `initialize(upgrade_snapshot) → capacity_total \| 结构化错误`；`can_fit(e)`；`consume(e)`；读取 `capacity_total` / `capacity_used` / `capacity_remaining` | 硬 |
 | 数据配置 | 上游 | `BalanceData.base_capacity`（`C0`，MVP 20）；不读 `DishData` | 硬（字段缺口见 Open Questions 1） |
-| 局外升级 | 上游（经快照） | `upgrade_snapshot.capacity_bonus: int ≥ 0`；购买时保证 `C0 + 最大加成 ≤ 999` | 硬（GDD 未写） |
+| 局外升级 | 上游（经快照） | `upgrade_snapshot.capacity_bonus: int ≥ 0`；购买时保证 `C0 + 最大加成 ≤ 999` | 硬（GDD 已写：`design/gdd/meta-upgrades.md`） |
 | 腻度与口味 | 间接上游 | `effective_satiety` 由餐局流程在吃下前取得并传入；本系统不直接调用、不重算 | 硬（值依赖，无调用边） |
-| 局内 HUD | 下游 | 只读 `capacity_total` / `capacity_used` / `capacity_remaining` / `can_fit`；不得写、不得自建计数器 | 硬（GDD 未写） |
+| 局内 HUD | 下游 | 只读 `capacity_total` / `capacity_used` / `capacity_remaining` / `can_fit`；不得写、不得自建计数器 | 硬（GDD 已写：`design/gdd/in-game-hud.md`） |
 | 结算与入场费 | 下游 | 从 `RunLog` 读 `capacity_total`；校验 `capacity_used = Σ effective_satiety` | 硬 |
 | 菜单波次 | 设计期下游 | `wave_reachable_opt` 的 `C` 参数；运行期不读 | 软（设计期） |
 | 菜品数值 | 设计期下游 | `opt_value` / `calibration_ratio` 的 `C0` 审计参数 | 软（设计期） |

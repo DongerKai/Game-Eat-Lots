@@ -164,9 +164,9 @@ The `transition_total` formula is defined as:
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
 | 界面流程 | 硬 | 发起 `Menu → Run`（携带 `RunConfig`）；订阅 `RunResult`、`abandoned`、`init_failed` 与当前顶层状态；暂停菜单消费 `ui_accept` 后请求 `Paused → Run` | GDD 未写 |
-| 餐局流程 | 硬 | 进入 `Run` 时取得 `RunConfig`；接收暂停/恢复通知；结算完成时发起 `Run → Menu, RunResult`；启动失败时发起 `Run → Menu, init_failed` | GDD 未写 |
+| 餐局流程 | 硬 | 进入 `Run` 时取得 `RunConfig`；接收暂停/恢复通知；结算完成时发起 `Run → Menu, RunResult`；启动失败时发起 `Run → Menu, init_failed` | GDD 已写（`design/gdd/run-flow.md`） |
 | 首局引导 | 软 | 在 `Run` 内请求 Blocked 上下文，只放行引导需要的动作；不改变顶层状态 | GDD 未写 |
-| 音效反馈 | 软 | 订阅状态切换事件（进入 `Run`、结算、退出） | GDD 未写 |
+| 音效反馈 | 软 | 订阅状态切换事件（进入 `Run`、结算、退出；具体点 `Paused` / `Resumed` / `Quit`） | GDD 已写（`design/gdd/audio-feedback.md`） |
 
 **不属于依赖的关系：**
 - **存档**：本系统不读写存档，`RunConfig` 与纪录写入都由发起方负责。间接关系，不记为依赖。

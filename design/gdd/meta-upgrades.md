@@ -342,14 +342,14 @@ The `menu_vision_useful_max` formula is defined as:
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
 | 餐局流程 | 软（间接） | 经界面流程消费快照；run-flow 明确把它列为间接关系，不算直接依赖 | GDD 已写（`design/gdd/run-flow.md`） |
-| 胃容量 | 硬 | `capacity_bonus` 加到基础容量 | GDD 未写 |
+| 胃容量 | 硬 | `capacity_bonus` 加到基础容量 | GDD 已写（`design/gdd/stomach-capacity.md`） |
 | 菜单波次 | 软（强） | `menu_vision` 作为总预览额度；上限由它执行 | GDD 已写（`design/gdd/menu-waves.md`） |
 | 腻度与口味 | 硬 | `cloying_resistance`；需按本 GDD 规则 16 的表达式接入 | GDD 已写（`design/gdd/cloying-and-taste.md`，公式尚未含抗性项） |
 | 界面流程 | 硬（UI） | 升级页、收据入账、钱包与「未保存」状态 | GDD 未写 |
 | 解锁与档口 | 软 | 读取钱包与等级作为解锁前置；`unlock_cost` 扣款须经本系统的 spend 事务（接口由 #13 定义，MVP 不实现） | GDD 未写 |
-| 纪录与里程碑 | 软 | 从 `upgrade_snapshot.levels` 冻结历史等级 | GDD 未写 |
+| 纪录与里程碑 | 软 | 从 `upgrade_snapshot.levels` 冻结历史等级 | GDD 已写（`design/gdd/records-and-milestones.md`） |
 | 首局引导 | 软 | 价格与可负担性；可推荐、不可自动购买 | GDD 未写 |
-| 音效反馈 | 软 | `purchase_succeeded` / `purchase_failed` / `run_result_applied` | GDD 未写 |
+| 音效反馈 | 软 | `purchase_succeeded` / `purchase_failed` / `run_result_applied` | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 场景与流程管理 | 软（编排） | 购买只在 `Menu`；本系统不驱动顶层状态 | GDD 已写（`design/gdd/scene-flow.md`） |
 
 **双向一致要求**：以上每个上游必须在其 Dependencies 中列出本系统，并在 Cross-References 中回指；下游必须写明「只消费快照，不重算等级」。存档已在下游表列出本系统；结算已列出；数据配置已列出。腻度与口味、菜单波次需要补上「局外升级」行并把 Open Question 标记为已回答（见下）。
@@ -431,7 +431,7 @@ The `menu_vision_useful_max` formula is defined as:
 | `design/gdd/game-concept.md` | 来源 | MVP 三项升级、会话级停点、长期成长与「数字看得见地涨」 |
 | `design/gdd/systems-index.md` | 索引 | 优先级 MVP、层 Feature、设计顺序 #11、依赖 `结算与入场费 / 存档 / 数据配置` |
 
-**待回指**：胃容量、界面流程、解锁与档口、纪录与里程碑、首局引导、音效反馈的 GDD 写好后，必须在各自的 Dependencies 与 Cross-References 中列出「局外升级」，并写明「只消费快照，不重算等级」。
+**待回指**：界面流程、解锁与档口、首局引导的 GDD 写好后，必须在各自的 Dependencies 与 Cross-References 中列出「局外升级」，并写明「只消费快照，不重算等级」。胃容量、纪录与里程碑、音效反馈已回指。
 
 ## Acceptance Criteria
 

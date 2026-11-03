@@ -331,12 +331,12 @@ The `shortfall` formula is defined as:
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 局外升级 | 硬 | `net_profit`（有符号）、`broke_even`；钱包策略与是否钳制由它拥有 | GDD 未写 |
+| 局外升级 | 硬 | `net_profit`（有符号）、`broke_even`；钱包策略与是否钳制由它拥有 | GDD 已写（`design/gdd/meta-upgrades.md`） |
 | 纪录与里程碑 | 硬 | `net_profit`、`total_value`、`return_ratio`、`station_id`、`end_reason`；时间戳由它添加 | GDD 已写（`design/gdd/records-and-milestones.md`） |
 | 界面流程 | 硬 | `RunResult` → 收据屏；在 `Run → Menu` 同帧接收 | GDD 未写 |
-| 局内 HUD | 硬 | `running_net(k)` 与共享的 int64 累加器；不得自行求和 | GDD 未写 |
+| 局内 HUD | 硬 | `running_net(k)` 与共享的 int64 累加器；不得自行求和 | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 首局引导 | 软 | 每行的静态 / 实际单位价值，用于讲解与替换建议 | GDD 未写 |
-| 音效反馈 | 软 | `settlement_started` / `broke_even` / `loss` 事件 | GDD 未写 |
+| 音效反馈 | 软 | `settlement_started` / `broke_even` / `loss` 事件；结果 cue 在数字滚动结束时起播 | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 存档 | 软（间接） | 只持久化局外升级与纪录保留下来的字段；结算无 I/O | GDD 已写（`design/gdd/save-system.md`） |
 | 菜单波次 | 软（未来） | 若允许同一道菜重复出现，结算按次计价 | GDD 未写 |
 
@@ -482,10 +482,10 @@ The `shortfall` formula is defined as:
 
 | # | 问题 | 负责人 | 目标解决时间 |
 |---|---|---|---|
-| 1 | **负净利如何进入钱包？** 本 GDD 只保证 `net_profit` 有符号且不钳制。局外升级可以选择 `wallet += net_profit`（允许破产）、`wallet += max(0, net_profit)`（只奖不罚）或别的规则。不同选择会直接决定"回本"是经济状态还是分数。 | economy-designer（局外升级） | 局外升级 GDD 完成时 |
+| 1 | **负净利如何进入钱包？** 本 GDD 只保证 `net_profit` 有符号且不钳制。**已回答（2026-11-03）**：局外升级采用全额入账 `wallet += net_profit`，允许负钱包，不按 0 计入——见 `design/gdd/meta-upgrades.md`。不同选择会直接决定"回本"是经济状态还是分数。 | economy-designer（局外升级） | 局外升级 GDD 完成时 |
 | 2 | **MVP 是否提供主动提前结账？** 当前设计不提供：一局只在回合耗尽或没有任何合法动作时结束，提前结账不会带来任何优势。若界面流程希望给玩家"收手"的主动权，需要新增 `PLAYER_CASH_OUT` 结束原因，并明确它与"从暂停菜单放弃"的区别（后者不结算）。 | game-designer（餐局流程） | 餐局流程 GDD 完成时 |
 | 3 | **纪录按哪个指标排名？** 建议按 `net_profit`（玩家看到的数、未来钱包的来源）。`return_ratio` 在单档口下是净利的单调变换，但跨档口比较更公平；两者都存入纪录，排名规则由纪录系统定。纪录还必须冻结 `station_id`、`entry_fee`、`total_value` 与升级快照，否则重调数值后历史不可比。 | game-designer（纪录与里程碑） | 纪录 GDD 完成时 |
 | 4 | **首局引导的"一条替换建议"如何计算？** 结算只提供每行的静态/有效单位价值，不计算最优解。首局引导需要自己选一条建议（例如"把豪华海鲜锅换成炸鸡腿"），但不得展示完整最优组合。 | ux-designer（首局引导） | 首局引导 GDD 完成时 |
 | 5 | **入场费 85 是否成立？** 它满足 `calibration_ratio = 1.224`，但未经真实玩家验证。设计期校准带给出重调规则：中位数 < 88 → 每轮降 3–5；> 96 → 每轮升 2–3，直到中位数落回 88–96。 | economy-designer + prototyper | `/prototype 点菜取舍与腻度` 之后 |
-| 6 | **升级后如何重算校准？** 胃容量 +1 或解腻抗性生效后，`opt_value` 会变，104 / 85 不再成立。局外升级需要提供"当前升级等级下的可达上限"或规定每次升级后由设计期重跑校准；否则入场费会随着成长静默失衡。 | economy-designer（局外升级 + 结算） | 局外升级 GDD 完成时 |
+| 6 | **升级后如何重算校准？** **已回答（2026-11-03）**：入场费运行期不变；`[1.15, 1.35]` 只约束未升级上限，满级容量 25 的 120/85 = 1.412 必须落在满级带 `[1.35, 1.45]`——见 `design/gdd/meta-upgrades.md`。 | economy-designer（局外升级 + 结算） | 局外升级 GDD 完成时 |
 | 7 | **收据是否每行都显示两列单位价值？** 当前要求静态与有效两列，教学价值最高，但信息密度也最高。UX 可以决定只在首局显示两列、常规局只显示有效值；无论哪种，数据都必须由结算提供，UI 不得自行计算。 | ux-designer（界面流程） | `/ux-design` 收据屏时 |

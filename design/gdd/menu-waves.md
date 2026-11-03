@@ -222,9 +222,9 @@ The `wave_healthy` formula is defined as:
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 局内 HUD | 硬 | `visible_dishes`、`preview_dishes`、跳过代价、当前波索引、隐藏数量 | GDD 未写 |
+| 局内 HUD | 硬 | `visible_dishes`、`preview_dishes`、跳过代价、当前波索引、隐藏数量 | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 结算与入场费 | 硬 | 本局实际吃到的菜、剩余回合 | GDD 未写 |
-| 局外升级 | 软 | `MENU_VISION` 的数值语义由局外升级拥有；本系统只消费整数等级 | GDD 未写 |
+| 局外升级 | 软 | `MENU_VISION` 的数值语义由局外升级拥有；本系统只消费整数等级；上限由局外升级保证不超卖 | GDD 已写（`design/gdd/meta-upgrades.md`） |
 | 首局引导 | 软 | "波次会推进、跳过的菜不会回来"的教学数据 | GDD 未写 |
 | 存档 | 条件 | 中途存档需保存 `seed`、`wave_index`、本波剩余 | GDD 已写（MVP 无中途存档；种子不持久化——见 `design/gdd/save-system.md`） |
 

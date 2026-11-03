@@ -446,6 +446,7 @@ formulas:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
       - design/gdd/menu-waves.md
+      - design/gdd/meta-upgrades.md
     variables:
       - M
       - C
@@ -463,12 +464,13 @@ formulas:
       - design/gdd/dish-values.md
       - design/gdd/cloying-and-taste.md
       - design/gdd/settlement-and-entry-fee.md
+      - design/gdd/meta-upgrades.md
     variables:
       - opt_value
       - entry_fee
     output_range: [0, 999]
     expression: "opt_value(M, C0, T) / entry_fee"
-    notes: "Target band [1.15, 1.35]. opt_value ignores cloying penalties, but the 12-dish pool has a zero-penalty witness order (红烧肉 -> 拍黄瓜 -> 糖醋里脊 -> rest), so 104 and 85 remain valid: 1.224. Recompute after any capacity or cloying-resistance upgrade."
+    notes: "Target band [1.15, 1.35] constrains the unupgraded ceiling. opt_value ignores cloying penalties, but the 12-dish pool has a zero-penalty witness order (红烧肉 -> 拍黄瓜 -> 糖醋里脊 -> rest), so 104 and 85 remain valid: 1.224. Max capacity 25 gives 120/85 = 1.412, which must fall in the full-level band [1.35, 1.45]. Recompute after any capacity or cloying-resistance upgrade."
     added: "2026-11-03"
     revised: "2026-11-03"
 
@@ -478,12 +480,14 @@ formulas:
     referenced_by:
       - design/gdd/cloying-and-taste.md
       - design/gdd/settlement-and-entry-fee.md
+      - design/gdd/meta-upgrades.md
     variables:
       - group_cloy
       - cloy_cap
+      - cloying_resistance
     output_range: [0, 3]
-    expression: "min(group_cloy(group(d)), cloy_cap)"
-    notes: "Extra capacity charged for a repeated cloying group, using the count BEFORE this dish. cloy_cap = 3 is a safety bound; the MVP pool's largest group is 2, so the cap never binds."
+    expression: "max(0, min(group_cloy(group(d)), cloy_cap) - floor(cloying_resistance))"
+    notes: "Extra capacity charged for a repeated cloying group, using the count BEFORE this dish. cloying_resistance comes from the run snapshot; it is floored once and subtracted at read time. cloy_cap = 3 is a safety bound; the MVP pool's largest group is 2, so the cap never binds."
     added: "2026-11-03"
     revised: ""
 
@@ -605,6 +609,7 @@ formulas:
     source: design/gdd/settlement-and-entry-fee.md
     referenced_by:
       - design/gdd/settlement-and-entry-fee.md
+      - design/gdd/meta-upgrades.md
     variables:
       - total_value
       - entry_fee
@@ -932,6 +937,63 @@ formulas:
     output_range: "true | false"
     expression: "station_ok(m, u) and metric_met(m.metric, m.threshold, u, c)"
     notes: "Metrics: NET_PROFIT, RETURN_RATIO_X10, LIFETIME_NET_PROFIT, RUNS_SETTLED. Thresholds live in MilestoneData, not in the formula."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: wallet_after_run
+    status: active
+    source: design/gdd/meta-upgrades.md
+    referenced_by:
+      - design/gdd/meta-upgrades.md
+    variables:
+      - wallet
+      - net_profit
+    output_range: "int64"
+    expression: "wallet' = checked_add_int64(wallet, net_profit(R))"
+    notes: "Full net profit is credited, including losses; no gameplay clamp. Only overflow returns WALLET_OVERFLOW."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: upgrade_price
+    status: active
+    source: design/gdd/meta-upgrades.md
+    referenced_by:
+      - design/gdd/meta-upgrades.md
+    variables:
+      - u.cost
+      - L
+      - u.cost_growth
+    output_range: [0, 2147483647]
+    expression: "ceil(u.cost * u.cost_growth^(L-1))"
+    notes: "u.cost is the level-1 price (owned by meta-upgrades). cost_growth default 1.35, safe band 1.2-1.6, must be >= 1.0. Round once at the end."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: upgrade_tree_cost
+    status: active
+    source: design/gdd/meta-upgrades.md
+    referenced_by:
+      - design/gdd/meta-upgrades.md
+    variables:
+      - u
+    output_range: [0, 2147483647]
+    expression: "sum(price(u, L) for L in 1..max_level(u))"
+    notes: "Design-time only. MVP full tree is 209."
+    added: "2026-11-03"
+    revised: ""
+
+  - name: menu_vision_useful_max
+    status: active
+    source: design/gdd/meta-upgrades.md
+    referenced_by:
+      - design/gdd/meta-upgrades.md
+      - design/gdd/menu-waves.md
+    variables:
+      - wave_size(s)
+      - u.effect_value
+    output_range: [0, 7]
+    expression: "ceil((wave_size(s) - 1) / u.effect_value)"
+    notes: "Highest level that still adds preview for a station. Buying past it is rejected as NO_EFFECT; menu-waves still clamps the actual preview."
     added: "2026-11-03"
     revised: ""
 

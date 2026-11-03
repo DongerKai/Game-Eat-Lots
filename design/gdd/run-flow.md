@@ -292,11 +292,11 @@ The `transition_cost` rule is defined as:
 | 菜单波次 | 硬 | `initialize(station_id, seed, turns_total, menu_vision[, pool_override])`；`visible_dishes`；`advance()`；无菜可吃信号 | GDD 已写（Designed） |
 | 腻度与口味 | 硬 | `run_started` / `run_ended` 生命周期；吃下时 `extra_satiety`、`effective_satiety` | GDD 已写（Designed） |
 | 结算与入场费 | 硬（回调） | `settle(RunLog) → RunResult \| 结构化错误`；每局一次 | GDD 已写（Designed） |
-| 局内 HUD | 硬 | 只读本局快照与 `run_*` 信号；不得自行求和或判定结束 | GDD 未写 |
+| 局内 HUD | 硬 | 只读本局快照与 `run_*` 信号；不得自行求和或判定结束 | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 界面流程 | 硬 | 经场景与流程管理发出 `RunConfig`、接收 `RunResult`；重开时组装新 `RunConfig` | GDD 未写 |
 | 首局引导 | 软 | `is_first_run`、`pool_override`；可压入 Blocked 上下文 | GDD 未写 |
-| 音效反馈 | 软 | 订阅 `run_started` / `run_ended` / `run_settled` / `run_discarded` / `run_faulted` | GDD 未写 |
-| 存档 | 无直接调用 | MVP 无中途存档；局外升级与纪录由下游持久化 | GDD 未写 |
+| 音效反馈 | 软 | 订阅 `run_started` / `run_ended` / `run_settled` / `run_discarded` / `run_faulted`；`run_settled` 不产生独立 cue，声音由结算的三个事件承载 | GDD 已写（`design/gdd/audio-feedback.md`） |
+| 存档 | 无直接调用 | MVP 无中途存档；局外升级与纪录由下游持久化 | GDD 已写（`design/gdd/save-system.md`） |
 
 **为什么下游是“依赖本系统”而不是“本系统依赖它们”**：本系统在运行时调用它们，但设计依赖按**生命周期所有权**方向记录——它们需要本系统发出开始/结束/结算时机的信号，本系统不需要它们定义“什么时候算一局”。若把它们列为本系统的上游，会与索引中“时间与回合 → 餐局流程”“胃容量 → 餐局流程”“结算 → 餐局流程”的记录形成环。腻度与口味 GDD 已用同一理由避免与局外升级成环，这里沿用。
 

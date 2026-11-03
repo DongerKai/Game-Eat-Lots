@@ -37,10 +37,11 @@
    - `icon: Texture2D` — 缺失时用占位图标（警告，不致命）
 4. **`UpgradeData` 字段**：
    - `id`、`display_name`、`description`
-   - `cost: int` — ≥ 0
+   - `cost: int` — ≥ 0；本字段是第 1 级价格，价格曲线由「局外升级」拥有
+   - `cost_growth: float` — 默认 1.35，安全范围 1.2–1.6，校验必须 ≥ 1.0
    - `max_level: int` — ≥ 1
    - `effect_type: enum {STOMACH_CAPACITY, CLOYING_RESISTANCE, MENU_VISION}`
-   - `effect_value: float` — 每级增量，> 0；`STOMACH_CAPACITY` 与 `MENU_VISION` 必须是正整数，`CLOYING_RESISTANCE` 可带小数
+   - `effect_value: float` — 每级增量，> 0；`STOMACH_CAPACITY` 与 `MENU_VISION` 必须是正整数；`CLOYING_RESISTANCE` 的语义为每级减免 1 点追加饱腹，小数部分在解析时取整
    - `prerequisite_id: StringName` — 可空；非空时必须存在
 5. **`StationData` 字段**：
    - `id`、`display_name`
@@ -49,6 +50,7 @@
    - `dish_pool: Array[StringName]` — 至少 1 项，每项必须存在，且每道菜的 `station_id` 必须指回本档口（双向一致）
    - `cloy_cap: int` — ≥ 1，默认 3；单道菜因同组重复最多追加的饱腹格（由「腻度与口味」消费）
    - `turn_budget: int` — ≥ 1（本局允许的回合数，由「时间与回合」消费；归属见其 Open Question 2）
+   - `wave_size: int` — ≥ 1，默认 4（每波菜数，由「菜单波次」消费）
 6. **id 是契约**：按类型命名空间隔离（`dish_*` / `upgrade_*` / `station_*`）。发布后不得改名——改名等于删除旧记录并新增，会让存档失效。
 7. **启动即校验**：加载全部记录 → 校验 → 建立目录 → Ready。任一规则失败就停在这里，不进入游戏。
 8. **运行时只读**：局内状态（当前饱腹、净利、剩余时间格）属于餐局流程，任何系统都不得写回数据记录。
@@ -167,13 +169,13 @@ The `valid_record_set` formula is defined as:
 | 菜品数值 | 硬 | `get_dish(id)` → `price`、`satiety`、`taste_tags`、`cloying_group` | GDD 已写（`design/gdd/dish-values.md`） |
 | 腻度与口味 | 硬 | `get_dish(id)` → `taste_tags`、`cloying_group`；`get_station(id)` → `cloy_cap` | GDD 已写（`design/gdd/cloying-and-taste.md`） |
 | 菜单波次 | 硬（VS） | `get_station(id)` → `dish_pool` | GDD 未写 |
-| 局外升级 | 硬 | `get_upgrade(id)` → 全部字段 | GDD 未写 |
+| 局外升级 | 硬 | `get_upgrade(id)` → 全部字段（含 `cost_growth`） | GDD 已写（`design/gdd/meta-upgrades.md`） |
 | 餐局流程 | 硬 | `get_station(id)` 解析 `station_id`；`entry_fee` 由结算读取 | GDD 已写（`design/gdd/run-flow.md`） |
 | 存档 | 硬 | 持久化 id 与等级/数值；读取时不信任存档里的数值快照 | GDD 已写（`design/gdd/save-system.md`） |
 | 时间与回合 | 硬 | `StationData.turn_budget`（新增字段，int ≥ 1）；本系统不在运行时被查询 | GDD 已写（`design/gdd/time-and-turns.md`） |
 | 胃容量 | 硬 | `BalanceData.base_capacity`（C0 = 20，字段归属见胃容量 Open Question 1）；`UpgradeData.STOMACH_CAPACITY` | GDD 已写（`design/gdd/stomach-capacity.md`） |
 | 纪录与里程碑 | 硬 | `MilestoneData` 目录（第四类记录，归属见纪录 Open Question 2）；`get_station(id)` → `display_name` | GDD 已写（`design/gdd/records-and-milestones.md`） |
-| 局内 HUD | 软（间接） | 通过菜品数值/时间与回合取得数字，不直接读 catalog | GDD 未写 |
+| 局内 HUD | 软（间接） | 通过菜品数值/时间与回合取得数字，不直接读 catalog | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 场景与流程管理 | 硬 | `Boot` 期读取加载与校验的最终结果（`Ready` / `Failed`），决定进入 Menu 还是 Error | GDD 已写 |
 
 **双向一致要求**：以上每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「数据配置」为上游依赖。目前场景与流程管理、菜品数值、腻度与口味、菜单波次、餐局流程、存档、时间与回合、胃容量、纪录与里程碑的 GDD 已完成并已列出本系统；其余系统仍待设计，此要求记录在此供后续核对。

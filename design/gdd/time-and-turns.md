@@ -194,7 +194,7 @@ The `is_exhausted` formula is defined as:
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
 | 结算与入场费 | 硬 | 经 `RunLog` 取得 `turns_total` / `turns_used`；依赖恒等式 `turns_used = 吃菜数 + 付费跳波数` 与 `turns_used ≤ turns_total` | GDD 已写（Designed） |
-| 局内 HUD | 硬 | 只读本局快照中的 `turns_remaining` / `turns_total`；不得自行推算耗尽 | GDD 未写 |
+| 局内 HUD | 硬 | 只读本局快照中的 `turns_remaining` / `turns_total`；不得自行推算耗尽 | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 菜单波次 | 硬（经餐局流程） | 从餐局流程收到 `turns_total`；付费跳波由餐局流程扣 1 回合，菜单波次不直接调用本系统 | GDD 已写（Designed） |
 | 菜品数值 | 软（仅设计期） | `T` 作为 `opt_value(M, C, T)` 与 `calibration_ratio` 的审计参数 | GDD 已写（Approved） |
 

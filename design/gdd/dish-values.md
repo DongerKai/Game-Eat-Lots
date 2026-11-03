@@ -233,6 +233,8 @@ The `calibration_ratio` formula is defined as:
 
 **Example:** `opt_value = 104`、`entry_fee = 85` → `calibration_ratio = 1.224`；最优玩家净利 +19，按价格贪心的玩家净利 +9。
 
+> **满级带（2026-11-03）**：`[1.15, 1.35]` 是**未升级**校准带；满级容量 25 的上限 120 / 85 = 1.412 属于「局外升级」定义的满级带 `[1.35, 1.45]`。两者同时成立才算该档口校准通过。
+
 ### 审查产出的使用方式
 
 - **CI**：每次改 `.tres` 后跑 `menu_healthy`、`same_group_dominated_pairs` 与 `opt_value`；这三项越界即失败。`cross_dominated_pairs` 只记录、不设门槛——跨组支配本来就允许，只要有用途。`unjustified_dominated` 不在 CI 中：`purpose` 不是数据字段，它是人工评审步骤（见 Open Question 7）。
@@ -274,7 +276,7 @@ The `calibration_ratio` formula is defined as:
 | 腻度与口味 | 硬 | `unit_value(d)`、`satiety(d)`、`cloying_group(d)` | GDD 已写（`design/gdd/cloying-and-taste.md`） |
 | 菜单波次 | 硬（VS） | 菜池：`uv_span(M)`、`same_group_dominated_pairs(M)`；单次刷新：`opt_value(M, C, T)` | GDD 未写 |
 | 结算与入场费 | 硬 | `price(d)`、`unit_value(d)`；一局求和由结算在 int64 中完成 | GDD 未写 |
-| 局内 HUD | 硬 | `price(d)`、`satiety(d)`；局内不请求 `unit_value` | GDD 未写 |
+| 局内 HUD | 硬 | `price(d)`、`satiety(d)`；局内不请求 `unit_value` | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 首局引导 | 软 | 结算期 `unit_value` 讲解数据 | GDD 未写 |
 
 **双向一致要求**：以上每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「菜品数值」为上游依赖。数据配置的 GDD 已在上游侧列出本系统；其余系统仍待设计，此要求记录在此供后续核对。
