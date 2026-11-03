@@ -144,6 +144,10 @@ Even in `autonomous` mode, certain decision categories ALWAYS trigger
 
 **Default** (when unset): `[scope_changes, file_deletions, schema_changes]`.
 
+**Explicit empty** (`automation_always_ask: []`): no category interrupts an
+`autonomous` run. This is distinct from leaving the key unset — an absent key
+keeps the default safety net; an explicit empty list asks for nothing.
+
 ### Recognized categories
 
 **This table is the set you may configure, NOT the set that always asks.** Only

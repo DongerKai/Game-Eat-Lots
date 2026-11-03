@@ -959,6 +959,10 @@ appends to the existing log.
 **Set by:** `/settings`
 **Read by:** All skills that respect `modes.automation`
 
+> **Explicit empty** (`automation_always_ask: []`) disables every always-ask
+> category: `autonomous` then asks for nothing. It is distinct from unset —
+> an absent key keeps the default three-category safety net.
+
 > **Makes `autonomous` safe.** Without this, `autonomous` is "AI does literally
 > everything, no questions asked." With it, AI does most things but stops on
 > destructive or irreversible decisions you specifically named.

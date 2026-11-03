@@ -55,7 +55,8 @@
 #     category is in the configured list (or in the default list when
 #     unset), 1 otherwise. Skills use this in autonomous mode to know
 #     when to prompt anyway. Default list: scope_changes, file_deletions,
-#     schema_changes.
+#     schema_changes. An explicit empty list (`automation_always_ask: []`)
+#     matches no category — it is not treated as unset.
 #
 #   log_decision <skill> <point> <options> <chosen> <reason> <category>
 #     Append a decision-log entry to production/session-logs/decision-log.md.
@@ -1129,12 +1130,33 @@ _yaml_helper_always_ask_default="scope_changes
 file_deletions
 schema_changes"
 
+# The config file that declares modes.automation_always_ask, local first.
+# The array reader returns empty for both "unset" and an explicit `[]`, but
+# the two mean opposite things here: unset keeps the default safety net,
+# while `[]` asks the user for nothing. Resolving from the declaring file
+# preserves that distinction — and a local `[]` still wins over a populated
+# base list, which the per-leaf merge alone would not do.
+_yaml_helper_always_ask_source() {
+  _yaml_helper_set_root
+  local f
+  for f in "$_YH_ROOT/project.local.yaml" "$_YH_ROOT/project.yaml"; do
+    [ -f "$f" ] || continue
+    if grep -Eq '^[[:space:]]*automation_always_ask[[:space:]]*:' "$f"; then
+      printf '%s' "$f"
+      return 0
+    fi
+  done
+  return 1
+}
+
 is_always_ask_category() {
   local category="$1"
   [ -z "$category" ] && return 1
-  local configured
-  configured=$(get_effective_yaml_array modes.automation_always_ask)
-  if [ -z "$configured" ]; then
+  local configured src
+  src=$(_yaml_helper_always_ask_source) || src=""
+  if [ -n "$src" ]; then
+    configured=$(get_yaml_array "$src" modes.automation_always_ask)
+  else
     configured="$_yaml_helper_always_ask_default"
   fi
   local item
@@ -1701,11 +1723,16 @@ EOF
       { s = $0; if (index(s, ",")) s = "\"" s "\""; out = out (n++ ? ", " : "") s }
       END { print out }'
   }
-  local aaa
+  local aaa src
   if _rc_want automation_always_ask; then
-    aaa=$(get_effective_yaml_array modes.automation_always_ask 2>/dev/null)
-    if [ -n "$aaa" ]; then
-      echo "automation_always_ask: $(_rc_join "$aaa") (configured)"
+    src=$(_yaml_helper_always_ask_source) || src=""
+    if [ -n "$src" ]; then
+      aaa=$(get_yaml_array "$src" modes.automation_always_ask 2>/dev/null)
+      if [ -n "$aaa" ]; then
+        echo "automation_always_ask: $(_rc_join "$aaa") (configured)"
+      else
+        echo "automation_always_ask: (none) (configured)"
+      fi
     else
       echo "automation_always_ask: $(_rc_join "$_yaml_helper_always_ask_default") (default)"
     fi
