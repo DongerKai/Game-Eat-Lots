@@ -1,0 +1,234 @@
+# Review Log — 数据配置（Data Config）
+
+## Review — 2026-11-03 — Verdict: NEEDS REVISION
+
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean mode — Phase 3b skipped)
+Blocking items: 5 | Recommended: 11
+Prior verdict resolved: First review
+
+Summary: The schema, state machine and integrity philosophy are sound, and the
+GDD is unusually precise about what it refuses to do (it does not chase
+optimality). The blocking problems are all of one kind: several normative rules
+stated in Detailed Design are absent from the `valid(D)` formula and from the
+acceptance criteria, so a programmer implementing the formula literally would
+ship a validator that lets `wave_size = 0` (division by zero in menu-waves) and
+`turn_budget = 0` through. Two record types that downstream GDDs treat as hard
+dependencies — `BalanceData` and `MilestoneData` — are still outside the
+three-type schema.
+
+### Required Before Implementation
+
+1. **[BLOCKING] Formulas / Detailed Rules — `valid(D)` omits three normative field constraints.**
+   Core Rule 4 requires `cost_growth ≥ 1.0` (line 41), Core Rule 5 requires
+   `turn_budget ≥ 1` (line 52) and `wave_size ≥ 1` (line 53), but `R_upg`
+   (line 95) and `R_sta` (line 96) constrain none of them, and no acceptance
+   criterion tests them. Downstream consequence: `wave_count = ceil(|M| /
+   wave_size)` (menu-waves) divides by zero if `wave_size = 0` passes
+   validation; `time-and-turns` states explicitly that "`turn_budget` … 由数据
+   配置在加载期校验" — a claim the formula does not back. Fix: add
+   `u.cost_growth ≥ 1.0` to `R_upg`; add `s.turn_budget ≥ 1 ∧ s.wave_size ≥ 1`
+   to `R_sta`; add one AC per constraint (the AC 23 block already has the
+   shape for `cloy_cap`).
+
+2. **[BLOCKING] Formulas — the `dishes_per_station` invariant is asserted but not enforced.**
+   Line 123 claims `dishes_per_station(s)` "必须等于 `|s.dish_pool|`，否则
+   `R_sta` 失败", but `R_sta` (line 96) never checks pool uniqueness. A station
+   with `dish_pool = [dish_a, dish_a]` passes every clause while
+   `dishes_per_station(s) = 1 ≠ 2`, and `dish_a` then appears twice in the wave
+   shuffle. Fix: add `¬hasDuplicates(s.dish_pool)` (or the equality itself) to
+   `R_sta`, plus an AC.
+
+3. **[BLOCKING] Detailed Rules / Formulas — the id type-namespace contract (Core Rule 6) is unenforced.**
+   Line 54 makes per-type prefixes (`dish_*` / `upgrade_*` / `station_*`) a
+   contract, but the only id rule in `valid(D)` is the regex
+   `^[a-z][a-z0-9_]*$`, which no prefix satisfies and no prefix violates.
+   Because uniqueness is checked per type, a `DishData` with id
+   `station_canteen` validates and then collides with the station id in save
+   data and in every `get_*(id)` lookup. AC 3 tests the regex only. Fix: add a
+   prefix predicate to each `R_*` and an AC line.
+
+4. **[BLOCKING] Dependencies / schema — `BalanceData.base_capacity` is a hard dependency with no record type.**
+   Line 176 lists 胃容量 → `BalanceData.base_capacity` (C0 = 20) as 硬, but
+   Core Rule 2 says "三类记录，三类 Resource" and no `BalanceData` schema,
+   `valid(D)` term, edge case or AC exists anywhere in this document.
+   `stomach-capacity.md` Open Question 1 confirms the gap and assigns the
+   decision to "数据配置复审时" — this review. Fix: either add the fourth
+   record type in full (fields, range, `R_bal`, AC), or state in Detailed Rules
+   that C0 is out of scope here and name its owner.
+
+5. **[BLOCKING] Dependencies / schema — `MilestoneData` is listed as a hard dependency while the schema declares three types.**
+   Line 177 calls it "第四类记录，归属见纪录 Open Question 2", but it is absent
+   from the schema, the formula and the ACs. `records-and-milestones.md` Open
+   Question 2 says both documents must be revised together and only one of the
+   two paths can be taken. Until that resolves, the dependency row must read as
+   conditional ("待 Open Question 2 决定"), not 硬 — otherwise the document
+   simultaneously claims a closed three-type contract and a fourth one.
+
+### Recommended Revisions
+
+1. **[RECOMMENDED] Acceptance Criteria — duplicate number 23.**
+   Lines 230 and 231 are both numbered 23, so "Acceptance Criteria 第 23 条"
+   (line 194, Game Feel) and "转为第 23 条的行为验证" (line 235) each resolve to
+   two different criteria. Renumber 24 → 25 as well.
+2. **[RECOMMENDED] Formulas — undefined symbols.**
+   `D_ids`, `S_ids`, `U_ids`, `uniqueIds(·)`, `cyclic(·)`, `dish(·)` and
+   `upgrade_count` (used in the `prereq_depth` range) appear in the formula but
+   not in the variables table. `dish(·)` and `cyclic(·)` carry real meaning —
+   define them.
+3. **[RECOMMENDED] Formulas — `prereq_depth` range contradicts its own semantics.**
+   The range is `1–upgrade_count`, but AC 20 gives depth 2 for a three-node
+   chain (edge counting), which makes a prerequisite-free upgrade depth 0.
+   Range should be `0–(upgrade_count − 1)`.
+4. **[RECOMMENDED] Formulas — `R_upg` does not validate `effect_type` membership.**
+   The implication `(u.effect_type ∈ {STOMACH_CAPACITY, MENU_VISION} → …)` is
+   vacuously true for an out-of-enum value, and Godot stores enums as plain
+   ints in a `.tres`, so `effect_type = 7` validates. Add an explicit
+   membership clause and one AC.
+5. **[RECOMMENDED] Detailed Rules — Core Rule 7's extra check is phrased as a suggestion.**
+   "建议增加一条：至少存在一个 `unlock_cost = 0` 的档口" sits inside a
+   normative list and is absent from `valid(D)`. Decide: a set-level predicate
+   plus AC, or drop it and keep `NoPlayableStation` as the single guarantee.
+6. **[RECOMMENDED] Formulas — the worked example contradicts the registry on a registered name.**
+   Line 116 gives `station_canteen` `entry_fee=30`; `entities.yaml` says 85
+   (`station_canteen_entry_fee`, owned by settlement-and-entry-fee), and
+   `dish-values.md` Open Question 2 already records the 30 as "只是示例". The
+   example also invents `upgrade_capacity` (`cost=40`, `max_level=3`) where the
+   real catalogue has `upgrade_stomach_capacity` (`cost=12`, `max_level=5`).
+   Either use the real numbers or label the block as synthetic fixture data, so
+   it cannot be copied into a `.tres`.
+7. **[RECOMMENDED] Acceptance Criteria — AC 22 is not independently executable.**
+   "p95 ≤ 100 ms（最小规格 PC）" — no minimum-spec machine is defined anywhere
+   in the project. Name the reference machine (or cite where it is defined), or
+   restate as a relative budget on the same harness.
+8. **[RECOMMENDED] Acceptance Criteria — AC 24 cannot run before the first release.**
+   Its baseline id list does not exist yet. Mark it as release-gated so QA does
+   not report it as a standing failure.
+9. **[RECOMMENDED] Acceptance Criteria — AC 19 accepts two different behaviours.**
+   "操作被拒绝或抛错" passes either way. Pick one, and state the mechanism —
+   `DishData` is a Godot Resource with exported fields, which is mutable by
+   default; a setter that pushes an error and ignores the write needs to be
+   named.
+10. **[RECOMMENDED] Cross-system — state the structural-vs-balance split explicitly.**
+    This GDD validates structure only, while consumers carry narrower bands
+    (`wave_size` 1–8 in menu-waves, `taste_tags` 0–3 in cloying-and-taste,
+    `menu_vision ≤ wave_size − 1`). One sentence — "bands live in the consuming
+    GDD; this schema enforces structure" — closes the apparent conflict for
+    every future reader.
+11. **[RECOMMENDED] Detailed Rules — `CLOYING_RESISTANCE`'s `effect_value` is ambiguous.**
+    The field is tunable but its semantics read as a constant ("每级减免 1
+    点"), and "小数部分在解析时取整" does not say whether 2.5 becomes 2 or 3.
+    Either make it an integer like the other two types, or state the rounding
+    rule and that the value, not the constant 1, is what applies.
+12. **[ADVISORY at `standard`] Tuning Knobs section is absent.**
+    Not blocking at this tier, but the document already carries three knobs
+    (`cost_growth` 1.35 / 1.2–1.6, `cloy_cap` 3, `wave_size` 4) scattered in
+    Detailed Rules. A Tuning Knobs table would list each with its safe range
+    and the gameplay aspect it moves, per `.claude/rules/design-docs.md`.
+13. **[ADVISORY at `standard`] Player Fantasy section is absent.**
+    Defensible for an invisible system — the doc says the player never touches
+    it — but if the tier rises to `full` it becomes required; the stated pillar
+    ("每口都是算术题") already supplies the one-line fantasy.
+
+### Nice-to-Have
+
+- Line 181's 场景与流程管理 row says only "GDD 已写" with no path, unlike every
+  other row (`design/gdd/scene-flow.md`).
+- Registry bookkeeping: `wave_size_default` (`entities.yaml`) does not list
+  `design/gdd/data-config.md` in `referenced_by`, although this GDD defines the
+  field that carries it. `cloy_cap` is correct.
+- `display_name` / `description` have no non-empty constraint; an empty string
+  passes validation and renders as a blank HUD row.
+- The example writes `effect_value=1` (an int literal) for a `float` field.
+
+### Completeness
+
+6/6 sections present that are REQUIRED at `workflow: standard` (Overview,
+Detailed Rules, Formulas, Edge Cases, Dependencies, Acceptance Criteria).
+Formulas is required here because the system defines numeric rules. Advisory
+gaps at this tier: Player Fantasy, Tuning Knobs.
+
+### Dependency Graph
+
+All 13 declared downstream dependencies resolve to an existing GDD.
+
+- ✓ `design/gdd/dish-values.md`
+- ✓ `design/gdd/cloying-and-taste.md`
+- ✓ `design/gdd/menu-waves.md`
+- ✓ `design/gdd/meta-upgrades.md`
+- ✓ `design/gdd/run-flow.md` and `design/gdd/settlement-and-entry-fee.md` (one row)
+- ✓ `design/gdd/save-system.md`
+- ✓ `design/gdd/time-and-turns.md`
+- ✓ `design/gdd/stomach-capacity.md`
+- ✓ `design/gdd/records-and-milestones.md`
+- ✓ `design/gdd/unlocks-and-stations.md`
+- ✓ `design/gdd/ui-flow.md`
+- ✓ `design/gdd/in-game-hud.md`
+- ✓ `design/gdd/scene-flow.md` — row cites no path (nice-to-have above)
+- Upstream: none declared, correct for a Foundation system.
+
+Bidirectional check: every GDD in the table lists 数据配置 as an upstream
+dependency. Two GDDs that mention 数据配置 but are correctly omitted from this
+table — `input.md` ("输入不依赖数据配置") and `audio-feedback.md` ("无直接调用")
+— agree that there is no dependency. `first-run-onboarding.md` resolves through
+菜品数值 / 菜单波次 and states it does not query the catalog directly. Index
+drift noticed but out of scope: `systems-index.md` row 11 (结算与入场费) omits
+数据配置 from `Depends On` although `settlement-and-entry-fee.md` lists it as 硬.
+
+### Registry Values
+
+Searched the whole document for every registered name it could restate —
+`station_canteen`, `dish_braised_pork`, `cloy_cap`, `wave_size`, `cost_growth`,
+`base_capacity`, `entry_fee`, `valid_record_set` — 17 lines matched.
+
+- ✓ `cloy_cap` = 3 (lines 51, 110) — matches `entities.yaml`.
+- ✓ `wave_size` default = 4 (line 53) — matches `wave_size_default`.
+- ✓ `cost_growth` = 1.35, band 1.2–1.6, floor ≥ 1.0 (line 41) — matches
+  `meta-upgrades.md` exactly.
+- ✓ `base_capacity` C0 = 20 (line 176) — matches `base_capacity`.
+- ✗ Line 116: `station_canteen.entry_fee = 30` vs registry 85
+  (`station_canteen_entry_fee`, owner settlement-and-entry-fee).
+- `dish_braised_pork` is named in the example pool without values — no conflict
+  with its registry entry (price 16, satiety 3, group 肉, tags [甜, 油]).
+- `dish_fried_rice` and `upgrade_capacity` are not registered names; they are
+  invented fixtures (see Recommended 6).
+
+### Specialist Disagreements
+
+None — lean mode, no specialist agents spawned.
+
+### Verdict Rationale
+
+The design is structurally sound: a single typed-resource catalogue, a fail-closed
+startup gate, and an explicit refusal to police balance are the right shape for a
+Foundation system, and the Edge Cases section is the strongest part of the
+document. The verdict is NEEDS REVISION rather than APPROVED because the formula
+and the acceptance criteria are not yet a complete encoding of the rules the
+document itself states — five normative constraints (three of them
+division-by-zero / zero-turn hazards) are missing from `valid(D)`, one invariant
+is asserted without being enforced, and two record types are declared hard
+dependencies while the schema says there are three. None of these require a
+redesign; all are additive edits to the formula and the AC list.
+
+---
+
+Receipt (files this review read for cross-document facts):
+```
+Reviewed-Content-Hash: design/gdd/data-config.md 1e8e07619c6eb3c027dcb348bcf848c73f2b16b5
+Reviewed-Content-Hash: design/registry/entities.yaml cdef3f7a3f4a270848207a53e3eef821342c6294
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/dish-values.md 60a580b19c4b2f980cd0a33df73e8c3aa32f6d3e
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md 38ebc87b9b529f9d32ce4fba2202411ce7891876
+Reviewed-Content-Hash: design/gdd/menu-waves.md 3c802aab667b644e6c8118e8f63b33a1cbdd87f4
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md 7dc02ff087d4ac059d4a81caa1b0c375483113ed
+Reviewed-Content-Hash: design/gdd/time-and-turns.md 7f55a619613d6c2ff9f99b9458e39d0f5f48895c
+Reviewed-Content-Hash: design/gdd/stomach-capacity.md bb97f41a121c6c18d15f7d10c23387ff25688b11
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 9e1293c7b33381aadbc4a578797b14a608a0a9c0
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 0f58ea62a2e8fa9ace2effe652cc644acab89d5b
+Reviewed-Content-Hash: design/gdd/scene-flow.md ac1d04a52a78a3027e95b4c81cde898e1b5ead06
+Reviewed-Content-Hash: design/gdd/input.md c96715b12512d1a093a10f6cf2e32030740be509
+Reviewed-Content-Hash: design/gdd/audio-feedback.md 8ad91f894b044ae735d9c55d13606f8e17453900
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 778f0a836330a6410aee8812fa0801f9dd3cc4f3
+Reviewed-Content-Hash: design/gdd/systems-index.md 721a697860f5cbf632fa991257dc4145828b1955
+```
