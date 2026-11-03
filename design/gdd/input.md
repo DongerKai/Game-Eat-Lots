@@ -44,6 +44,16 @@ Godot 4.6 起鼠标焦点与键盘/手柄焦点分离，因此输入层负责分
 9. **设备识别**：按事件类型判断，绝不比较 `device == 0`（Godot 4.7 起鼠标/键盘使用 `DEVICE_ID_MOUSE` / `DEVICE_ID_KEYBOARD`）。
 10. **无重绑（MVP）**：绑定集中在一张映射表里；重绑是以后替换这张表，不改变动作集。
 11. **输入只读**：局内系统只查询"某动作是否刚触发"，不持有设备或原始事件对象。
+12. **上下文切换由请求驱动**：上下文状态机归输入所有，但切换只能通过 `request_context(context) -> bool` 发起，下游不得直接赋值。允许的请求方与目标：
+
+    | 请求方 | 目标上下文 |
+    |---|---|
+    | 场景与流程管理 | `Blocked` / `Menu` / `Run` |
+    | 界面流程 | `Modal`（打开弹窗）与关闭弹窗后的来源上下文 |
+    | 首局引导 | `Blocked` 与引导结束后的来源上下文 |
+    | 暂停操作（`ui_pause`、窗口失焦、手柄拔出） | `Paused` 与恢复后的 `Run` |
+
+    输入**不判断请求是否合理**（例如"Menu 能不能进 Run"），只校验目标是否为五个已知上下文之一；未知值返回 `false`。合法性由请求方负责——这条与「场景与流程管理」的"不做规则校验"是同一条边界。每次成功切换发出 `context_changed(from, to)`。
 
 ### States and Transitions
 
@@ -52,22 +62,23 @@ Godot 4.6 起鼠标焦点与键盘/手柄焦点分离，因此输入层负责分
 | Blocked | 加载、首局引导、结算动画 | `ui_pause`（若该界面允许） | 其余全部 |
 | Menu | 主菜单、结算、升级、设置 | 导航、`ui_accept`、`ui_cancel` | `game_skip_dish`、`ui_pause` |
 | Run | 一局进行中且无弹窗 | 导航、`ui_accept`、`game_skip_dish`、`ui_pause` | — |
-| Paused | Run 中按 `ui_pause` | `ui_pause` / `ui_accept`（恢复）、`ui_cancel`（打开退出确认） | `game_skip_dish` |
+| Paused | Run 中按 `ui_pause`；或窗口失焦、手柄拔出 | `ui_pause` / `ui_accept`（恢复）、`ui_cancel`（打开退出确认） | `game_skip_dish` |
 | Modal | 任意弹窗（设置、确认框） | 导航、`ui_accept`、`ui_cancel` | 其余全部 |
 
-**转换**：Run → Paused（`ui_pause`）；Paused → Run（`ui_pause` 或 `ui_accept`）；任意 → Modal（界面请求）；Modal → 来源上下文（`ui_accept` 确认或 `ui_cancel` 关闭）；Run → Menu（结算完成）；Menu → Run（开始一局）。
+**转换**：Run → Paused（`ui_pause`，或窗口失焦 / 手柄拔出）；Paused → Run（`ui_pause` 或 `ui_accept`）；任意 → Modal（界面请求）；Modal → 来源上下文（`ui_accept` 确认或 `ui_cancel` 关闭）；Run → Menu（结算完成）；Menu → Run（开始一局）。除暂停与恢复外，所有转换都经 `request_context()` 发起（规则 12）。
 
 ### Interactions with Other Systems
 
 | 系统 | 方向 | 数据/接口 | 硬/软 |
 |---|---|---|---|
-| 界面流程 | 下游读取 | 焦点、导航、`ui_accept`、`ui_cancel` | 硬 |
+| 场景与流程管理 | 下游读取 + 写入上下文 | 请求 `Blocked` / `Menu` / `Run`；监听 `context_changed` | 硬 |
+| 界面流程 | 下游读取 + 写入上下文 | 焦点、导航、`ui_accept`、`ui_cancel`；请求 `Modal` 与来源上下文 | 硬 |
 | 餐局流程 | 下游读取 | 每回合的 `ui_accept`、`game_skip_dish`、`ui_pause` | 硬 |
 | 局内 HUD | 下游读取 | 菜品卡的悬停、点击、右键 | 硬 |
-| 首局引导 | 下游读取 | 请求进入 Blocked 上下文，只放行引导需要的动作 | 软 |
+| 首局引导 | 下游读取 + 写入上下文 | 请求进入 Blocked 上下文，只放行引导需要的动作 | 软 |
 | 音效反馈 | 下游读取 | 动作触发事件（用于 UI 音效） | 软 |
 
-**接口所有权**：输入拥有动作映射、上下文状态机与双焦点记录；下游只查询动作与焦点，不修改映射表。
+**接口所有权**：输入拥有动作映射、上下文状态机与双焦点记录。下游只查询动作与焦点，不修改映射表；上下文通过 `request_context()` 请求，不直接赋值，切换结果经 `context_changed(from, to)` 广播。
 
 ## Formulas
 
@@ -153,13 +164,16 @@ The `stick_engaged` formula is defined as:
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 界面流程 | 硬 | 导航、`ui_accept`、`ui_cancel`、初始焦点、双焦点状态 | GDD 未写 |
+| 场景与流程管理 | 硬 | `request_context(Blocked / Menu / Run)`；`context_changed(from, to)` | GDD 已写 |
+| 界面流程 | 硬 | 导航、`ui_accept`、`ui_cancel`、初始焦点、双焦点状态；`request_context(Modal)` | GDD 未写 |
 | 餐局流程 | 硬 | 每回合的 `ui_accept`、`game_skip_dish`、`ui_pause` | GDD 未写 |
 | 局内 HUD | 硬 | 菜品卡的悬停、点击、右键 | GDD 未写 |
 | 首局引导 | 软 | 请求 Blocked 上下文，只放行指定动作 | GDD 未写 |
 | 音效反馈 | 软 | 动作触发事件 | GDD 未写 |
 
-**双向一致要求**：以上系统编写 GDD 时必须列出「输入」为上游依赖。当前 `design/gdd/systems-index.md` 的依赖列**没有记录这些依赖**——本 GDD 完成后需要把「根系统索引补上 输入 → 界面流程 / 餐局流程 / 局内 HUD」作为索引修正项。
+**双向一致要求**：以上系统编写 GDD 时必须列出「输入」为上游依赖。「场景与流程管理」的 GDD 已写，其 Dependencies 已把输入列为上游依赖，两处一致。剩余条目在各自 GDD 编写时核对。
+
+**索引修正项**：`design/gdd/systems-index.md` 的依赖列仍缺「输入 → 界面流程 / 餐局流程 / 局内 HUD / 场景与流程管理」。场景与流程管理一行已由 `/design-system` 补上；其余待对应 GDD 写出后一并补齐。
 
 ## Visual/Audio Requirements
 
@@ -191,7 +205,11 @@ The `stick_engaged` formula is defined as:
 
 ## Cross-References
 
-**None — this system references no other GDD.** 输入不依赖数据配置或其他已写文档；它被界面流程、餐局流程、局内 HUD 引用，这些文档写好后需要在本表补充反向链接。
+| 引用 | 在本 GDD 的位置 | 引用的内容 |
+|---|---|---|
+| 场景与流程管理 | Core Rules 规则 12、Interactions、Dependencies | 它请求 `Blocked` / `Menu` / `Run` 三个上下文；它监听 `context_changed` 以冻结/解冻局内世界；两边都声明「不做规则校验」是同一条边界 |
+
+> 本系统仍不依赖任何上游 GDD。「引用」列记录的是**下游**文档中与本系统共用的契约——`/review-all-gdds` 的一致性检查需要这条反向链接。
 
 ## Acceptance Criteria
 
@@ -214,6 +232,9 @@ The `stick_engaged` formula is defined as:
 15. **GIVEN** 60 FPS 目标与同帧轮询，**WHEN** 从 F1 时间戳到消费者查询，**THEN** 延迟 ≤ 1 帧（16.7 ms）。该预算依赖 `project.yaml` 的目标帧率与输入轮询方式，不测主观手感。
 16. **GIVEN** 任意界面停在 `ui_accept` 可用状态，**WHEN** 等待 10 秒后再按，**THEN** 结果与立即按下相同——没有任何接受倒计时。
 17. **GIVEN** F6 的双焦点绘制，**WHEN** 界面渲染，**THEN** 保留截图到 `production/qa/evidence/`，由视觉 gate 确认两种焦点样式可区分。
+18. **GIVEN** F8 处于 Blocked，**WHEN** 调用 `request_context(&"Menu")`，**THEN** 返回 `true` 且 `context_changed(Blocked, Menu)` 发出一次；**WHEN** 调用 `request_context(&"Bogus")`，**THEN** 返回 `false`、上下文不变、不广播。
+19. **GIVEN** F8 处于 Menu，**WHEN** 调用 `request_context(&"Run")`，**THEN** 返回 `true` 并完成切换——输入不判断该请求在业务上是否合理，合法性由请求方负责。
+20. **GIVEN** 全仓库静态扫描，**THEN** 上下文只通过 `request_context()` 改变，没有任何代码直接给上下文赋值；调用方仅限场景与流程管理、界面流程、首局引导与暂停操作。
 
 **无法直接断言、已改写或转为视觉门的规则**：
 - 「输入只读」：黑盒不可判 → 第 11 条改为 API 形状 + 静态扫描。

@@ -54,7 +54,7 @@ progression system, and 餐局流程 is the skeleton that 时间与回合, 胃�
 |---|-------------|----------|----------|--------|------------|------------|
 | 1 | 数据配置 | Core | MVP | Designed | design/gdd/data-config.md | — |
 | 2 | 输入 | Core | MVP | Designed | design/gdd/input.md | — |
-| 3 | 场景与流程管理 | Core | MVP | Not Started | — | — |
+| 3 | 场景与流程管理 | Core | MVP | Designed | design/gdd/scene-flow.md | 数据配置, 输入 |
 | 4 | 存档 | Persistence | MVP | Not Started | — | 数据配置 |
 | 5 | 餐局流程 | Core | MVP | Not Started | — | 场景与流程管理, 数据配置, 输入 |
 | 6 | 时间与回合 | Core | MVP | Not Started | — | 餐局流程 |
@@ -110,7 +110,7 @@ Vertical Slice tier, and the rest are Full Vision.
 
 1. **数据配置** — every dish, upgrade and station value lives here; nothing else can be tuned without it
 2. **输入** — keyboard/mouse and partial gamepad; no gameplay dependency
-3. **场景与流程管理** — the app-level state machine; no gameplay dependency
+3. **场景与流程管理** — the app-level state machine; still in the foundation layer, but since `/design-system` it depends on 数据配置 (boot validation) and 输入 (context switching). Both are foundation systems, so the layer is unchanged and no cycle exists.
 
 ### Core Layer (depends on foundation)
 
@@ -193,10 +193,10 @@ Vertical Slice tier, and the rest are Full Vision.
 | Metric | Count |
 |--------|-------|
 | Total systems identified | 20 |
-| Design docs started | 2 |
+| Design docs started | 3 |
 | Design docs reviewed | 0 |
 | Design docs approved | 0 |
-| MVP systems designed | 2/13 |
+| MVP systems designed | 3/13 |
 | Vertical Slice systems designed | 0/5 |
 
 ---

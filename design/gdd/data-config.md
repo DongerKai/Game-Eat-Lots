@@ -73,6 +73,7 @@
 | 菜单波次 | 下游读取 | `StationData` 的 `dish_pool` | 硬（Vertical Slice 期） |
 | 局外升级 | 下游读取 | `UpgradeData` 的全部字段 | 硬 |
 | 餐局流程 | 下游读取 | `StationData` 的 `entry_fee` | 硬 |
+| 场景与流程管理 | 下游读取 | 启动校验状态 Ready / Failed | 硬 |
 | 存档 | 下游引用 | 只存 id 与等级/数值，不存记录本身 | 硬 |
 
 **接口所有权**：数据配置拥有三个 catalog 的查询与校验；下游只读，不拥有写入路径。
@@ -165,6 +166,7 @@ The `valid_record_set` formula is defined as:
 | 菜单波次 | 硬（VS） | `get_station(id)` → `dish_pool` | GDD 未写 |
 | 局外升级 | 硬 | `get_upgrade(id)` → 全部字段 | GDD 未写 |
 | 餐局流程 | 硬 | `get_station(id)` → `entry_fee` | GDD 未写 |
+| 场景与流程管理 | 硬 | 读取启动校验状态 Ready / Failed；Failed 时不实例化主场景 | GDD 已写 |
 | 存档 | 硬 | 持久化 id 与等级/数值；读取时不信任存档里的数值快照 | GDD 未写 |
 | 局内 HUD | 软（间接） | 通过菜品数值/时间与回合取得数字，不直接读 catalog | GDD 未写 |
 
@@ -187,7 +189,9 @@ The `valid_record_set` formula is defined as:
 
 ## Cross-References
 
-**None — this system references no other GDD.** 数据配置是最先设计的系统；下游系统（菜品数值、腻度与口味、菜单波次、局外升级、餐局流程、存档、局内 HUD）在各自 GDD 写好后，需要把「数据配置」列回 Cross-References，届时在此表补充。
+**上游引用：无。** 数据配置不引用任何其他 GDD 的规则或数值。
+
+**下游反向链接：** 场景与流程管理已在其 GDD 中把数据配置列为上游依赖，本 GDD 的 Interactions 与 Dependencies 已同步。其余下游系统（菜品数值、腻度与口味、菜单波次、局外升级、餐局流程、存档、局内 HUD）在各自 GDD 写好后，需要把「数据配置」列回 Cross-References，届时在此表补充。
 
 ## Acceptance Criteria
 
