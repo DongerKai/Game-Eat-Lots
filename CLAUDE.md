@@ -49,6 +49,13 @@ after it runs `project.yaml` holds the real values.
 **User-driven collaboration, not autonomous execution.**
 Every task follows: **Question -> Options -> Decision -> Draft -> Approval**
 
+**The protocol is gated by `modes.automation`** (`project.yaml`, see
+`.claude/docs/automation-modes.md`). The bullets below describe the
+`collaborative` default; `guided` asks only for major decisions, and
+`autonomous` asks for nothing except categories in
+`modes.automation_always_ask` — it picks the recommended option and logs the
+decision instead.
+
 - Agents MUST ask "May I write this to [filepath]?" before using Write/Edit tools
   (exempt: `active.md` appends, agent memory, a subagent's new file at the path
   its orchestrating skill named; see `.claude/rules/agent-memory.md`)
