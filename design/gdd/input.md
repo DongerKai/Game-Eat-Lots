@@ -1,6 +1,6 @@
 # 输入（Input）
 
-> **Status**: In Design
+> **Status**: In Design — 新增规则 12（上下文切换请求接口）与验收条件 18–20（2026-11-03）
 > **Author**: user + agents
 > **Last Updated**: 2026-11-03
 > **Last Verified**: 2026-11-03
@@ -44,6 +44,15 @@ Godot 4.6 起鼠标焦点与键盘/手柄焦点分离，因此输入层负责分
 9. **设备识别**：按事件类型判断，绝不比较 `device == 0`（Godot 4.7 起鼠标/键盘使用 `DEVICE_ID_MOUSE` / `DEVICE_ID_KEYBOARD`）。
 10. **无重绑（MVP）**：绑定集中在一张映射表里；重绑是以后替换这张表，不改变动作集。
 11. **输入只读**：局内系统只查询"某动作是否刚触发"，不持有设备或原始事件对象。
+12. **上下文切换由请求驱动**：上下文状态机归输入所有，但下游不能直接赋值，只能发起请求。接口三个：
+
+    | 接口 | 语义 | 唯一调用方 |
+    |---|---|---|
+    | `request_context(context, clear_stack := true) -> bool` | 设置权威上下文；`clear_stack` 为真时清空临时栈 | 场景与流程管理 |
+    | `push_context(context) -> bool` | 把上下文压入临时栈，保留栈下内容 | 界面流程（`Modal`）、首局引导（`Blocked`） |
+    | `pop_context() -> bool` | 弹出临时栈顶，回到压栈前的上下文 | 界面流程、首局引导 |
+
+    输入**不判断请求是否合理**（例如"Menu 能不能进 Run"），只校验 `context` 是否为五个已知上下文之一；未知值返回 `false`，栈与当前上下文都不变。合法性由请求方负责——这与「场景与流程管理」的"不做规则校验"是同一条边界。任何一次实际改变都发出 `context_changed(from, to)`，参数为栈顶变化前后的值；空操作（同值覆盖）不发信号。场景与流程管理在顶层切换时用 `clear_stack = true`，因此界面流程与首局引导遗留的临时上下文不会跨状态存活。
 
 ### States and Transitions
 
@@ -61,13 +70,14 @@ Godot 4.6 起鼠标焦点与键盘/手柄焦点分离，因此输入层负责分
 
 | 系统 | 方向 | 数据/接口 | 硬/软 |
 |---|---|---|---|
-| 界面流程 | 下游读取 | 焦点、导航、`ui_accept`、`ui_cancel` | 硬 |
+| 场景与流程管理 | 下游读取 + 请求上下文 | `request_context(ctx, clear_stack := true)`；`context_changed(from, to)` | 硬 |
+| 界面流程 | 下游读取 + 请求上下文 | 焦点、导航、`ui_accept`、`ui_cancel`；`push_context(Modal)` / `pop_context()` | 硬 |
 | 餐局流程 | 下游读取 | 每回合的 `ui_accept`、`game_skip_dish`、`ui_pause` | 硬 |
 | 局内 HUD | 下游读取 | 菜品卡的悬停、点击、右键 | 硬 |
-| 首局引导 | 下游读取 | 请求进入 Blocked 上下文，只放行引导需要的动作 | 软 |
+| 首局引导 | 下游读取 + 请求上下文 | `push_context(Blocked)` / `pop_context()`，只放行引导需要的动作 | 软 |
 | 音效反馈 | 下游读取 | 动作触发事件（用于 UI 音效） | 软 |
 
-**接口所有权**：输入拥有动作映射、上下文状态机与双焦点记录；下游只查询动作与焦点，不修改映射表。
+**接口所有权**：输入拥有动作映射、上下文状态机与双焦点记录。下游只查询动作与焦点，**不修改映射表**；上下文另经 `request_context` / `push_context` / `pop_context` 请求（规则 12），不直接赋值。
 
 ## Formulas
 
@@ -158,7 +168,7 @@ The `stick_engaged` formula is defined as:
 | 局内 HUD | 硬 | 菜品卡的悬停、点击、右键 | GDD 未写 |
 | 首局引导 | 软 | 请求 Blocked 上下文，只放行指定动作 | GDD 未写 |
 | 音效反馈 | 软 | 动作触发事件 | GDD 未写 |
-| 场景与流程管理 | 硬 | 顶层状态切换时通知进入默认上下文并清空临时栈；由它订阅 `ui_pause` 驱动 `Run ⇄ Paused` | GDD 已写 |
+| 场景与流程管理 | 硬 | 顶层状态切换时调用 `request_context(default_ctx, clear_stack := true)`；订阅 `context_changed`；由它订阅 `ui_pause` 驱动 `Run ⇄ Paused` | GDD 已写 |
 
 **双向一致（已完成）**：索引第 5、15、16 行的 `Depends On` 已分别记录「输入」；场景与流程管理的 GDD 也已完成并把「输入」列为上游依赖，索引第 3 行已记为「数据配置, 输入」。以上系统编写各自 GDD 时必须同样列出「输入」为上游依赖。
 
@@ -215,6 +225,9 @@ The `stick_engaged` formula is defined as:
 15. **GIVEN** 60 FPS 目标与同帧轮询，**WHEN** 从 F1 时间戳到消费者查询，**THEN** 延迟 ≤ 1 帧（16.7 ms）。该预算依赖 `project.yaml` 的目标帧率与输入轮询方式，不测主观手感。
 16. **GIVEN** 任意界面停在 `ui_accept` 可用状态，**WHEN** 等待 10 秒后再按，**THEN** 结果与立即按下相同——没有任何接受倒计时。
 17. **GIVEN** F6 的双焦点绘制，**WHEN** 界面渲染，**THEN** 保留截图到 `production/qa/evidence/`，由视觉 gate 确认两种焦点样式可区分。
+18. **GIVEN** F8，**WHEN** 调用 `request_context(&"Menu", true)`，**THEN** 返回 `true`、栈被清空、栈顶为 `Menu`，`context_changed` 发出一次；**WHEN** 调用 `request_context(&"Bogus")`，**THEN** 返回 `false`、栈与栈顶均不变、不发信号。
+19. **GIVEN** F8 处于 `Run`，**WHEN** 界面流程 `push_context(&"Modal")` 再 `pop_context()`，**THEN** 上下文依次为 `Modal`、`Run`，两次各发一次 `context_changed`；**WHEN** 此时场景与流程管理调用 `request_context(&"Menu", true)`，**THEN** 栈被清空且栈顶为 `Menu`——遗留的临时上下文不跨顶层状态存活。
+20. **GIVEN** 全仓库静态扫描，**THEN** 上下文只经 `request_context` / `push_context` / `pop_context` 改变，没有任何代码直接给上下文赋值；`request_context(clear_stack := true)` 的调用方仅限场景与流程管理。
 
 **无法直接断言、已改写或转为视觉门的规则**：
 - 「输入只读」：黑盒不可判 → 第 11 条改为 API 形状 + 静态扫描。

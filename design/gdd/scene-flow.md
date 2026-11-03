@@ -1,7 +1,7 @@
 # 场景与流程管理（Scene & Flow）
 
-> **Status**: In Review — revised after design review, awaiting re-review (2026-11-03)
-> **Author**: user + Claude (systems-designer not consulted — Lean mode)
+> **Status**: In Review — Formulas 章节补写、输入上下文接口定名（2026-11-03），待重新评审
+> **Author**: user + Claude（首次设计未咨询 systems-designer — Lean 模式；Formulas 后续补写）
 > **Last Updated**: 2026-11-03
 > **Last Verified**: 2026-11-03
 > **Implements Pillar**: 数字看得见地涨
@@ -26,7 +26,7 @@
 
 1. **单一顶层状态**：任意时刻恰好一个顶层状态。集合固定为六个：`Boot`、`Error`、`Menu`、`Run`、`Paused`、`Quit`。不为细分界面新增顶层状态——结算、升级、设置都是 `Menu` 内的界面，由界面流程推进。
 2. **唯一切换入口与合法性**：所有顶层切换只经 `request_transition(to, payload)`，并返回该请求是否被接受（bool）。其他系统不得自行挂载/卸载场景或写状态。请求先校验 `(current, to)` 是否在下面的转移表内：合法则在该帧渲染前生效；非法则拒绝、保持原状态并记日志。**一帧内的多个请求全部针对帧初状态校验**，按到达顺序取第一个合法者生效，其余一律拒绝并各记日志——后到的请求不会因为前一个已经改变状态而重新变得合法。**日志级别**：普通非法转移与同帧落败记 WARNING；在非 `Run` 状态收到 `RunResult` 记 ERROR。调用方拿到 `false` 即知 payload 未被交付，不得假设成功。
-3. **状态 → 输入上下文**：切换生效时，本系统通知输入进入该状态的默认上下文：`Boot` → Blocked、`Error` → Menu、`Menu` → Menu、`Run` → Run、`Paused` → Paused。`Error` 沿用 Menu 上下文只是为了让唯一按钮可以被导航与确认；`Error` 内不存在任何能触发 `Menu` 或 `Run` 的动作。`Modal` 与 `Blocked` 可由界面流程或首局引导临时压栈；本系统不感知其内容，只在顶层切换时保证输入栈回到该状态的默认上下文。
+3. **状态 → 输入上下文**：切换生效时，本系统调用 `request_context(default_ctx, clear_stack := true)`（输入 GDD 规则 12），把输入置于该状态的默认上下文并清空临时栈：`Boot` → Blocked、`Error` → Menu、`Menu` → Menu、`Run` → Run、`Paused` → Paused。`Error` 沿用 Menu 上下文只是为了让唯一按钮可以被导航与确认；`Error` 内不存在任何能触发 `Menu` 或 `Run` 的动作。`Modal` 与 `Blocked` 可由界面流程或首局引导临时压栈；本系统不感知其内容，只在顶层切换时保证输入栈回到该状态的默认上下文。
 4. **启动序列**：进入 `Boot` 后读取数据配置的加载与校验结果；`Ready` → `Menu`，`Failed` → `Error`。启动期间输入为 Blocked。
 5. **一局的进入**：`Menu → Run` 携带 `RunConfig`，由发起方（界面流程）组装：`station_id` 与当前局外升级等级快照。本系统不读存档、不组装 `RunConfig`，只原样转交。
 6. **一局的离开**：`Run → Menu` 携带 `RunResult`，由餐局流程在结算完成时发起。`RunResult` 在切换生效的同一帧内、恰好一次同步交给界面流程，不落盘、不缓存；界面流程据此打开结算屏。**进入失败不是结算**：若 `RunConfig` 在进入时无法解析，餐局流程立即请求 `Run → Menu`，携带 `init_failed = true`；不产生 `RunResult`、不结算。
@@ -72,7 +72,7 @@
 | 系统 | 方向 | 数据/接口 | 硬/软 |
 |---|---|---|---|
 | 数据配置 | 上游读取 | `Boot` 期读取加载与校验的最终结果（`Ready` / `Failed`）；不重复实现校验 | 硬 |
-| 输入 | 下游通知 / 上游动作 | 输出：切换时通知进入默认上下文并清空临时栈。输入：只订阅 `ui_pause` 触发 `Run ⇄ Paused`；`ui_accept` 由界面流程消费，本系统不监听 | 硬 |
+| 输入 | 下游通知 / 上游动作 | 输出：切换时调用 `request_context(default_ctx, clear_stack := true)`。输入：订阅 `context_changed` 与 `ui_pause` 触发 `Run ⇄ Paused`；`ui_accept` 由界面流程消费，本系统不监听 | 硬 |
 | 界面流程 | 下游读取 | 发起 `request_transition(Menu → Run, RunConfig)`；订阅 `RunResult`、`abandoned`、`init_failed` 与当前顶层状态；接收 `ui_cancel` 打开退出确认，并把确认/取消的结果以切换请求交回本系统；暂停菜单消费 `ui_accept` 后请求 `Paused → Run` | 硬 |
 | 餐局流程 | 下游读取 | 进入 `Run` 时取得 `RunConfig`；收到暂停/恢复通知；结算完成时发起 `Run → Menu, RunResult`；启动失败时发起 `Run → Menu, init_failed` | 硬 |
 | 存档 | 无直接调用 | `RunConfig` 与纪录写入由发起方负责；本系统不读写存档 | 软（间接） |
@@ -80,6 +80,52 @@
 | 首局引导 | 下游请求 | 在 `Run` 内请求 Blocked 上下文并只放行指定动作；不改变顶层状态 | 软 |
 
 **接口所有权**：本系统拥有顶层状态、转移合法性与 payload 转交；下游只请求切换、订阅状态与 payload，不得自行改写状态或挂载场景。
+
+## Formulas
+
+本系统只有两个数值规则——**状态生效延迟**与**过渡时长上限**。两者都来自规则 12「切换不阻塞」，且都必须是可判定的，否则"单帧生效"只是说法而不是规格。
+
+这些值不进数据配置：它们是表现时序，不是平衡数值。`FADE_OUT` / `FADE_IN` 的具体时长由 `/ux-design` 的交互规格拥有，本 GDD 只规定上限与不可阻塞性。
+
+### 状态生效延迟
+
+The `state_latency_frames` formula is defined as:
+
+`state_latency_frames = ceil(t_apply / FRAME_TIME)`
+
+**Variables:**
+
+| Variable | Type | Range | Source | Description |
+|---|---|---|---|---|
+| `t_apply` | float (s) | 0 | calculated | 从 `request_transition` 被接受到目标状态写入的耗时 |
+| `FRAME_TIME` | float (s) | 目标帧率的倒数（60 FPS 下 0.0167） | `project.yaml` | 一帧的时长 |
+| `state_latency_frames` | int | 0 | calculated | 请求被接受到目标状态渲染之间隔了几帧 |
+
+**Output Range:** 恒为 0。**这不是"通常为 0"**：`t_apply` 必须为 0——状态在同一次调用内写入，当前帧渲染时目标状态已经在位。任何大于 0 的值都是规则 12 的违反，不是性能问题。
+
+**Example:** 界面流程在帧 N 调用 `request_transition(Menu → Run, RunConfig)` 并收到 `true`；帧 N 渲染时已显示 `Run`，`state_latency_frames = 0`。
+
+### 过渡总时长
+
+The `transition_total` formula is defined as:
+
+`transition_total = FADE_OUT + FADE_IN`
+
+**Variables:**
+
+| Variable | Type | Range | Source | Description |
+|---|---|---|---|---|
+| `FADE_OUT` | float (s) | 0–0.10 | `/ux-design` 交互规格 | 旧状态淡出时长 |
+| `FADE_IN` | float (s) | 0–0.10 | `/ux-design` 交互规格 | 新状态淡入时长 |
+| `TRANSITION_CAP` | float (s) | 0.20（常量） | constant | 过渡总时长上限 |
+
+**Output Range:** 0–0.20 s。无障碍设置关闭视觉过渡时 `FADE_OUT = FADE_IN = 0`，即 `transition_total = 0`。
+
+**约束：** `transition_total ≤ TRANSITION_CAP`；且 `transition_total` **不参与** `state_latency_frames` 的计算——过渡在状态已生效之后才播放。把两者相加是错误实现，会直接违反规则 12。
+
+**Example:** `FADE_OUT = 0.08`、`FADE_IN = 0.08` → `transition_total = 0.16 s`，未超上限；状态仍在帧 N 生效。
+
+> 过渡播放期间到达的新合法请求会立即中止剩余过渡（Edge Cases 最后一条）。过渡不是状态机的一部分，因此不存在"过渡被拒绝"——这一点没有数值，不单独成式。
 
 ## Edge Cases
 
@@ -111,7 +157,7 @@
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
 | 数据配置 | 硬 | `Boot` 期读取加载与校验的最终结果（`Ready` / `Failed`）；校验逻辑由数据配置拥有，本系统不重复实现 | GDD 已写 |
-| 输入 | 硬 | 切换生效时通知进入默认上下文并清空临时栈；订阅 `ui_pause` 驱动 `Run ⇄ Paused` | GDD 已写 |
+| 输入 | 硬 | 切换生效时调用 `request_context(default_ctx, clear_stack := true)`；订阅 `context_changed`；订阅 `ui_pause` 驱动 `Run ⇄ Paused` | GDD 已写 |
 
 **下游依赖方：**
 
@@ -164,7 +210,7 @@
 | 系统 | GDD | 关系 |
 |---|---|---|
 | 数据配置 | design/gdd/data-config.md | 上游：读取加载与校验结果，决定 `Boot → Menu` 还是 `Boot → Error` |
-| 输入 | design/gdd/input.md | 上游：切换时通知默认上下文；订阅 `ui_pause` 驱动暂停 |
+| 输入 | design/gdd/input.md | 上游：切换时调用 `request_context(..., clear_stack := true)`；订阅 `context_changed` 与 `ui_pause` 驱动暂停 |
 | 界面流程 | 未写 | 下游：发起 `Menu → Run`，接收 `RunResult`、`init_failed` 与 `abandoned`，按顶层状态切界面 |
 | 餐局流程 | 未写 | 下游：取得 `RunConfig`，接收暂停/恢复通知，结算时回传 `RunResult`，启动失败时回传 `init_failed` |
 | 首局引导 | 未写 | 下游（软）：在 `Run` 内请求 Blocked 上下文 |
@@ -174,7 +220,7 @@
 
 ## Acceptance Criteria
 
-> **Section D（Formulas）未编写**：本系统不定义任何数值规则，没有公式需要覆盖——判据全部来自 Detailed Design。
+> **Formulas 覆盖**：Detailed Design 与 Visual/Audio 各声明了一条数值规则（单帧生效、过渡 ≤ 0.2 秒），Formulas 已给出对应的两个量与约束，第 31–33 条覆盖它们。其余判据全部来自 Detailed Design。
 
 > **集成判据**：第 9、14 条依赖界面流程；第 10、25 条依赖存档；第 22、23 条依赖餐局流程，其中第 23 条还需要界面流程的结算屏发起重开。其余判据只需本系统加上输入与数据配置的测试替身。
 
@@ -208,6 +254,9 @@
 28. **GIVEN** `Paused`，**WHEN** 玩家按 `ui_accept`，**THEN** 本系统不自行恢复 `Run`（不监听该动作）；只有界面流程请求恢复才切回 `Run`。退出确认 `Modal` 打开时同理，`ui_accept` 只属于对话框。
 29. **GIVEN** 任一请求被拒绝，**WHEN** 调用 `request_transition`，**THEN** 返回 `false`，调用方据此可以重新发起。
 30. **GIVEN** 视觉过渡尚未播完，**WHEN** 收到新的合法请求，**THEN** 立即生效并中止未完成的过渡。
+31. **GIVEN** 任意合法请求，**WHEN** `request_transition` 返回 `true`，**THEN** 该请求所在帧的渲染即显示目标状态，`state_latency_frames = 0`；不得出现"状态已变但画面仍是旧状态"的中间帧。
+32. **GIVEN** `/ux-design` 给出 `FADE_OUT` 与 `FADE_IN`，**WHEN** 检查其和，**THEN** `transition_total ≤ 0.20 s`；**GIVEN** 无障碍设置关闭过渡，**THEN** `FADE_OUT = FADE_IN = 0` 且切换照常在同一帧生效。
+33. **GIVEN** 过渡正在播放且已计入 `FADE_OUT`，**WHEN** 在此期间发生合法切换，**THEN** 剩余过渡被取消、新状态仍在同一帧生效，且 `state_latency_frames = 0`——过渡时长不计入状态延迟。
 
 ## Open Questions
 

@@ -56,7 +56,7 @@ were found.
 |---|-------------|----------|----------|--------|------------|------------|
 | 1 | 数据配置 | Core | MVP | Designed | design/gdd/data-config.md | — |
 | 2 | 输入 | Core | MVP | Designed | design/gdd/input.md | — |
-| 3 | 场景与流程管理 | Core | MVP | Approved | design/gdd/scene-flow.md | 数据配置, 输入 |
+| 3 | 场景与流程管理 | Core | MVP | In Review | design/gdd/scene-flow.md | 数据配置, 输入 |
 | 4 | 存档 | Persistence | MVP | Not Started | — | 数据配置 |
 | 5 | 餐局流程 | Core | MVP | Not Started | — | 场景与流程管理, 数据配置, 输入 |
 | 6 | 时间与回合 | Core | MVP | Not Started | — | 餐局流程 |
@@ -201,7 +201,11 @@ Vertical Slice tier, and the rest are Full Vision.
 | Total systems identified | 20 |
 | Design docs started | 3 |
 | Design docs reviewed | 1 |
-| Design docs approved | 1 |
+| Design docs approved | 0 |
+
+> 场景与流程管理于 2026-11-03 通过设计评审（Approved），随后补写了 Formulas 章节并在
+> 输入 GDD 中定名了上下文切换接口，两处都是评审后才出现的改动，因此状态回到 **In Review**
+> 等待复审。复审通过后改回 Approved。
 | MVP systems designed | 3/13 |
 | Vertical Slice systems designed | 0/5 |
 
