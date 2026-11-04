@@ -432,3 +432,173 @@ Reviewed-Content-Hash: design/gdd/in-game-hud.md 654e48d14dbf85fdbab3b923e590a4f
 Reviewed-Content-Hash: design/gdd/ui-flow.md 21482b6d00538b95af113995e613b8df29985a8a
 Reviewed-Content-Hash: design/gdd/records-and-milestones.md 9fe5183795ca3d47798510a1d00a040dabe3ca61
 Reviewed-Content-Hash: design/gdd/systems-index.md 0c3efa52308253f2243c0771bff7c9b6d3ae5933
+
+---
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: M
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 1 | Recommended: 17
+Summary: All three prior blocking items are closed. Core Rule 8 (`:34`) now reads `Critical 1 / Lifecycle 3 / Gameplay 3 / UI 3` (sum 10), matching the Formulas table (`:195`) and making AC 7 / AC 9's "10 voices full" setup reachable; the edge case (`:297`) now accepts `end_pickup`, matching the catalogue and `run-flow.md:33`; and the record cues (`:72-75`, plus the new merge paragraph at `:79`) adopt the Approved producer's contract — `record_broken` and `milestone_earned` may coexist, `career_completed` closes the frame, and same-frame milestones collapse to one play, which is now also what `records-and-milestones.md:347` and its AC 20 describe. The single new blocking defect is in that merge rule's own wording: it records `suppressed:outcome_priority`, a reason the closed vocabulary at `:144` does not contain, while that table forbids adding a reason without editing it first and AC 26 asserts every logged reason is in the vocabulary. Everything else outstanding is carried-over recommended work, most of it in upstream files.
+Prior verdict resolved: Yes — 3 of 3 prior blocking items closed (#1 and #2 outright; #3 on substance, with one new one-line defect in its wording)
+
+Findings:
+- [BLOCKING] 音效事件目录 (`:79`) vs 封闭原因词表 (`:144`) / AC 26 (`:530`): the new merge rule records `suppressed:outcome_priority`, but `:144` defines `suppressed` reasons as only `duplicate_outcome` and `preempted`, and states "任何新原因必须先改本表，不能临时加字符串——否则测试无法穷举". AC 26 asserts every logged `decision` / `reason` falls inside the closed vocabulary, so the first settlement that completes the career fails AC 26 and the reason cannot be enumerated by a test. Add `outcome_priority` to the `suppressed` list at `:144` (preferred over reusing `preempted`, which already means "cancelled by a higher-priority event").
+- [RECOMMENDED] Dependencies (`:365`) / `in-game-hud.md:176`: the naming half of the old HUD gap is closed, but no rule in the HUD emits `dish_action_rejected` — rule 11 (`in-game-hud.md:54`) declines an inedible focus and rule `:373` covers the run-flow rejection path, and neither names the event. `in-game-hud.md` is unchanged this round. Until the HUD re-review adds the producer rule, `sfx.eat.reject` is still a dead cue.
+- [RECOMMENDED] Dependencies (`:365`) / `in-game-hud.md:395,416`: the HUD still claims audio subscribes to "焦点移动、确认、拒绝、跳过意图". Rule 19 (`:45`) refuses any focus cue and `ui-flow.md:473` states the same. Remove the focus-movement wording in the HUD.
+- [RECOMMENDED] Acceptance Criteria 10 (`:505`): "两条 cue 的播放区间不重叠" is not verifiable from this GDD — the print cue's duration lives in the sound spec and is unstated, and `ui-flow.md:69` permits a 0.3 s roll, so print and result can overlap at the short end. Assert only "result cue starts at or after the last `number_roll_finished`", or bound the print cue below 0.3 s in the sound spec.
+- [RECOMMENDED] Detailed Design, Core Rule 12 (`:38`): "结果 cue 只在**最后一个** `number_roll_finished` 后起播" still has no mechanism — `ui-flow.md:347` shares one duration `D` across all fields, so every field finishes in the same frame. State it as "track the open-roll set; fire when it empties". The start-without-finish fallback exists only inside rule 12 and still deserves an Edge Cases entry.
+- [RECOMMENDED] Edge Cases (`:317-318`): `d = 0` ("no tick, no `land`") and `d < 60 ms` ("0 ticks, `land` at end") still overlap at exactly zero. Write the second as `0 < d < TICK_MS`. Carried over.
+- [RECOMMENDED] Formulas `duck_db` (`:277`) vs Core Rule 18 (`:44`): rule 18 says ducking happens only while a Critical cue plays; `env(t)` includes `settlement_started`, a Lifecycle cue. Carried over.
+- [RECOMMENDED] Acceptance Criteria 22 (`:523`): the ducking AC cannot pass in the Vertical Slice — `:287` and `:414` state there is no music or ambience. Mark it deferred or test against an injected mock bus. Carried over.
+- [RECOMMENDED] Acceptance Criteria 17 (`:515`): "派发时间在预算内" is still not measurable from the log; point it at AC 25's `≤ 0.25 ms` median / `≤ 1.0 ms` peak. Carried over.
+- [RECOMMENDED] Acceptance Criteria: still no criterion for "减少重复音效" (`:457`), which changes `cooldown_ms`, `TICK_MS` and variant selection. Carried over.
+- [RECOMMENDED] Dependencies (`:384-390`) / Interactions (`:114-115`) / Cross-References (`:478-479`): the "双向一致核对" block is wholly obsolete — all four named documents already carry the audio row, and #15 / #16 are written GDDs — while the Interactions table still labels them "（#15，未设计）" / "（#16，未设计）" and Cross-References still says "（未写）". Delete the block and refresh the four labels.
+- [RECOMMENDED] Interactions (`:109-119`) / Cross-References (`:472-482`): 纪录与里程碑 is absent from both tables even though Dependencies (`:358`) lists it as a hard upstream and `:382` cites the three cue mappings. Add the row to both.
+- [RECOMMENDED] Edge Cases (`:307`) / Interactions (`:115`): `ui-flow.md:168` emits `receipt_closed(run_id, reason: restart | menu | quit)` and `:91` cites this GDD's edge case by that name. Name the event here instead of "收据关闭".
+- [RECOMMENDED] 音效事件目录 (`:73`): `sfx.milestone` is the only cue id that does not follow `sfx.<域>.<事件>`. `sfx.record.milestone` or `sfx.milestone.earned` matches the rest.
+- [RECOMMENDED] 音效事件目录 (`:72`): `sfx.record.broken`'s 起播时机 "收据打开时" sits outside Core Rule 5's same-frame dispatch unless the upstream emits at receipt open. Say "事件同帧", or confirm the emitter with the records GDD.
+- [RECOMMENDED] Acceptance Criteria: the merge/exclusion policy at `:79` has no criterion. Add one settlement fixture — `record_broken` + two `milestone_earned` + `career_completed` in one frame — asserting `sfx.career.complete` `admitted`, the other three `suppressed:outcome_priority`, and a second fixture with two milestones and no career completion asserting exactly one `sfx.milestone`. Without it, the new rule is only prose.
+- [RECOMMENDED] Formulas (`:230`) / `voice_admission` step 4 (`:184`) / Core Rule 4 (`:30`): the two "1 / 会话" cues (`sfx.flow.quit`, `sfx.career.complete`) have no dedupe mechanism. Step 4 and rule 4 define dedupe only for per-`run_id` cues, and the cooldown table routes "每局一次 / 结果 cue" to `run_id`. Say what rejects a second `career_completed` or `flow.quit` in the same session.
+- [RECOMMENDED] Scope signal: `systems-index.md:213` records `S`. Four hard upstream contracts (records added), two downstream contracts and six formula blocks put this at `M`. `systems-index.md:73` also still lists only three `Depends On` entries — 纪录与里程碑 is now a hard upstream in this GDD's Dependencies table. Both index edits belong to the orchestration session.
+
+Advisory (not counted): `MAX_TICKS`' justification at `:245` still reads "1500 / 150 = 10", which mixes the cap with the derived interval — the real derivation is `min(floor(d / TICK_MS), 10)`. The signal `broke_even` still shares an identifier with the registered formula `broke_even`; no value conflict, but cue and event names need their own namespace. Player Fantasy and Tuning Knobs remain absent as headings (advisory at `standard`; `## Game Feel` `:437-446` and the Formulas tables cover them). `run-flow.md:377` still carries a stale "音效反馈 | 未写" row in its older summary table.
+
+---
+
+## Design Review: 音效反馈（Audio Feedback）
+
+Specialists consulted: none (lean mode)
+Re-review: Yes — prior verdict was NEEDS REVISION on 2026-11-04 (third pass)
+
+### Completeness: 6/6 required sections present
+
+`modes.workflow: standard`. Required: Overview, Detailed Design (accepted as
+Detailed Rules), Edge Cases, Dependencies, Acceptance Criteria — plus Formulas,
+because this system defines numeric rules (volume mapping, admission, cooldown,
+tick count, pitch, ducking). All six are present.
+
+Advisory at `standard`:
+- **Player Fantasy** — absent as a heading; `## Game Feel` (`:437-446`) carries it.
+- **Tuning Knobs** — absent as a heading; constants carry ranges and sources
+  inside Formulas.
+
+### Prior Blocking Disposition
+
+| # | Prior blocking | Status |
+|---|---|---|
+| 1 | Voice pool arithmetic / admission order | **Closed** — Core Rule 8 (`:34`) now reads `Lifecycle 3`; sum is 10 and equals `MAX_VOICES` (`:195`); admission order keeps Critical-replaces-Critical before generic steal |
+| 2 | `action_committed.action` vocabulary | **Closed** — Edge Cases `:297` accepts `{eat, skip_wave, end_pickup}`, matching the catalogue (`:58`) and `run-flow.md:33`; no `end_meal` remains in the document |
+| 3 | Record-cue playback policy | **Closed on substance** — catalogue `:72-75` and the merge paragraph `:79` now state coexistence, `career_completed` closing the frame, and same-frame milestone collapsing, matching `records-and-milestones.md:347` and its AC 20. The wording introduces one new defect: `suppressed:outcome_priority` is not in the closed vocabulary (`:144`) |
+
+### Dependency Graph
+
+Every declared dependency has a GDD on disk.
+
+Upstream:
+- ✓ run-flow.md — exists (Approved)
+- ✓ settlement-and-entry-fee.md — exists (Approved); timing clause aligned
+- ✓ scene-flow.md — exists (In Review)
+- ✓ records-and-milestones.md — exists (Approved); record-cue contract now aligned
+- ✗ sound bible (`design/audio/`) — does not exist; Open Question 2 covers it
+
+Downstream:
+- ✓ in-game-hud.md — exists (Approved); still lacks the `dish_action_rejected` producer
+- ✓ ui-flow.md — exists (Needs Revision); all three contracts present
+
+Cited but not dependencies (correctly declared as such): input.md, save-system.md,
+data-config.md, game-concept.md — all exist.
+
+### Registry Values
+
+`design/registry/entities.yaml` still carries no audio, cue, voice or SFX entry
+(searched for `audio`, `cue`, `sfx`, `voice` — no matches), so this system owns
+no registered values.
+
+No numeric conflict:
+- `net_profit` is used only as an example range (`start = −85`, `end = 19`,
+  `:262`, `:521`); the GDD never restates its formula or value.
+- `run_id` is typed `int64` (`:133`), matching the registry.
+- `broke_even` is consumed as an event and never derived — the correct boundary.
+
+Gaps: no registry entries exist for this system (Open Question 7); the signal
+`broke_even` shares an identifier with the registered formula (advisory, no value
+conflict).
+
+### Required Before Implementation
+
+1. **Put `outcome_priority` in the closed reason table** — `:79` records
+   `suppressed:outcome_priority`, `:144` lists only `duplicate_outcome` and
+   `preempted` under `suppressed`, and the same table says a new reason must be
+   added there first. AC 26 then fails on the first career-completing settlement.
+   One edit at `:144`.
+
+### Recommended Revisions
+
+2. **Get the HUD to emit `dish_action_rejected`** — declared at
+   `in-game-hud.md:176`, produced by no rule. Route to the HUD re-review.
+3. **Drop the focus-audio claim from the HUD** — `in-game-hud.md:395,416`
+   contradict rule 19 here and `ui-flow.md:473`.
+4. **Make AC 10 testable** — assert ordering, not non-overlap, or bound the print
+   cue below 0.3 s.
+5. **Define the "last finish" mechanism** — track the open-roll set; add the
+   "started but never finished" case to Edge Cases.
+6. **`0 < d < TICK_MS`** — remove the overlap at zero (`:317-318`).
+7. **Ducking scope** — align rule 18 (`:44`) with `duck_db`'s `env(t)` (`:277`).
+8. **AC 22** — deferred, or an injected mock bus.
+9. **AC 17** — point at AC 25's numbers.
+10. **Add an AC for "减少重复音效"**.
+11. **Refresh labels and delete the obsolete block** — `:114-115`, `:478-479`,
+    and the "双向一致核对" block at `:384-390`.
+12. **Add 纪录与里程碑 to Interactions and Cross-References** — it is a hard
+    upstream in Dependencies (`:358`).
+13. **Name `receipt_closed(run_id, reason)`** (`:307`, `:115`).
+14. **Rename `sfx.milestone`** to match `sfx.<域>.<事件>`.
+15. **Restate `sfx.record.broken`'s timing** as "事件同帧" or confirm the emitter.
+16. **Add an AC for the record-cue merge rule** (`:79`).
+17. **Define dedupe for the "1 / 会话" cues** (`sfx.flow.quit`,
+    `sfx.career.complete`) — step 4 (`:184`) only covers per-`run_id` cues.
+
+### Specialist Disagreements
+
+None — Lean mode runs no specialists (Phase 3b skipped).
+
+### Nice-to-Have
+
+- `MAX_TICKS`' "1500 / 150 = 10" (`:245`) describes the derived interval, not the
+  derivation; write `min(floor(d / TICK_MS), 10)`.
+- Cue and event names still need a namespace distinct from formula names
+  (`broke_even`).
+- `run-flow.md:377` still has a stale "音效反馈 | 未写" row.
+- `systems-index.md:73` should add 纪录与里程碑 to `Depends On` and move the row
+  to `Needs Revision`.
+
+### Scope Signal
+
+Rough scope signal: **M** — four hard upstream contracts, two downstream
+contracts, six formula blocks, no new ADR expected at design level (the pause
+`process_mode` ADR is already anticipated in Open Question 6). The index records
+`S` and lists three dependencies.
+
+### Verdict: NEEDS REVISION
+
+One blocking item, and it is a one-line vocabulary entry. The design itself is
+sound: the three prior blockers are closed, the record-cue contract now matches
+its producer in both directions, and the remaining items are carried-over polish
+split between this file and the HUD.
+
+---
+
+Reviewed-Content-Hash: design/gdd/audio-feedback.md ffb1c54a84af1da89b0228395ee86e89b3e87e30
+Reviewed-Content-Hash: design/registry/entities.yaml 9915429b2bba990a0ae53a735bc2b21b24789d9a
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md ea6e49d52b2a08d72dc75c2b295cf54ba5b88279
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md b033f0acd34e58fa436fd583230335ee143196ae
+Reviewed-Content-Hash: design/gdd/scene-flow.md 4efc24d198112aa612551f5b3e5bdeeac28cd52e
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 654e48d14dbf85fdbab3b923e590a4f356dd0218
+Reviewed-Content-Hash: design/gdd/ui-flow.md 9c709252b4c631e8fb50d8a2f35a8fb394f230d7
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 84e5c38fc40fb2a75d8ee608c911bdebf369c5a1
+Reviewed-Content-Hash: design/gdd/input.md 9432d857ed18dc216dc5a038f81608ae9e10d975
+Reviewed-Content-Hash: design/gdd/systems-index.md 12d2e7c5b8de635a090b0d1f4589dcab58c729f8
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
