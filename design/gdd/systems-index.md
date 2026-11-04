@@ -55,16 +55,16 @@ were found.
 | # | System Name | Category | Priority | Status | Design Doc | Depends On |
 |---|-------------|----------|----------|--------|------------|------------|
 | 1 | 数据配置 | Core | MVP | Approved | design/gdd/data-config.md | — |
-| 2 | 输入 | Core | MVP | In Review | design/gdd/input.md | — |
-| 3 | 场景与流程管理 | Core | MVP | In Review | design/gdd/scene-flow.md | 数据配置, 输入 |
-| 4 | 存档 | Persistence | MVP | In Review | design/gdd/save-system.md | 数据配置 |
+| 2 | 输入 | Core | MVP | Approved | design/gdd/input.md | — |
+| 3 | 场景与流程管理 | Core | MVP | Approved | design/gdd/scene-flow.md | 数据配置, 输入 |
+| 4 | 存档 | Persistence | MVP | Needs Revision | design/gdd/save-system.md | 数据配置 |
 | 5 | 餐局流程 | Core | MVP | Approved | design/gdd/run-flow.md | 场景与流程管理, 数据配置, 输入 |
 | 6 | 时间与回合 | Core | MVP | Approved | design/gdd/time-and-turns.md | 餐局流程 |
-| 7 | 胃容量 | Gameplay | MVP | In Review | design/gdd/stomach-capacity.md | 餐局流程, 数据配置 |
+| 7 | 胃容量 | Gameplay | MVP | Needs Revision | design/gdd/stomach-capacity.md | 餐局流程, 数据配置 |
 | 8 | 菜品数值 | Gameplay | MVP | Approved | design/gdd/dish-values.md | 数据配置 |
-| 9 | 腻度与口味 | Gameplay | MVP | In Review | design/gdd/cloying-and-taste.md | 菜品数值, 餐局流程 |
-| 10 | 菜单波次 | Gameplay | Vertical Slice | In Review | design/gdd/menu-waves.md | 菜品数值, 数据配置, 餐局流程 |
-| 11 | 结算与入场费 | Economy | MVP | In Review | design/gdd/settlement-and-entry-fee.md | 菜品数值, 腻度与口味, 胃容量, 时间与回合, 餐局流程 |
+| 9 | 腻度与口味 | Gameplay | MVP | Approved | design/gdd/cloying-and-taste.md | 菜品数值, 餐局流程 |
+| 10 | 菜单波次 | Gameplay | Vertical Slice | Needs Revision | design/gdd/menu-waves.md | 菜品数值, 数据配置, 餐局流程 |
+| 11 | 结算与入场费 | Economy | MVP | Needs Revision | design/gdd/settlement-and-entry-fee.md | 菜品数值, 腻度与口味, 胃容量, 时间与回合, 餐局流程 |
 | 12 | 局外升级 | Progression | MVP | In Review | design/gdd/meta-upgrades.md | 结算与入场费, 存档, 数据配置 |
 | 13 | 解锁与档口 | Progression | Vertical Slice | In Review | design/gdd/unlocks-and-stations.md | 局外升级, 存档, 数据配置 |
 | 14 | 纪录与里程碑 | Progression | Vertical Slice | In Review | design/gdd/records-and-milestones.md | 结算与入场费, 存档, 数据配置 |
@@ -242,7 +242,7 @@ Vertical Slice tier, and the rest are Full Vision.
 | Total systems identified | 20 |
 | Design docs started | 18 |
 | Design docs reviewed | 18 |
-| Design docs approved | 4 |
+| Design docs approved | 7 |
 
 > 场景与流程管理于 2026-11-03 通过设计评审（Approved），随后补写了 Formulas 章节并在
 > 输入 GDD 中定名了上下文切换接口，两处都是评审后才出现的改动，因此状态回到 **In Review**
