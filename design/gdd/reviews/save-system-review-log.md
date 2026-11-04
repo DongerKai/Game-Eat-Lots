@@ -1249,3 +1249,70 @@ Reviewed-Content-Hash: design/gdd/meta-upgrades.md b9b9235e9a4ad7d8739ad778e98dd
 Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 5aafb0674e6a0bc5bd6a370c275e95a2f01ebfa9
 Reviewed-Content-Hash: design/gdd/records-and-milestones.md 84e5c38fc40fb2a75d8ee608c911bdebf369c5a1
 ```
+
+---
+
+## Fix Verification — 2026-11-04 — Verdict: APPROVED
+
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean mode — Phase 3b skipped)
+Blocking items: 0 | Recommended: 10 (carried) | Nice-to-have: 5 (carried)
+Prior verdict resolved: Yes — the single blocking item of the round-6 review (the
+load-result table's `Blocked` exit row was not lock-aware) is now fixed, together with
+its edge-case and transition-table counterparts.
+
+Summary: This entry verifies the fix applied to the round-6 blocking; it is not a new
+full review. All sites that offer 「新建生涯」 or isolate a file now carry the live-lock
+condition already stated in rule 21 (line 47), UI 4 (line 331), AC 23 (line 402) and
+AC 24b (line 403). The load table (line 66) is now lock-first: `L = live` offers only
+「退出」「重试」 for every reason, and the reason branch applies only when `L ≠ live`.
+Rule 12 (line 38) requires "无存活写锁" before the quarantine rename. The transition
+table conditions `Blocked → 新建生涯` on "无存活写锁" (line 78) and the delete-career
+transition on `L ≠ live` (line 80). Edge Cases 238 and 239 now state the lock split
+explicitly. UI 3 (line 325) repeats the `version ≤ 当前` qualifier. No contradictory
+site remains in this GDD: a grep for 「新建生涯」 returns only sites that either sit under
+`L ≠ live` or carry rule 21's blanket prohibition.
+
+### Verified Sites
+
+- Line 38 (rule 12): quarantine requires no live lock, cites rule 21.
+- Line 66 (load table, `Blocked` row): lock-first exit mapping.
+- Line 78 (transition `Blocked → Fresh`): conditioned on "无存活写锁".
+- Line 80 (transition delete career): conditioned on `L ≠ live`.
+- Lines 238–239 (Edge Cases): explicit live-lock vs no-lock split, corrupt-file recovery
+  path included.
+- Line 325 (UI 3): `ReadOnly` notice qualified with `version ≤ 当前`.
+- Unchanged and consistent: rule 21 (line 47), UI 4 (lines 326–331), AC 23 (line 402),
+  AC 24b (line 403), formula lines 137–139.
+
+### Remaining Findings
+
+The 10 recommended revisions and 5 nice-to-have items recorded in the round-6 entry
+stand, all non-blocking at `lean` mode. One is a cross-document follow-on:
+
+- `ui-flow.md:81` (rule 20), `:402` (Edge Case), `:504` (table) and `:586` (AC 26) still
+  repeat the reason-keyed `Blocked` mapping without the live-lock override, and `:419`
+  says the modal accepts "其两个出口". This must be fixed in `ui-flow.md`; it is not a
+  defect in this GDD, which now states the override unambiguously in both rule 21 and
+  UI 4. `ui-flow.md` was also being edited by a concurrent session at the time of this
+  verification, so it was left untouched here.
+
+### Verdict: APPROVED
+
+Suggested systems-index status: **Approved** (`systems-index.md:60` still reads
+`In Review`; per the parallel constraint this session did not modify the index). The
+blocking set is empty; the design is internally consistent on the load-result branch,
+the version axis and the live-lock exit set.
+
+---
+
+Receipt (files this verification read for cross-document facts):
+```
+Reviewed-Content-Hash: design/gdd/save-system.md ed7db3ae74ee707c1f15d098798ea32b6e5615b3
+Reviewed-Content-Hash: design/registry/entities.yaml 5e3b667c300bdf6b9daad9b294aecf224b502b8e
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/ui-flow.md 35a3291d40d49cf1b6f35190ed231112462f0bc6
+Reviewed-Content-Hash: design/gdd/systems-index.md b59ef2478102399659f8ae8b533c98a63a1c90b0
+Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
+```
