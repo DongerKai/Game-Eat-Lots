@@ -240,3 +240,102 @@ Reviewed-Content-Hash: design/gdd/data-config.md 7dc918c23ab271495049b5fd33bddd0
 Reviewed-Content-Hash: design/gdd/input.md ee9ea6022f8e289d9e00ef8f9eabb181b0c5349f
 Reviewed-Content-Hash: design/gdd/ui-flow.md 4eb7451abe5537272d446ec90150266f98e1588d
 Reviewed-Content-Hash: design/gdd/run-flow.md 02d37ce06fa293e6b76cb22277a68b705e413448
+
+## Review — 2026-11-04 — Verdict: APPROVED
+Review mode: lean · Workflow: standard
+Scope signal: M
+Specialists: none（lean 模式，未派发专员 agent）
+Blocking items: 0 | Recommended: 7
+Summary: 第四轮复审。上一轮唯一 blocking 已按建议的最小改法修复，且没有过度修正：规则 2 的 `Boot` 分支限定为「同状态请求返回 `false`」，并明写「`Boot → Quit` 仍合法并返回 `true`」；AC 17 增加第三个 GIVEN、AC 29 的 `Boot` 分支同样限定为同状态；第 69 行与 Edge Case 第 138 行都回指规则 2。`Quit` 中同状态请求、`Boot` 待校验期同状态请求、`Boot → Quit` 三个场景的返回值在规则与 AC 之间现已一致，先前四处的直接矛盾全部闭合。本轮新增的规则 15 `state_changed(from, to)` 已与 `audio-feedback.md` 采用同一信号名与签名，未引入新的跨文档冲突。剩余 7 项 recommended 全部为此前遗留且不阻塞；其中最高优先是把规则 2 / AC 17 里指向「规则 6」的两处引用改正——`Boot → Quit` 例外实际写在「非法转移一律拒绝」段（第 67 行）与规则 10，但行为在第 67 行与 AC 6 已完整给出，故不判阻塞。
+Prior verdict resolved: Yes —— 上一轮 blocking（作用域例外把 `Boot → Quit` 一并判为 `false`）已按建议的纯措辞限定修复，四处矛盾闭合。
+
+### 上一轮 blocking 复核（逐条）
+
+| 上轮 blocking | 现状 | 结论 |
+|---|---|---|
+| 作用域例外写成「这两段时间内任何请求一律 `false`」，把 `Boot → Quit` 也判为拒绝，与第 67 行、规则 10、AC 6、AC 13 矛盾；AC 17/29 未把 `Boot` 分支限定为同状态 | 规则 2（第 28 行）改为「`Quit` 终态：任何请求返回 `false`；`Boot` 尚未完成校验期间：同状态请求返回 `false`，其余请求按规则 6 处理——`Boot → Quit` 仍合法并返回 `true`」；AC 17（第 244 行）补第三个 GIVEN「`Boot` 待校验期请求 `Quit` → `true`」；AC 29（第 256 行）把 `Boot` 分支限定为「目标等于当前状态」；第 69 行与 Edge Case 第 138 行均回指规则 2 | ✓ 已解决 |
+
+逐点核对四个返回值场景（规则 2 / AC 17 / AC 29 / 第 67 行 / AC 6 / AC 13 / AC 19 的口径）：
+
+- `Quit` 中任何请求 → `false`：规则 2、AC 17、AC 19 一致 ✓
+- `Boot` 待校验期同状态请求 → `false`：规则 2、AC 17、AC 29 一致 ✓
+- `Boot` 待校验期非 `Quit` 的其他请求 → 拒绝：第 67 行、AC 6 一致 ✓（规则 2 的引用目标写错，见 findings 第 1 条；行为本身无歧义）
+- `Boot` 待校验期请求 `Quit` → `true`：规则 2、AC 17、第 67 行、规则 10、AC 6、AC 13 一致 ✓
+
+### 完整性（standard 层：5 节必需 + 有数值规则时的 Formulas）
+
+必需 6/6 齐全：Overview、Detailed Design（= Detailed Rules）、Formulas、Edge Cases、Dependencies、Acceptance Criteria。Formulas 对本系统仍为必需（两条数值规则：单帧生效、过渡 ≤ 0.2 s）。
+Advisory 缺口（不阻塞）：Player Fantasy、Tuning Knobs（Game Feel 一节实质覆盖 Player Fantasy）。
+
+### Dependency Graph
+
+| 依赖 | 方向 | 文件 | 状态 |
+|---|---|---|---|
+| 数据配置 | 上游（硬） | `design/gdd/data-config.md` | ✓ 存在，第 190 行回指本系统 |
+| 输入 | 上游（硬） | `design/gdd/input.md` | ✓ 存在，第 51/56/74/172 行回指本系统 |
+| 界面流程 | 下游（硬） | `design/gdd/ui-flow.md` | ✓ 存在，第 13/47/57 行回指本系统 |
+| 餐局流程 | 下游（硬） | `design/gdd/run-flow.md` | ✓ 存在，第 13/23/42 行回指本系统 |
+| 首局引导 | 下游（软） | `design/gdd/first-run-onboarding.md` | ✓ 存在，第 121/361 行回指本系统 |
+| 音效反馈 | 下游（软） | `design/gdd/audio-feedback.md` | ✓ 存在，第 111/355 行回指本系统 |
+
+双向一致性成立，无断链。存档仍被正确标记为「不属于依赖」而非遗漏。
+
+### Registry Values
+
+`design/registry/entities.yaml` 共 78 条命名条目；没有任何条目的 `source:` 或 `referenced_by:` 指向本系统或本 GDD（`grep scene-flow` 命中 0 行）。本系统只拥有状态名与转移语义，不含经济数值。上次评审之后 registry 的唯一改动是 `save_load_decision` 的 `output_range` 增加 `ReadOnly` 并细化迁移失败分支；本 GDD 不复述该值域，不构成冲突。
+
+### 本轮同步复核的跨文档改动（2ec41d5..be69169）
+
+- `scene-flow.md` 自身：规则 2 作用域限定、AC 17/29 限定、第 69 行与 Edge Case 138 回指、新增规则 15 `state_changed(from, to)`。
+- `audio-feedback.md`：第 355 行的依赖行改为「顶级状态转移…与 `state_changed(from, to)` 信号」——与本 GDD 规则 15 同名同参，**新信号无漂移**。其 cue 表（第 66–69 行）是 `sfx.flow.pause` / `flow.resume` / `flow.menu` / `flow.quit`，与本 GDD 依赖行第 170 行的措辞不完全对应（见 findings 第 8 条）。
+- `ui-flow.md`：第 47 行规则 3 确认 `Menu → MainMenu 或 ReceiptScreen`（不新增顶层状态）；第 93 行确认过渡「由 `场景与流程管理` 定义上限」；第 57 行规则 8 仍以 `request_transition(Menu → Run, RunConfig)` 发起。均与本 GDD 规则 1/5/12 一致。
+- `run-flow.md`：规则 14（第 42 行）「保留该 `RunResult`，在回到 `Run` 顶层状态后重发」仍是 Edge Case 第 135 行所需的语义；规则 20 引用本 GDD 规则 12，正确。
+- `first-run-onboarding.md`：第 79 行「`Paused` 清空临时栈 / 恢复 `Run` 时重新压入白名单」与本 GDD 规则 3 的 `clear_stack := true` 一致。
+- `input.md`：`request_context(context, clear_stack := true, allow := []) -> bool` 签名未变；`Blocked` 仍为「`ui_pause` 始终允许」，本系统不使用 `allow`；新增的 `consume_action(action)` 属首局引导，本系统不涉及。
+- `data-config.md`：`Ready` / `Failed` 与第 190 行回指未变；本轮改动只涉及「纪录与里程碑」的依赖行，与本系统无关。
+
+### Findings
+
+- [RECOMMENDED] **规则 2（第 28 行）与 AC 17（第 244 行）把 `Boot → Quit` 例外引用成「规则 6」**，但规则 6 是「一局的离开（`Run → Menu` 携带 `RunResult`）」；该例外实际写在「非法转移一律拒绝」段（第 67 行）与规则 10「退出」。同句「其余请求按规则 6 处理」对 `Boot` 待校验期的非 `Quit` 请求因此指向空处。行为本身在第 67 行与 AC 6 已完整给出（一律拒绝），六处口径不矛盾，故不判阻塞；建议两处改为「见第 67 行」，并把该分句写成「其余请求一律拒绝」。
+- [RECOMMENDED] Open Questions 第 1 行（结算屏是否提升为独立顶层状态）与第 2 行（`RunConfig` / `RunResult` schema 归属）仍未标记已解决。前者已由 `ui-flow.md` 规则 3（第 47 行，`Menu → MainMenu 或 ReceiptScreen`，不新增顶层状态）回答；后者已由 `run-flow.md`「RunConfig 与 RunResult 的归属」一节（第 53 行）回答。建议移入「已解决」或删除。
+- [RECOMMENDED] Formulas §过渡总时长（跨文档冲突，第 4 轮仍未闭合）：本 GDD 第 89/119/120/184 行声明 `FADE_OUT` / `FADE_IN` 的时长由 `/ux-design` 交互规格拥有；`ui-flow.md` Open Question 2（第 623 行）仍写「过渡时长 `FADE_OUT` / `FADE_IN` 由场景与流程管理拥有」。本轮 `ui-flow.md` 第 93 行已改口「由 `场景与流程管理` 定义上限」，与 `TRANSITION_CAP` 一致，冲突范围收窄为「时长归属」；仍需两份 GDD 指定唯一所有者。
+- [RECOMMENDED] Edge Cases 第 135 行「餐局流程依据 `request_transition` 返回 `false` 重新发起」仍读作可立即重试，但 `Paused` 下的 `Run → Menu` 不在合法转移表内；`run-flow.md` 规则 14（第 42 行）已写明「保留该 `RunResult`，在回到 `Run` 顶层状态后重发；暂停期间等待，不请求」。建议本条直接指向该规则。
+- [RECOMMENDED] 调用写法仍不统一：规则 2（第 28 行）定义 `request_transition(to, payload)`（按 `(current, to)` 校验），正文与 Formulas 示例写作 `request_transition(Menu → Run, RunConfig)`（第 77/107 行），Cross-References（第 215 行）又简写为「发起 `Menu → Run`」。建议统一并在一处给出完整签名。
+- [RECOMMENDED] AC 32（第 259 行）仍把两个独立断言（总时长 ≤ 0.20 s；关闭过渡时为 0）塞进一条，且前提「`/ux-design` 给出 FADE 值」依赖尚不存在的文档；建议拆条并将前提改为「给定任意满足 0 ≤ FADE ≤ 0.10 的取值」。
+- [RECOMMENDED] AC 9（第 236 行）「画面与暂停前一致」仍不可独立判定 pass/fail；建议改为可观测形式，如「恢复后 HUD 根节点实例 id 不变，且显示值与暂停帧相同」。
+- [NICE-TO-HAVE] 新增规则 15（第 41 行）的 `state_changed(from, to)` 已与 `audio-feedback.md` 第 355 行对齐；但本 GDD 的 Dependencies 表第 170 行仍写「订阅状态切换事件（进入 `Run`、结算、退出；具体点 `Paused` / `Resumed` / `Quit`）」——未写信号名，且 `audio-feedback.md` 的 cue 表（第 66–69 行）没有「进入 `Run`」cue，反有进入 `Menu` 的 `sfx.flow.menu`。建议该行直接写 `state_changed(from, to)` 并指向该 cue 表。
+- [NICE-TO-HAVE] Tuning Knobs 缺失（standard 层 advisory）：`TRANSITION_CAP = 0.20` 是唯一常量型可调值，补一行安全区间与影响面即可。
+- [NICE-TO-HAVE] `TRANSITION_CAP` 仍列在 Variables 表（第 121 行）却不出现在表达式（第 113 行 `transition_total = FADE_OUT + FADE_IN`），可移到「约束」下避免读者困惑。
+- [NICE-TO-HAVE] 规则 7 可补一句「`ui_pause` 仅在 `Run` / `Paused` 有意义」：`input.md` 第 2 条本轮改为 `Blocked` 始终放行 `ui_pause`，`Boot`（Blocked）期间按键会到达本系统；规则 7 已限定「`Run` 中收到」，语义无冲突。
+
+### 已核对且无问题的跨文档接口
+
+- `request_context(context, clear_stack := true, allow := []) -> bool`、`context_changed(from, to)`：与 `input.md` 第 51/56/172 行一致；本 GDD 只调用 `request_context(default_ctx, clear_stack := true)`，未使用 `allow`。
+- `state_changed(from, to)`：`audio-feedback.md` 第 355 行已采用同名同参信号；`sfx.flow.pause` / `flow.resume` 与「由 `(from, to)` 推导」一致。
+- 五个默认输入上下文（Blocked / Menu / Menu / Run / Paused）：与 `input.md` 上下文能力表一致。
+- `ui_pause` 由本系统消费、`ui_accept` 由界面流程消费：与 `ui-flow.md` 规则 15/27、`input.md` 第 2 条三方一致。
+- `RunConfig` / `RunResult` / `init_failed` / `abandoned` 四个 payload：`ui-flow.md` 规则 8、`run-flow.md` 规则 4/14/16 均按本 GDD 的定义使用，无字段漂移。
+- 首局引导在 `Run` 内 `push_context(Blocked)` 且不改顶层状态：与 `first-run-onboarding.md` 第 79/121 行一致。
+- 数据配置 `Ready` / `Failed` 与存档 `load_outcome`（`Fresh / Loaded / Migrated / Recovered / ReadOnly / Blocked`）仍是两套值域，未混淆。
+
+### 跨文档待办（不属于本 GDD）
+
+`audio-feedback.md` 第 386 行仍留着待办「`scene-flow.md` 的下游表把音效反馈记为 `GDD 未写`，应改为…」；本 GDD 第 170 行早已是「GDD 已写（`design/gdd/audio-feedback.md`）」。该待办已过期，应由音效反馈的会话清理，不计入本 GDD 的 findings。
+
+### Suggested systems-index status
+
+**Approved** —— 当前索引记为 **In Review**（`systems-index.md` 第 59 行）。0 个 blocking，剩余 7 项 recommended 与 4 项 nice-to-have 均不阻塞。本次按并行约束未改动 `design/gdd/systems-index.md`，状态由编排会话统一更新。
+
+### Verdict: APPROVED
+
+---
+
+Reviewed-Content-Hash: design/gdd/scene-flow.md 4efc24d198112aa612551f5b3e5bdeeac28cd52e
+Reviewed-Content-Hash: design/registry/entities.yaml f8361d463dc6172ce3c22a462bccce6d2037d35c
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/data-config.md 0be338a35d8e5fa9ded4c219b29801021835938a
+Reviewed-Content-Hash: design/gdd/input.md 9432d857ed18dc216dc5a038f81608ae9e10d975
+Reviewed-Content-Hash: design/gdd/ui-flow.md 21482b6d00538b95af113995e613b8df29985a8a
+Reviewed-Content-Hash: design/gdd/run-flow.md ed8848ea7c41823db26e22fb7d5df5f998fc0234
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 3f99e25a3d35bd4922c0717adc033569a50abafb
+Reviewed-Content-Hash: design/gdd/audio-feedback.md f6ac7fbd915341f63761529b664028eec6b216c0
