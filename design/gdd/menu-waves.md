@@ -59,14 +59,14 @@
 | 数据配置 | 上游 | `get_station(id)` → `dish_pool`、`wave_size` | 硬 |
 | 菜品数值 | 上游 | `opt_value`、各菜 `price` / `satiety`，用于可达最优校验 | 硬 |
 | 腻度与口味 | 上游（只读） | 生成校验需要把重复惩罚计入可达最优；本系统不改腻度状态 | 软（强） |
-| 餐局流程 | 双向 | 传入 `seed`、回合预算 `T`、`menu_vision`；接收"无可吃菜"信号 | 硬 |
+| 餐局流程 | 双向 | `initialize(station_id, seed, turn_budget, menu_vision[, pool_override])`；`consume(dish_id) → {ADVANCED, NO_EATABLE}`；`advance()` 只承载付费跳波；接收"无可吃菜"信号 | 硬 |
 | 局内 HUD | 下游 | `visible_dishes`、`preview_dishes`、跳过代价、当前波索引 | 硬 |
 | 局外升级 | 下游 | `MENU_VISION` 的语义由局外升级拥有；本系统只消费整数等级 | 软 |
 | 结算与入场费 | 下游 | 本局实际吃到的菜与剩余回合 | 硬 |
 | 首局引导 | 下游 | "波次会推进、跳过的菜不会回来"的教学数据 | 软 |
 | 存档 | 条件 | 中途存档需保存 seed、`wave_index` 与本波剩余 | 条件 |
 
-**接口所有权**：本系统拥有划分与推进规则；「局内 HUD」不得自行重排或补全未揭晓的菜，「结算」不得把没出现的菜算进菜单最优。
+**接口所有权**：本系统拥有划分与推进规则；「局内 HUD」不得自行重排或补全未揭晓的菜，「结算」不得把没出现的菜算进菜单最优。`pool_override` 非空时，波次划分与健康校验都在覆盖后的菜池上运行；`consume` 负责吃空自动推进，`advance` 只负责付费跳波。
 
 ## Formulas
 

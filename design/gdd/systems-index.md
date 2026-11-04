@@ -57,10 +57,10 @@ were found.
 | 1 | 数据配置 | Core | MVP | Approved | design/gdd/data-config.md | — |
 | 2 | 输入 | Core | MVP | In Review | design/gdd/input.md | — |
 | 3 | 场景与流程管理 | Core | MVP | In Review | design/gdd/scene-flow.md | 数据配置, 输入 |
-| 4 | 存档 | Persistence | MVP | Needs Revision | design/gdd/save-system.md | 数据配置 |
-| 5 | 餐局流程 | Core | MVP | Needs Revision | design/gdd/run-flow.md | 场景与流程管理, 数据配置, 输入 |
-| 6 | 时间与回合 | Core | MVP | Needs Revision | design/gdd/time-and-turns.md | 餐局流程 |
-| 7 | 胃容量 | Gameplay | MVP | Needs Revision | design/gdd/stomach-capacity.md | 餐局流程, 数据配置 |
+| 4 | 存档 | Persistence | MVP | In Review | design/gdd/save-system.md | 数据配置 |
+| 5 | 餐局流程 | Core | MVP | In Review | design/gdd/run-flow.md | 场景与流程管理, 数据配置, 输入 |
+| 6 | 时间与回合 | Core | MVP | In Review | design/gdd/time-and-turns.md | 餐局流程 |
+| 7 | 胃容量 | Gameplay | MVP | In Review | design/gdd/stomach-capacity.md | 餐局流程, 数据配置 |
 | 8 | 菜品数值 | Gameplay | MVP | Approved | design/gdd/dish-values.md | 数据配置 |
 | 9 | 腻度与口味 | Gameplay | MVP | Designed | design/gdd/cloying-and-taste.md | 菜品数值, 餐局流程 |
 | 10 | 菜单波次 | Gameplay | Vertical Slice | Designed | design/gdd/menu-waves.md | 菜品数值, 数据配置, 餐局流程 |

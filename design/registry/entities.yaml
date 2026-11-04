@@ -775,9 +775,9 @@ formulas:
       - B
       - V
       - L
-    output_range: "Fresh | Loaded | Migrated | Recovered | Blocked"
-    expression: "Blocked if L = live; Fresh if P empty and B empty; Blocked if readable(P) and version(P) > V; Loaded if readable(P) and valid(P) and version(P) = V; Migrated if readable(P) and valid(P) and 1 <= version(P) < V and migrate succeeds; Recovered if backup valid and migratable; else Blocked"
-    notes: "Load decision for the save system. P = primary file, B = backup, V = SAVE_SCHEMA_VERSION, L = lock state. A higher-than-current version never falls back to the backup."
+    output_range: "Fresh | Loaded | Migrated | Recovered | ReadOnly | Blocked"
+    expression: "ReadOnly if L = live and readable(P) and valid(P) and version(P) = V; Blocked if L = live; Fresh if P empty and B empty; Blocked if readable(P) and version(P) > V; Loaded if readable(P) and valid(P) and version(P) = V; Migrated if readable(P) and valid(P) and 1 <= version(P) < V and migrate succeeds; Blocked if readable(P) and valid(P) and 1 <= version(P) < V and migrate fails; Recovered if backup valid and migratable; else Blocked"
+    notes: "Load decision for the save system. P = primary file, B = backup, V = SAVE_SCHEMA_VERSION, L = lock state. ReadOnly = a live lock over a readable current file (browse, no write). A readable primary whose migration fails is Blocked, never Recovered; a higher-than-current version never falls back to the backup."
     added: "2026-11-03"
     revised: ""
 

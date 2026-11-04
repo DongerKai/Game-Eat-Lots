@@ -60,8 +60,9 @@
 | 字段 | 类型 | 来源 | 说明 |
 |---|---|---|---|
 | `run_id` | int64 | 餐局流程 | 每局唯一；结算的去重键 |
-| `station_id` | StringName | 场景与流程管理 `RunConfig` | 用于读取 `entry_fee` |
-| `end_reason` | enum | 时间与回合 / 胃容量 | MVP 只有 `TIME_EXHAUSTED` / `NO_EATABLE_DISH`；主动结账见 Open Question 2 |
+| `station_id` | StringName | 场景与流程管理 `RunConfig` | 用于纪录归档与档口显示 |
+| `entry_fee` | int | 餐局流程（`RunConfig.entry_fee_override` 或 `StationData.entry_fee`） | 本局入场费；结算不再直接读档口记录 |
+| `end_reason` | enum | 餐局流程 | MVP 只有 `TIME_EXHAUSTED` / `NO_EATABLE_DISH`；主动结账见 Open Question 2 |
 | `eaten` | EatenEntry[] | 腻度与口味 + 餐局流程 | 按吃下顺序；每条含 `dish_id`、`extra_satiety`、`effective_satiety` |
 | `capacity_total` | int | 胃容量 | 本局总容量 |
 | `capacity_used` | int | 胃容量 | 本局实际占用；必须等于各行 `effective_satiety` 之和（不变式 1） |
@@ -91,7 +92,7 @@
 
 | 系统 | 方向 | 数据/接口 | 硬/软 |
 |---|---|---|---|
-| 数据配置 | 上游 | `get_station(id)` → `entry_fee`；`get_dish(id)` → `price`、`satiety`；调用前提 `Ready` | 硬 |
+| 数据配置 | 上游 | `get_station(id)` → 存在性与 `display_name`；`get_dish(id)` → `price`、`satiety`；`entry_fee` 改从 `RunLog.entry_fee` 读取；调用前提 `Ready` | 硬 |
 | 菜品数值 | 上游 | `price(d)`、`unit_value(d)`；本系统不重算单位价值 | 硬 |
 | 腻度与口味 | 上游 | 每个 `EatenEntry` 的 `extra_satiety`、`effective_satiety`（吃下时记录） | 硬 |
 | 胃容量 | 上游 | `capacity_total`、本局实际已用容量 | 硬 |

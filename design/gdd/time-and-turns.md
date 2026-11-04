@@ -213,7 +213,7 @@ The `is_exhausted` formula is defined as:
 
 - 已回指本系统的 GDD：餐局流程（下游表，接口逐字一致）、结算与入场费（上游表，`turns_total` / `turns_used`）、菜品数值（软上游，`T` 作为审计参数）。菜单波次从餐局流程接收 `turns_total`，索引未把本系统列为其上游，与本设计一致。
 - **索引第 6 行**：`Status` 应由 `Not Started` 改为 `Designed`，`Design Doc` 应指向 `design/gdd/time-and-turns.md`；由编排会话统一处理。
-- **数据配置缺口（不在本文件修改）**：`StationData` 需要新增 `turn_budget: int`（≥ 1），并在加载期校验；本 GDD 的规则 3 依赖该字段存在。这是本 GDD 唯一要求的共享文件改动。
+- **数据配置已定义**：`StationData.turn_budget: int`（≥ 1）已在 `design/gdd/data-config.md` 声明并纳入加载期校验；本 GDD 的规则 3 依赖该字段存在。
 - **菜单波次措辞**：其 UI Requirements 写“本系统只发起扣除”，本 GDD 规定唯一调用者是餐局流程；行为一致（发起 ≠ 执行），但文档措辞需要在一致性检查时统一，见 Open Question 6。
 
 ## Visual/Audio Requirements
@@ -241,25 +241,18 @@ The `is_exhausted` formula is defined as:
 
 | 系统 | GDD | 关系 |
 |---|---|---|
-| 餐局流程 | design/gdd/run-flow.md | 上游（调用者）：`initialize` / `can_spend_turn` / `spend_turn` / 读数 / `is_exhausted()`；本 GDD 落实其 §Dependencies 中“GDD 未写”的接口 |
+| 餐局流程 | design/gdd/run-flow.md | 上游（调用者）：`initialize` / `can_spend_turn` / `spend_turn` / 读数 / `is_exhausted()`；本 GDD 落实其 §Dependencies 中列出的接口 |
 | 结算与入场费 | design/gdd/settlement-and-entry-fee.md | 下游：`RunLog.turns_total` / `turns_used` 的来源；满足其不变式 4 |
 | 菜单波次 | design/gdd/menu-waves.md | 间接：`turns_total` 经餐局流程传入；付费跳波由餐局流程扣 1 回合；其 `eats + skips ≤ T` 与本系统的 `turns_used` 恒等式一致 |
 | 菜品数值 | design/gdd/dish-values.md | 软（设计期）：`T` 是 `opt_value` / `calibration_ratio` 的审计参数；改预算须重跑校准 |
-| 数据配置 | design/gdd/data-config.md | 数据所有者：`StationData.turn_budget` 字段（需新增）；本系统不在运行时查询它 |
-| 局内 HUD | 未写 | 下游：显示剩余 / 总回合；不得自行推算耗尽 |
-| 局外升级 | 未写 | 无直接交互：MVP 无时间类升级 |
+| 数据配置 | design/gdd/data-config.md | 数据所有者：`StationData.turn_budget` 字段；本系统不在运行时查询它 |
+| 局内 HUD | design/gdd/in-game-hud.md | 下游：显示剩余 / 总回合；不得自行推算耗尽 |
+| 局外升级 | design/gdd/meta-upgrades.md | 无直接交互：MVP 无时间类升级 |
 | 存档 | design/gdd/save-system.md | 无直接交互：MVP 无中途存档，回合不持久化 |
 | 输入 | design/gdd/input.md | 无直接交互：动作由餐局流程路由 |
-| 音效反馈 | 未写 | 无直接交互：本系统不发信号 |
+| 音效反馈 | design/gdd/audio-feedback.md | 无直接交互：本系统不发信号 |
 
-**待回指（不由本文件修改）**：
-
-1. `run-flow.md` §Dependencies 的下游表中，“时间与回合”一行的状态 `GDD 未写` → `GDD 已写（design/gdd/time-and-turns.md）`；其 §Cross-References 中“时间与回合 | 未写”同步指向本文件。
-2. `settlement-and-entry-fee.md` §Dependencies 的上游表中，“时间与回合”一行状态改为 `GDD 已写`；其 Open Questions 中没有直接指向本系统的条目，若复核后发现有，按“回合只提供 `turns_total` / `turns_used`，不提供结束原因”的边界处理。
-3. `dish-values.md` §Dependencies 的上游表中，“时间与回合”一行状态改为 `GDD 已写`；`T` 的说明可补“该值来自 `StationData.turn_budget`”。
-4. `data-config.md`：`StationData` 字段表新增 `turn_budget: int ≥ 1`；其下游表中“局内 HUD”等行不受影响；若数据配置的校验规则按字段逐条列出，需补一条 `turn_budget < 1` 即失败的规则。
-5. `menu-waves.md`：UI Requirements 的“本系统只发起扣除”建议改为“本系统发出跳波意图，由餐局流程调用时间与回合扣除”。
-6. `systems-index.md` 第 6 行：`Status` → `Designed`，`Design Doc` → `design/gdd/time-and-turns.md`；Progress Tracker 的 `Design docs started` 与 `MVP systems designed` 各加 1（批次合并时统一核对，避免与并行会话重复计数）。
+**待回指（不由本文件修改）**：其余回指均已完成。唯一剩余项：`menu-waves.md` §UI Requirements 的「本系统只发起扣除」建议改为「本系统发出跳波意图，由餐局流程调用时间与回合扣除」。
 
 ## Acceptance Criteria
 
