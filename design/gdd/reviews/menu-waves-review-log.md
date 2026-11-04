@@ -946,3 +946,90 @@ Reviewed-Content-Hash: design/registry/entities.yaml 08de917004eb720428b21dee6a0
 Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
 Reviewed-Content-Hash: design/gdd/run-flow.md ea6e49d52b2a08d72dc75c2b295cf54ba5b88279
 Reviewed-Content-Hash: design/gdd/time-and-turns.md 090c7e7fcd313a7c38092e9bf07cdd12b77dd34f
+
+---
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION
+
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none（lean — Phase 3b 未运行）
+Blocking items: 2 | Recommended: 10
+
+Summary: D2 改写后的全文复审（不是 delta）。规则 9、逐波重置 DP（924 携带态、吃菜 1 回合、非末波跳过 +1、回合耗尽免费结束）、0.9 单侧门与 OQ2/OQ4 统计全部用穷举独立复核并逐项对上：`opt_value = 104`、34,650 个 3×4 划分的最小可达 97（510 个恰为 97）、100% 通过 93.6、0.95 通过率 91.11%、接受均值 100.79 vs 不收紧 100.53、`wave_size = 3` 时 104 可达率 4.55%。两条 blocking：注册表 `wave_reachable_opt.notes` 的示例序列 100/95 与本 GDD 的 101/97 冲突（跨文件，未改）；`menu_vision` 在两处散文里被称作"整数等级"（已就地改）。其余 10 条是口径与跨文档同步，AC 1 越界、规则 6 自相矛盾、`M`/`pool` 冗余等已在复审中修好。
+
+Prior verdict resolved: No — 上一条 APPROVED 的收据 `a7ed4b78` 与当前字节不符（D2 改写了规则 9、可达最优 DP 与 OQ2/OQ4）；且那次是确认 pass（只盖了 5 个文件、沿用前一条的 4 条 recommended），`menu_vision` 口径与注册表示例值因此从未被全文检查。
+
+Findings:
+- [BLOCKING] Registry: `wave_reachable_opt.notes` 写 "104 with no skips, 100 with one, 95 with two"，与本 GDD 的 104/101/97（`跳过对上限的影响`表、`wave_healthy` Example、校准契约段）冲突。穷举 34,650 个划分复核：恰好 1 次跳过的最大可达 **101**、2 次 **97**，注册表的 100/95 在任何口径（最大值）下都不成立。需注册表同步，本文件不改。
+- [BLOCKING] Interactions / Dependencies（局外升级行）: 把 `menu_vision` 称作"本系统只消费整数等级"，与 `meta-upgrades.md` 规则 12/14（快照给的是**已解析额度** `Σ effect_value × level`，"不是等级"）和 `run-flow.md` 的"总预览额度"冲突；变量表与公式本身是对的，按该散文实现会把额度再乘一次 `effect_value`。**已在复审中修正**为"已解析的整数预览额度"。
+- [RECOMMENDED] Acceptance Criteria: AC 1 的 "任一 `station_id`" 与 Edge Case（首局六道池、`wave_size` 被钳制为单波）冲突，断言在合法档口上必然失败。**已限定为 `station_canteen`（`|M| = 12`）。**
+- [RECOMMENDED] Detailed Rules: 规则 6 "代价不是回合" 与规则 5/8（跳过花 1 回合、共用预算）自相矛盾。**已改为"主代价是失去的菜，另为跨波付 1 回合"。**
+- [RECOMMENDED] Formulas: `wave_healthy(M, seed, pool, C0, T)` 的 `M` 与 `pool` 未定义区别（划分集合 vs 基准集合）。**已补"恒为同一有效菜池（`pool_override` 生效时为覆盖池）"。**
+- [RECOMMENDED] Formulas: "跳过对上限的影响" 表未写 9/8 道菜的前提（先在被跳过的波里吃掉保留菜、再付 1 回合）。**已补前提，并注明末波永不付跳过回合。**
+- [RECOMMENDED] Dependencies / Cross-References: 四处"需回改/待回改"已过时——`data-config.md` 已定义 `wave_size`，`dish-values.md` 下游表已回指本系统。**已清理为现状。**
+- [RECOMMENDED] Detailed Rules: 规则 9 的"超节点预算……返回 `DEGRADED`"未写 `UNHEALTHY` 优先。**已补：非空/覆盖不通过仍为 `UNHEALTHY`。**
+- [RECOMMENDED] Open Questions: OQ2/OQ4 的 "E[重掷] = 1.10" 实为 E[尝试次数]（91.11% → 期望重掷 0.098、期望尝试 1.098）；标签把重掷代价放大约 11 倍。为不重开 D2，**未改任何数值与结论**，留待决策留痕决定是否更正标签。
+- [RECOMMENDED] Cross-doc: 局内 HUD 规则 16 / AC 24 的按钮文案写「跳过本波 · 花 1 回合」，缺本 GDD 要求的「放弃剩余 N 道」（Visual/Audio、UI Requirements、AC 20）。HUD 已 Approved，建议其下次修订对齐。
+- [RECOMMENDED] Cross-doc: `dish-values.md` 规则 11 与公式段仍写 `opt_value` "不进入游戏运行时"；ADR-0006 §4 已声明本系统健康门是唯一例外、并要求 dish-values 下次修订补一句。本 GDD 与 ADR 一致，不改。
+- [RECOMMENDED] Registry metadata: `wave_size_default.referenced_by` 缺 `data-config.md`；`wave_reachable_opt.variables` 缺 `pool`（其 expression 用到）。非数值冲突。
+- 备注（advisory at `standard`）：`## Tuning Knobs` 仍缺席；`get_run_menu()` 在 `run-flow.md` 全文仍未出现（首局引导依赖它）。
+
+Reviewed-Content-Hash: design/gdd/menu-waves.md effad23c5f5bd13b0c6a657ab32c2680a078fc6b
+Reviewed-Content-Hash: design/registry/entities.yaml ac9dd64cdbbf756d272d52dd8d27bed6bf7a5b27
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md 56f6f4866e1b5ab7c8a5a8f04d22078e7d05e1cb
+Reviewed-Content-Hash: design/gdd/dish-values.md 8b48f38c7e01eb84a462bf847a8bbac3a7101997
+Reviewed-Content-Hash: design/gdd/data-config.md 89626e0d680a97b2887e2d2e76f07a4e3126ec2a
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md e6aa08b28eb7739e9a5c342f358f9f55b5292bde
+Reviewed-Content-Hash: design/gdd/stomach-capacity.md 77622412130d27b404e93a2fe2cdf3a99a8718ab
+Reviewed-Content-Hash: design/gdd/time-and-turns.md eb20c7ac3b422dbf3d5dcec1759061c55de41cd8
+Reviewed-Content-Hash: design/gdd/in-game-hud.md f81ce0c2348338cd8bd3858ed659e2b13c882a06
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md ba07eaa56adfaa489b0ba0fdac9065b492f68c64
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 9bf45c1ead7e161599186ca5724fa460b044e314
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md db09042623fa8333cd6410aa8e97249c1f45e9cf
+Reviewed-Content-Hash: design/gdd/ui-flow.md cf471d2d45476ff8e1db0a5fa4a7fae9a4e146ea
+Reviewed-Content-Hash: design/gdd/save-system.md 1bd3148294c81eb9a186f218cbb390b30b0e08ad
+Reviewed-Content-Hash: design/gdd/systems-index.md e0174253c2b36603edfef7b4d00d005380530feb
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+Reviewed-Content-Hash: docs/architecture/adr-0006-deterministic-rng.md f8bbbce1efbe2312fb8283ea8c73d61591e92f7a
+
+---
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION（复审：正文已清，剩余 blocking 在注册表）
+
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none（lean）
+Blocking items: 1 | Recommended: 5
+
+Summary: 上一条的两条 blocking 里，GDD 内那条（`menu_vision` 等级/额度）已关闭；本轮按全文重读复核，正文未再发现缺陷，D2 统计仍逐项可复现。唯一剩余的 blocking 在注册表：`wave_reachable_opt.notes` 的示例序列 100/95 需改为 101/97。该文件不在本分支可改范围，等编排会话同步后即可确认通过。
+
+Prior verdict resolved: 部分 — GDD 内 blocking 已修（`menu_vision` 口径、AC 1、规则 6、`M`/`pool`、表前提、`DEGRADED` 优先级、过时的"待回改"）；注册表 blocking 仍未解决（跨文件）。
+
+Findings:
+- [BLOCKING] Registry: `wave_reachable_opt.notes` 的 "104 with no skips, 100 with one, 95 with two" → 应为 "104 with no skips, 101 with one, 97 with two"（与正文表、Example、校准契约、穷举复核一致）。未改注册表。
+- [RECOMMENDED] Open Questions: "E[重掷] = 1.10" 标签（实为 E[尝试次数]），未改，待决策留痕决定是否更正。
+- [RECOMMENDED] Cross-doc: 局内 HUD 按钮文案缺「放弃剩余 N 道」。
+- [RECOMMENDED] Cross-doc: `dish-values.md` 的 `opt_value` "不进入游戏运行时" 措辞（ADR-0006 §4 已声明例外）。
+- [RECOMMENDED] Registry metadata: `wave_size_default.referenced_by` 缺 `data-config.md`；`wave_reachable_opt.variables` 缺 `pool`。
+- [RECOMMENDED] 索引：`design/gdd/systems-index.md:67` 仍为 `In Review`；本分支不改索引，待本文件通过后由编排会话改为 `Approved`。
+
+Reviewed-Content-Hash: design/gdd/menu-waves.md 4c2da744c1c4b19bc861bd0c09509d6deecbd6b7
+Reviewed-Content-Hash: design/registry/entities.yaml ac9dd64cdbbf756d272d52dd8d27bed6bf7a5b27
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md 56f6f4866e1b5ab7c8a5a8f04d22078e7d05e1cb
+Reviewed-Content-Hash: design/gdd/dish-values.md 8b48f38c7e01eb84a462bf847a8bbac3a7101997
+Reviewed-Content-Hash: design/gdd/data-config.md 89626e0d680a97b2887e2d2e76f07a4e3126ec2a
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md e6aa08b28eb7739e9a5c342f358f9f55b5292bde
+Reviewed-Content-Hash: design/gdd/stomach-capacity.md 77622412130d27b404e93a2fe2cdf3a99a8718ab
+Reviewed-Content-Hash: design/gdd/time-and-turns.md eb20c7ac3b422dbf3d5dcec1759061c55de41cd8
+Reviewed-Content-Hash: design/gdd/in-game-hud.md f81ce0c2348338cd8bd3858ed659e2b13c882a06
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md ba07eaa56adfaa489b0ba0fdac9065b492f68c64
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 9bf45c1ead7e161599186ca5724fa460b044e314
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md db09042623fa8333cd6410aa8e97249c1f45e9cf
+Reviewed-Content-Hash: design/gdd/ui-flow.md cf471d2d45476ff8e1db0a5fa4a7fae9a4e146ea
+Reviewed-Content-Hash: design/gdd/save-system.md 1bd3148294c81eb9a186f218cbb390b30b0e08ad
+Reviewed-Content-Hash: design/gdd/systems-index.md e0174253c2b36603edfef7b4d00d005380530feb
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+Reviewed-Content-Hash: docs/architecture/adr-0006-deterministic-rng.md f8bbbce1efbe2312fb8283ea8c73d61591e92f7a
