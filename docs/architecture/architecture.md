@@ -6,7 +6,7 @@
 - Last Updated: 2026-11-04
 - Engine: Godot 4.7 (pinned; installed version NOT DETERMINED — no editor on this machine)
 - GDDs Covered: 18 (all designed systems; #19 在线挑战 and #20 同屏合作 are Not Started)
-- ADRs Referenced: ADR-0001 内容数据格式；ADR-0002 持久化格式；ADR-0003 场景与屏幕架构（均为 Proposed）
+- ADRs Referenced: ADR-0001 内容数据格式；ADR-0002 持久化格式；ADR-0003 场景与屏幕架构；ADR-0004 服务组合与信号；ADR-0005 输入上下文栈；ADR-0006 确定性随机；ADR-0007 局内状态与结算事务；ADR-0008 设置与本地化；ADR-0009 音频播放与暂停（均为 Proposed）
 - TD-ARCHITECTURE: 2026-11-04 — skipped — lean mode
 - LP-FEASIBILITY: 2026-11-04 — skipped — lean mode
 
@@ -310,8 +310,11 @@ class MenuWaves:
                     menu_vision: int, pool_override: Array[StringName] = []) -> WaveInitResult
     func visible_dishes() -> Array[DishData]
     func preview_dishes() -> Array[DishData]
+    func hidden_counts() -> Array[int]
     func consume(dish_id: StringName) -> ConsumeResult
     func advance() -> AdvanceResult
+    func end_pickup() -> EndPickupResult
+    func health() -> HealthEval
 
 class Settlement:
     func settle(log: RunLog) -> Result[RunResult, SettlementError]
@@ -344,17 +347,26 @@ class Records:
 
 ## ADR Audit
 
-Three Foundation ADRs are written and `Proposed`; the remaining six groups are
-still gaps. The TR registry is still empty — every TR ID below is provisional.
+Nine Foundation/Feature ADRs are written and `Proposed`; none of the Required
+ADRs remains unwritten. The TR registry holds all 104 table requirements; ADR
+linkage below is authoritative.
 
 | ADR | Engine Compat | Version | GDD Linkage | Conflicts | Valid |
 |---|---|---|---|---|---|
 | ADR-0001 内容数据格式、校验与启动门 | ✅ | ✅ 4.7 | ✅ TR-data-config-001..006, TR-records-004 | None | ⚠️ Proposed — engine verification pending |
 | ADR-0002 持久化格式、原子写入与跨平台写锁 | ✅ | ✅ 4.7 | ✅ TR-save-system-001..007, TR-ui-flow-005, TR-records-001 | None | ⚠️ Proposed — engine verification pending |
 | ADR-0003 场景与屏幕架构 | ✅ | ✅ 4.7 | ✅ TR-scene-flow-001..005, TR-ui-flow-001..003, TR-in-game-hud-002 | None | ⚠️ Proposed — engine verification pending |
+| ADR-0004 服务组合与信号机制 | ✅ | ✅ 4.7 | ✅ TR-audio-feedback-001/005, TR-run-flow-006, TR-save-system-006, TR-scene-flow-003/005, TR-ui-flow-004 | None | ⚠️ Proposed — engine verification pending |
+| ADR-0005 输入上下文栈语义 | ✅ | ✅ 4.7 | ✅ TR-input-001..006, TR-first-run-onboarding-002, TR-in-game-hud-004, TR-scene-flow-002, TR-ui-flow-001 | None | ⚠️ Proposed — engine verification pending |
+| ADR-0006 确定性随机、种子派生与健康校验预算 | ✅ | ✅ 4.7 | ✅ TR-menu-waves-001..006, TR-dish-values-003, TR-run-flow-002/003 | None | ⚠️ Proposed — engine verification pending |
+| ADR-0008 机器级设置与本地化管线 | ✅ | ✅ 4.7 | ✅ TR-ui-flow-006, TR-ui-flow-003（呈现侧） | None | ⚠️ Proposed — engine verification pending |
+| ADR-0007 局内状态所有权与结算事务边界 | ✅ | ✅ 4.7 | ✅ TR-run-flow-001/002/005, TR-settlement-001/004, TR-ui-flow-004, TR-meta-upgrades-005, TR-records-002 | None | ⚠️ Proposed — engine verification pending |
+| ADR-0009 音频播放、池化与暂停语义 | ✅ | ✅ 4.7 | ✅ TR-audio-feedback-001..007, TR-ui-flow-007 | None | ⚠️ Proposed — engine verification pending |
 
-**Traceability coverage:** 25 of 103 requirements covered by an ADR; 78 gaps.
-Covered: data-config 6, records 2, save 7, ui-flow 4, scene-flow 5, in-game-hud 1.
+**Traceability coverage:** 59 of 104 requirements covered by an ADR; 45 gaps.
+Covered: data-config 6, records 3, save 7, ui-flow 7, scene-flow 5,
+in-game-hud 2, input 6, menu-waves 6, dish-values 1, run-flow 5,
+audio-feedback 7, first-run-onboarding 1, settlement 2, meta-upgrades 1.
 
 ## Required ADRs
 
@@ -366,15 +378,15 @@ Grouped by layer, Foundation first. Each group lists the TR areas it must cover;
 1. **Content data format, validation and boot gate** — `Resource` vs JSON/CSV, id rules, `DataConfig` state machine, milestone catalog loader. Covers `TR-data-config-*`, `TR-records-004`. **Written: ADR-0001 (Proposed).**
 2. **Persistence format, atomic write and cross-platform lock** — JSON vs `store_var` vs binary, int64 encoding, path/naming, lock mechanism, migration harness. Covers `TR-save-system-001..007`. **Written: ADR-0002 (Proposed).**
 3. **Scene and screen architecture** — one root controller vs one scene per screen; screen stack, modal stack, focus neighbours, dual-focus presentation. Covers `TR-scene-flow-*`, `TR-ui-flow-001..003`, `TR-in-game-hud-002`. **Written: ADR-0003 (Proposed).**
-4. **Service composition and signal mechanism** — composition root vs autoloads, dependency injection, signal ordering/reentrancy, paused `process_mode`. Covers the cross-cutting lifecycle contracts and `TR-audio-feedback-005`.
-5. **Input context stack semantics** — `push_context` on a same-value top, `Blocked` allow-lists, action consumption, nav repeat. Covers `TR-input-001..006`.
+4. **Service composition and signal mechanism** — composition root vs autoloads, dependency injection, signal ordering/reentrancy, paused `process_mode`. Covers the cross-cutting lifecycle contracts and `TR-audio-feedback-005`. **Written: ADR-0004 (Proposed).**
+5. **Input context stack semantics** — `push_context` on a same-value top, `Blocked` allow-lists, action consumption, nav repeat. Covers `TR-input-001..006`. **Written: ADR-0005 (Proposed).**
 
 **Core / Feature — before the relevant system is built**
 
-6. **Deterministic RNG and seeded generation** — `RandomNumberGenerator` seeding, partition stability, health-check DP budget. Covers `TR-menu-waves-001..006`.
-7. **Run state ownership and settlement transaction boundary** — who owns `run_id`, `RunLog`, the single `Save.commit`, and the receipt orchestration order. Covers `TR-run-flow-*`, `TR-settlement-*`, `TR-ui-flow-004`.
-8. **Settings persistence and localization pipeline** — machine-level file format/path/write timing, `tr()` key strategy, CJK font fallback, 150% scaling. Covers `TR-ui-flow-006`, `TR-ui-flow-003` presentation aspects.
-9. **Audio playback, pooling and pause semantics** — bus graph, voice pool, cue catalog location, pause behaviour. Covers `TR-audio-feedback-001..006`.
+6. **Deterministic RNG and seeded generation** — `RandomNumberGenerator` seeding, partition stability, health-check DP budget. Covers `TR-menu-waves-001..006`. **Written: ADR-0006 (Proposed).**
+7. **Run state ownership and settlement transaction boundary** — who owns `run_id`, `RunLog`, the single `Save.commit`, and the receipt orchestration order. Covers `TR-run-flow-*`, `TR-settlement-*`, `TR-ui-flow-004`. **Written: ADR-0007 (Proposed).**
+8. **Settings persistence and localization pipeline** — machine-level file format/path/write timing, `tr()` key strategy, CJK font fallback, 150% scaling. Covers `TR-ui-flow-006`, `TR-ui-flow-003` presentation aspects. **Written: ADR-0008 (Proposed).**
+9. **Audio playback, pooling and pause semantics** — bus graph, voice pool, cue catalog location, pause behaviour. Covers `TR-audio-feedback-001..007`. **Written: ADR-0009 (Proposed).**
 
 **Can defer to implementation**
 
@@ -412,13 +424,13 @@ Grouped by layer, Foundation first. Each group lists the TR areas it must cover;
 | QQ-04 | Signal ordering and reentrancy; whether a signal handler may request a transition. | High | ADR 4 |
 | QQ-05 | Screen controller structure: one root controller vs one scene per screen; manual vs automatic focus neighbours. | High | ADR 3 |
 | QQ-06 | `push_context(Modal)` when the top is already `Modal` — same-value push semantics. | High | ADR 5 |
-| QQ-07 | Settlement transaction boundary: UI Flow as orchestrator vs a dedicated transaction service. | High | ADR 7 |
-| QQ-08 | Settings file format/path/write timing and CJK font fallback. | Medium | ADR 8 |
-| QQ-09 | Audio `process_mode` under pause; cue catalog data location (no `design/audio/` yet). | Medium | ADR 9 |
+| QQ-07 | Settlement transaction boundary: UI Flow as orchestrator vs a dedicated transaction service. | High | Resolved — ADR-0007 D2–D4 (UIRoot calls, SettlementTransaction implements) |
+| QQ-08 | Settings file format/path/write timing and CJK font fallback. | Medium | Resolved — ADR-0008 §1–7 |
+| QQ-09 | Audio `process_mode` under pause; cue catalog data location (no `design/audio/` yet). | Medium | Resolved — ADR-0009 D3/D7 (`PROCESS_MODE_ALWAYS`, `res://data/audio/cue_catalog.tres`) |
 | QQ-10 | Whether `/review-all-gdds` runs before the Technical Setup gate; it is still ABSENT. | Medium | Run `/review-all-gdds` |
 | QQ-11 | Full Vision systems (#19/#20) will add schema v2 and an input/scene split; not designed. | Low | When #19/#20 start |
-| QQ-12 | Fresh-baseline writer: Save cannot depend on Unlocks to merge `unlocks.normalize()` into the first commit; the boot orchestrator identity is unassigned. | High | ADR-0004 |
-| QQ-13 | UI Flow action delivery under `Menu`/`Modal`/`Paused`: `InputRouter.consume_action` is Blocked/onboarding-only in the input GDD; the screen-side path is undefined. | High | ADR-0005 |
+| QQ-12 | Fresh-baseline writer: Save cannot depend on Unlocks to merge `unlocks.normalize()` into the first commit; the boot orchestrator identity is unassigned. | High | Resolved — ADR-0004 D5 (`AppRoot.BootSequence`) |
+| QQ-13 | UI Flow action delivery under `Menu`/`Modal`/`Paused`: `InputRouter.consume_action` is Blocked/onboarding-only in the input GDD; the screen-side path is undefined. | High | Resolved — ADR-0005 D4 (`ActionSink`, first consumer wins) |
 
 ## Appendix A — Technical Requirements Baseline
 
@@ -455,8 +467,8 @@ Extracted from 18 GDDs | 103 requirements | 0 registered, 103 provisional
 | TR-run-flow-002 | run-flow.md | 餐局流程 | Init order: turns → capacity → menu waves → cloying in one frame; failure → `init_failed`, no `RunResult` | Core |
 | TR-run-flow-003 | run-flow.md | 餐局流程 | `submit_action(eat/skip_wave/end_pickup, dish_id)` with fixed validation order and atomic commit | Core |
 | TR-run-flow-004 | run-flow.md | 餐局流程 | Only two end reasons (`TIME_EXHAUSTED`, `NO_EATABLE_DISH`); fixed priority; state frozen after `Ending` | Core |
-| TR-run-flow-005 | run-flow.md | 餐局流程 | `RunLog` assembled from action-time values; `settle(RunLog)` once; `RunResult` handed off | Core |
-| TR-run-flow-006 | run-flow.md | 餐局流程 | Signals `run_started/action_committed/run_ended/run_settled/run_faulted/run_discarded`, at most once per `run_id` | Core |
+| TR-run-flow-005 | run-flow.md | 餐局流程 | `RunLog` assembled from action-time values; `settle(RunLog)` once; `RunResult` handed off once; `run_settled` is a pre-notification and persistence happens only after the `Run -> Menu` delivery is accepted | Core |
+| TR-run-flow-006 | run-flow.md | 餐局流程 | Signals `run_started/action_committed/run_ended/run_settled/run_faulted/run_discarded`, at most once per `run_id`; `run_faulted.detail` carries `phase ∈ {INIT, RUN}` and `run_id = 0` means allocation failed | Core |
 | TR-run-flow-007 | run-flow.md | 餐局流程 | Read-only run snapshot for HUD incl. `run_state`, `frozen`, `running_net`, `shortfall`, `action_seq` | UI |
 | TR-time-and-turns-001 | time-and-turns.md | 时间与回合 | `initialize(turn_budget)` once per run; `INVALID_TURN_BUDGET` on bad input, no clamping | Core |
 | TR-time-and-turns-002 | time-and-turns.md | 时间与回合 | `spend_turn()` cost exactly 1; `can_spend_turn()` pure; no overdraft, no refund | Core |
@@ -483,7 +495,7 @@ Extracted from 18 GDDs | 103 requirements | 0 registered, 103 provisional
 | TR-menu-waves-004 | menu-waves.md | 菜单波次 | `wave_reachable_opt` wave-reset DP: 924 carry states, per-dish turn cost, cloying-ignoring upper bound, ≤1e4 nodes, `DEGRADED` fallback | Core |
 | TR-menu-waves-005 | menu-waves.md | 菜单波次 | `wave_healthy` lower bound `0.9 × opt_value`; up to 20 rerolls then best + warning | Core |
 | TR-menu-waves-006 | menu-waves.md | 菜单波次 | `pool_override` accepted by initialize and health check | Core |
-| TR-settlement-001 | settlement-and-entry-fee.md | 结算与入场费 | `settle(RunLog)` once per `run_id`; duplicate returns `ALREADY_SETTLED` | Core |
+| TR-settlement-001 | settlement-and-entry-fee.md | 结算与入场费 | `settle(RunLog)` once per `run_id`; duplicate returns `ALREADY_SETTLED`; the transaction additionally rejects a repeated application by `run_id + digest` | Core |
 | TR-settlement-002 | settlement-and-entry-fee.md | 结算与入场费 | `total_value` int64 sum; `net_profit = total_value − entry_fee`; `broke_even` derived; no clamping | Economy |
 | TR-settlement-003 | settlement-and-entry-fee.md | 结算与入场费 | `RunResult` schema: rows in eaten order, `return_ratio` null when fee 0, `upgrade_snapshot` passthrough | Data |
 | TR-settlement-004 | settlement-and-entry-fee.md | 结算与入场费 | Pure function: no I/O, clock, or RNG; checked int64 overflow returns error | Core |
@@ -492,7 +504,7 @@ Extracted from 18 GDDs | 103 requirements | 0 registered, 103 provisional
 | TR-meta-upgrades-002 | meta-upgrades.md | 局外升级 | Exponential `upgrade_price` from `cost`/`cost_growth`; linear effect per level; hard `max_level` | Economy |
 | TR-meta-upgrades-003 | meta-upgrades.md | 局外升级 | `resolve_upgrade_snapshot()` returns parsed bonuses plus frozen `levels` copy | Core |
 | TR-meta-upgrades-004 | meta-upgrades.md | 局外升级 | Purchase transaction: validate → memory apply → `save.commit` → success; rollback on write failure | Save/Load |
-| TR-meta-upgrades-005 | meta-upgrades.md | 局外升级 | `prepare_run_result` computes progression only; orchestrator commits once; `APPLIED_UNSAVED` on write failure | Save/Load |
+| TR-meta-upgrades-005 | meta-upgrades.md | 局外升级 | `prepare_run_result` computes progression only; orchestrator commits once; `WALLET_OVERFLOW` omits progression while records still commit; write failure returns `APPLIED_UNSAVED` and marks both namespaces dirty | Save/Load |
 | TR-meta-upgrades-006 | meta-upgrades.md | 局外升级 | `spend(amount, reason, extra)` generic wallet transaction; `extra` merged into the same commit | Economy |
 | TR-meta-upgrades-007 | meta-upgrades.md | 局外升级 | `menu_vision_useful_max = ceil((wave_size−1)/effect_value)`; no no-effect level sold | Economy |
 | TR-unlocks-001 | unlocks-and-stations.md | 解锁与档口 | Availability derived: `unlock_cost = 0` or id in `unlocks.stations`; dishes follow the station | Core |
@@ -501,7 +513,7 @@ Extracted from 18 GDDs | 103 requirements | 0 registered, 103 provisional
 | TR-unlocks-004 | unlocks-and-stations.md | 解锁与档口 | Fixed validation order incl. `NOT_IN_MENU`, `BUSY`, `INSUFFICIENT_FUNDS` | Core |
 | TR-unlocks-005 | unlocks-and-stations.md | 解锁与档口 | Catalog/progress/effective-unlock read APIs; id-sorted output | Data |
 | TR-records-001 | records-and-milestones.md | 纪录与里程碑 | `records` namespace schema: per-station best, career aggregates, earned milestones, `completed_at` | Save/Load |
-| TR-records-002 | records-and-milestones.md | 纪录与里程碑 | `prepare_run(RunResult)` once per `run_id`; consistency assertions; any error aborts the whole settlement transaction | Core |
+| TR-records-002 | records-and-milestones.md | 纪录与里程碑 | `prepare_run(RunResult)` once per `run_id`; consistency assertions; any error aborts the whole settlement transaction (no other namespace commits); `ALREADY_APPLIED` triggers no commit | Core |
 | TR-records-003 | records-and-milestones.md | 纪录与里程碑 | Per-station ranking by `net_profit`; strict improvement only; ties keep the old record | Core |
 | TR-records-004 | records-and-milestones.md | 纪录与里程碑 | Separate read-only `MilestoneData` loader with four metrics; monotonic lock-in | Data |
 | TR-records-005 | records-and-milestones.md | 纪录与里程碑 | UTC timestamps display-only; no logic reads the clock | Data |
@@ -515,16 +527,17 @@ Extracted from 18 GDDs | 103 requirements | 0 registered, 103 provisional
 | TR-ui-flow-001 | ui-flow.md | 界面流程 | Fixed screen inventory; UI stack max depth 2, modal stack max depth 2 | UI |
 | TR-ui-flow-002 | ui-flow.md | 界面流程 | Deterministic `back_target` priority; forced `Blocked` modal ignores `ui_cancel` | Input |
 | TR-ui-flow-003 | ui-flow.md | 界面流程 | Focus order per screen, `initial_focus`, `focus_restore` | UI |
-| TR-ui-flow-004 | ui-flow.md | 界面流程 | Receipt orchestration: `prepare_run` → `prepare_run_result` → one `save.commit`; receipt opens same frame | UI |
+| TR-ui-flow-004 | ui-flow.md | 界面流程 | Receipt orchestration: the transaction runs inside `UIRoot.reset_for_state(Menu, RunResult)` before the receipt mounts; `prepare_run` -> `prepare_run_result` -> one `save.commit`; receipt opens same frame; a fatal records error means zero commits plus `settlement_aborted` | UI |
 | TR-ui-flow-005 | ui-flow.md | 界面流程 | Lock-first `Blocked` exits and `retry_load` path; load-report branching | UI |
 | TR-ui-flow-006 | ui-flow.md | 界面流程 | Machine-level settings model: volumes, mute, text scale 100/125/150, reduce motion, HUD opacity | UI |
 | TR-ui-flow-007 | ui-flow.md | 界面流程 | Semantic events for audio: `ui_button_activated`, `number_roll_*`, `receipt_closed` | Audio |
-| TR-audio-feedback-001 | audio-feedback.md | 音效反馈 | Event→cue mapping; fixed cue catalog; same-frame dispatch | Audio |
-| TR-audio-feedback-002 | audio-feedback.md | 音效反馈 | Voice pool max 10 with per-priority caps, preemption rules, 50 ms guard | Audio |
-| TR-audio-feedback-003 | audio-feedback.md | 音效反馈 | Deterministic variant round-robin; per-cue cooldowns; per-`run_id` dedupe | Audio |
+| TR-audio-feedback-001 | audio-feedback.md | 音效反馈 | Event→cue mapping; fixed cue catalog published as a typed Resource validated by DataConfig; same-frame dispatch | Audio |
+| TR-audio-feedback-002 | audio-feedback.md | 音效反馈 | Voice pool max 10 with per-priority caps, preemption rules, 50 ms guard; per-priority cap is a hard ceiling after any steal | Audio |
+| TR-audio-feedback-003 | audio-feedback.md | 音效反馈 | Deterministic variant round-robin; per-cue cooldowns; per-`run_id` dedupe; MVP pitch jitter disabled, future jitter only from SeedHash | Audio |
 | TR-audio-feedback-004 | audio-feedback.md | 音效反馈 | `cue_volume_db = clamp(base + bus + master + sfx, -80, 0)` | Audio |
-| TR-audio-feedback-005 | audio-feedback.md | 音效反馈 | Pause silences and clears pending outcome; mute/missing-device are drop semantics | Audio |
-| TR-audio-feedback-006 | audio-feedback.md | 音效反馈 | Cue request log (ring buffer 10k) with closed reason vocabulary | Audio |
+| TR-audio-feedback-005 | audio-feedback.md | 音效反馈 | Pause silences and clears pending outcome; mute/missing-device are drop semantics; `sfx.flow.*` runs out-of-pool so the pause cue starts on the freeze frame | Audio |
+| TR-audio-feedback-006 | audio-feedback.md | 音效反馈 | Cue request log (ring buffer 10k) with closed reason vocabulary; `priority` stays in the vocabulary but is not emitted in v1 | Audio |
+| TR-audio-feedback-007 | audio-feedback.md | 音效反馈 | Content defects (invalid cue catalog or event map) fail boot through the data gate; playback failures degrade silently at runtime | Audio |
 | TR-first-run-onboarding-001 | first-run-onboarding.md | 首局引导 | Runs only when `RunConfig.is_first_run`; preset `pool_override` six dishes and `entry_fee_override = 40` | Core |
 | TR-first-run-onboarding-002 | first-run-onboarding.md | 首局引导 | Fixed B0–B4 beat sequence; one beat per input; modal beats use `Blocked` allow-list | Core |
 | TR-first-run-onboarding-003 | first-run-onboarding.md | 首局引导 | Anchors from HUD `get_anchor_rect`; bubbles never cover the three protected rects | UI |
@@ -535,11 +548,11 @@ Extracted from 18 GDDs | 103 requirements | 0 registered, 103 provisional
 
 | Area | Requirements | ADR coverage |
 |---|---|---|
-| Foundation (data, input, scene, save) | 24 | 18 |
-| Core (run, turns, capacity, dish values) | 21 | 0 |
-| Feature (cloying, waves, settlement, meta, unlocks, records) | 34 | 2 |
-| Presentation (HUD, UI, audio, onboarding) | 24 | 5 |
-| **Total** | **103** | **25** |
+| Foundation (data, input, scene, save) | 24 | 24 |
+| Core (run, turns, capacity, dish values) | 21 | 6 |
+| Feature (cloying, waves, settlement, meta, unlocks, records) | 34 | 12 |
+| Presentation (HUD, UI, audio, onboarding) | 25 | 17 |
+| **Total** | **104** | **59** |
 
 `/architecture-review` will bootstrap the Requirements Traceability Matrix and
 give every provisional ID its permanent one.

@@ -102,7 +102,7 @@ state_ownership:
     status: active
     owner_system: data-config
     adr: docs/architecture/adr-0001-content-data-format.md
-    interface: "DataConfig.get_dish / get_upgrade / get_station / get_dish_icon / get_balance (read-only records), plus get_state() and the ready/failed signals"
+    interface: "DataConfig.get_dish / get_upgrade / get_station / get_dish_icon / get_cue / get_balance (read-only records), plus get_state() and the ready/failed signals"
     write_access: data-config-only
     referenced_by:
       - docs/architecture/adr-0001-content-data-format.md
@@ -117,6 +117,51 @@ state_ownership:
     write_access: records-only
     referenced_by:
       - docs/architecture/adr-0001-content-data-format.md
+    added: 2026-11-04
+    revised: ""
+
+  - state: service_graph
+    status: active
+    owner_system: app-root
+    adr: docs/architecture/adr-0004-service-composition-signals.md
+    interface: "AppRoot constructs and owns every service in _ready(); services are injected by constructor and never resolved by name"
+    write_access: app-root-only
+    referenced_by:
+      - docs/architecture/adr-0004-service-composition-signals.md
+    added: 2026-11-04
+    revised: ""
+
+  - state: input_context_stack
+    status: active
+    owner_system: input
+    adr: docs/architecture/adr-0005-input-context-stack.md
+    interface: "InputRouter.base_context / context_stack() (read-only) + request_context() / push_context() / pop_context(); context_changed(from, to) signal"
+    write_access: input-only
+    referenced_by:
+      - docs/architecture/adr-0005-input-context-stack.md
+      - docs/architecture/adr-0003-scene-screen-architecture.md
+    added: 2026-11-04
+    revised: ""
+
+  - state: menu_wave_partition
+    status: active
+    owner_system: menu-waves
+    adr: docs/architecture/adr-0006-deterministic-rng.md
+    interface: "MenuWaves.wave_index() / wave_count() / visible_dishes() / preview_dishes() / hidden_counts() / health() (read-only)"
+    write_access: menu-waves-only
+    referenced_by:
+      - docs/architecture/adr-0006-deterministic-rng.md
+    added: 2026-11-04
+    revised: ""
+
+  - state: settings_document
+    status: active
+    owner_system: ui-flow
+    adr: docs/architecture/adr-0008-settings-localization.md
+    interface: "SettingsModel.snapshot() / audio() / presentation() (immutable value objects); set_int/set_bool; flush(reason)"
+    write_access: ui-flow-only
+    referenced_by:
+      - docs/architecture/adr-0008-settings-localization.md
     added: 2026-11-04
     revised: ""
 
@@ -136,6 +181,50 @@ state_ownership:
 #     added: 2026-03-26
 #     revised: ""
 
+
+  - state: run_id_and_run_result
+    status: active
+    owner_system: run-flow
+    adr: docs/architecture/adr-0007-run-state-settlement-transaction.md
+    interface: "RunFlow.snapshot().run_id / run_state; RunResult reaches others only as the Run -> Menu payload or a ReceiptSnapshot.result; run_id = 0 means unallocated"
+    write_access: run-flow-only
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-settlement-transaction.md
+    added: 2026-11-04
+    revised: ""
+
+  - state: run_log
+    status: active
+    owner_system: run-flow
+    adr: docs/architecture/adr-0007-run-state-settlement-transaction.md
+    interface: "RunLog built in Ending, passed once to Settlement.settle(log); Settlement retains no reference"
+    write_access: run-flow-only
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-settlement-transaction.md
+    added: 2026-11-04
+    revised: ""
+
+  - state: wallet_and_upgrade_levels
+    status: active
+    owner_system: meta-upgrades
+    adr: docs/architecture/adr-0007-run-state-settlement-transaction.md
+    interface: "MetaUpgrades.prepare_run_result(result) returns the progression delta; the wallet mutates only inside the settlement transaction or spend(tx)"
+    write_access: meta-upgrades-only
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-settlement-transaction.md
+    added: 2026-11-04
+    revised: ""
+
+  - state: settlement_receipt_snapshot
+    status: active
+    owner_system: ui-flow
+    adr: docs/architecture/adr-0007-run-state-settlement-transaction.md
+    interface: "immutable ReceiptSnapshot (run_id, wallet before/after, save_state, abort_code); ReceiptScreen reads only this"
+    write_access: ui-flow-only
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-settlement-transaction.md
+    added: 2026-11-04
+    revised: ""
 
 # ─── INTERFACE CONTRACTS ──────────────────────────────────────────────────────
 # How systems are required to communicate with each other.
@@ -186,6 +275,7 @@ interfaces:
     signal_signature: "push_context(&\"Modal\") / pop_context() — paired; no pop after a top-level transition"
     referenced_by:
       - docs/architecture/adr-0003-scene-screen-architecture.md
+      - docs/architecture/adr-0005-input-context-stack.md
     added: 2026-11-04
     revised: ""
 
@@ -199,6 +289,7 @@ interfaces:
     signal_signature: "handle_action(action: StringName) -> bool — exactly once per press"
     referenced_by:
       - docs/architecture/adr-0003-scene-screen-architecture.md
+      - docs/architecture/adr-0005-input-context-stack.md
     added: 2026-11-04
     revised: ""
 
@@ -232,10 +323,97 @@ interfaces:
       - unlocks-and-stations
       - ui-flow
       - records
+      - audio-feedback
     adr: docs/architecture/adr-0001-content-data-format.md
-    signal_signature: "get_dish(id) / get_upgrade(id) / get_station(id) / get_dish_icon(id) -> DataResult; get_balance() -> BalanceData (READY only)"
+    signal_signature: "get_dish(id) / get_upgrade(id) / get_station(id) / get_dish_icon(id) / get_cue(id) -> DataResult; get_balance() -> BalanceData (READY only)"
     referenced_by:
       - docs/architecture/adr-0001-content-data-format.md
+    added: 2026-11-04
+    revised: ""
+
+  - contract: signal_state_fanout
+    status: active
+    pattern: signal
+    producer: app-root
+    consumers:
+      - scene-flow
+      - ui-flow
+      - run-flow
+      - menu-waves
+    adr: docs/architecture/adr-0004-service-composition-signals.md
+    signal_signature: "state_changed(from, to, payload) — one subscriber (AppRoot), fixed synchronous fan-out order"
+    referenced_by:
+      - docs/architecture/adr-0004-service-composition-signals.md
+    added: 2026-11-04
+    revised: ""
+
+  - contract: fresh_baseline_commit
+    status: active
+    pattern: direct_call
+    producer: app-root
+    consumers:
+      - save
+    adr: docs/architecture/adr-0004-service-composition-signals.md
+    signal_signature: "BootSequence writes the new-career baseline through SaveSystem.commit() before Save.load() returns READY"
+    referenced_by:
+      - docs/architecture/adr-0004-service-composition-signals.md
+      - docs/architecture/adr-0002-persistence-format.md
+    added: 2026-11-04
+    revised: ""
+
+  - contract: input_action_delivery
+    status: active
+    pattern: direct_call
+    producer: input
+    consumers:
+      - ui-flow
+    adr: docs/architecture/adr-0005-input-context-stack.md
+    signal_signature: "ActionSink.handle_action(action: StringName) -> bool; first true consumer wins, InputRouter sets the frame consumed bit"
+    referenced_by:
+      - docs/architecture/adr-0005-input-context-stack.md
+    added: 2026-11-04
+    revised: ""
+
+  - contract: input_context_push
+    status: active
+    pattern: direct_call
+    producer: input
+    consumers:
+      - scene-flow
+      - ui-flow
+      - first-run-onboarding
+    adr: docs/architecture/adr-0005-input-context-stack.md
+    signal_signature: "request_context(ctx) / push_context(ctx) / pop_context() -> bool; context_changed(from, to) emitted on every depth change"
+    referenced_by:
+      - docs/architecture/adr-0005-input-context-stack.md
+    added: 2026-11-04
+    revised: ""
+
+  - contract: wave_partition_query
+    status: active
+    pattern: direct_call
+    producer: menu-waves
+    consumers:
+      - run-flow
+      - in-game-hud
+    adr: docs/architecture/adr-0006-deterministic-rng.md
+    signal_signature: "initialize(station_id, seed, turn_budget, menu_vision, pool_override) -> WaveInitResult; visible_dishes() / preview_dishes() / hidden_counts() / consume() / advance() / end_pickup() / health()"
+    referenced_by:
+      - docs/architecture/adr-0006-deterministic-rng.md
+    added: 2026-11-04
+    revised: ""
+
+  - contract: settings_snapshot
+    status: active
+    pattern: direct_call
+    producer: ui-flow
+    consumers:
+      - audio-feedback
+      - in-game-hud
+    adr: docs/architecture/adr-0008-settings-localization.md
+    signal_signature: "SettingsModel.snapshot() / audio() / presentation() (immutable); changed(key, value) + presentation_changed(prefs)"
+    referenced_by:
+      - docs/architecture/adr-0008-settings-localization.md
     added: 2026-11-04
     revised: ""
 
@@ -259,6 +437,76 @@ interfaces:
 #     revised: ""
 
 
+  - contract: run_settlement_handoff
+    status: active
+    pattern: signal
+    producer: run-flow
+    consumers:
+      - ui-flow
+      - audio-feedback
+      - first-run-onboarding
+    adr: docs/architecture/adr-0007-run-state-settlement-transaction.md
+    signal_signature: "run_settled(run_id: int, result: RunResult) — pre-notification; listeners never call prepare_* or commit"
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-settlement-transaction.md
+    added: 2026-11-04
+    revised: ""
+
+  - contract: run_fault_return
+    status: active
+    pattern: direct_call
+    producer: run-flow
+    consumers:
+      - scene-flow
+      - ui-flow
+    adr: docs/architecture/adr-0007-run-state-settlement-transaction.md
+    signal_signature: "request_transition(Run -> Menu, {init_failed: true, fault: {phase: INIT|RUN, code, detail}})"
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-settlement-transaction.md
+    added: 2026-11-04
+    revised: ""
+
+  - contract: settlement_transaction_apply
+    status: active
+    pattern: direct_call
+    producer: ui-flow
+    consumers:
+      - save-system
+      - meta-upgrades
+      - records-and-milestones
+    adr: docs/architecture/adr-0007-run-state-settlement-transaction.md
+    signal_signature: "SettlementTransaction.apply(result: RunResult) -> ReceiptSnapshot; exactly one call per run_id"
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-settlement-transaction.md
+    added: 2026-11-04
+    revised: ""
+
+  - contract: audio_cue_request
+    status: active
+    pattern: direct_call
+    producer: audio-feedback
+    consumers:
+      - app-root
+    adr: docs/architecture/adr-0009-audio-playback-pause.md
+    signal_signature: "AudioDirector.request(event: StringName, payload: Dictionary) -> int; play(cue_id, context) -> CueDecision"
+    referenced_by:
+      - docs/architecture/adr-0009-audio-playback-pause.md
+    added: 2026-11-04
+    revised: ""
+
+  - contract: audio_catalog_publish
+    status: active
+    pattern: shared_resource
+    producer: data-config
+    consumers:
+      - audio-feedback
+    adr: docs/architecture/adr-0009-audio-playback-pause.md
+    signal_signature: "DataConfig.get_cue(id) -> DataResult; has_cue(id) -> bool; cue_catalog() -> AudioCueCatalogResource (READY only)"
+    referenced_by:
+      - docs/architecture/adr-0009-audio-playback-pause.md
+    added: 2026-11-04
+    revised: ""
+
 # ─── PERFORMANCE BUDGETS ──────────────────────────────────────────────────────
 # Frame time allocations per system, against a defined total frame budget.
 # Conflicts: allocations that sum to more than the total budget = unshippable.
@@ -274,6 +522,26 @@ performance_budgets:
     notes: "Career write p95 <= 50 ms and load p95 <= 100 ms at the Full Vision 8.5 KiB fixture; main-thread only, no background save thread"
     referenced_by:
       - docs/architecture/adr-0002-persistence-format.md
+    added: 2026-11-04
+    revised: ""
+
+  - system: menu-waves
+    status: active
+    budget_ms: 4
+    adr: docs/architecture/adr-0006-deterministic-rng.md
+    notes: "initialize() p95 <= 4 ms including the worst 21 candidates; < 0.3 ms/candidate typical; NODE_BUDGET 10^4, STATE_CELL_BUDGET 262144, BASELINE_CELL_BUDGET 65536; over-budget returns DEGRADED and never blocks the run"
+    referenced_by:
+      - docs/architecture/adr-0006-deterministic-rng.md
+    added: 2026-11-04
+    revised: ""
+
+  - system: settings
+    status: active
+    budget_ms: 2
+    adr: docs/architecture/adr-0008-settings-localization.md
+    notes: "Settings document < 1 KiB; encode+write < 2 ms and decode+validate < 1 ms, each once per session/modal close; three Theme variants built once at boot; per-frame path performs no I/O"
+    referenced_by:
+      - docs/architecture/adr-0008-settings-localization.md
     added: 2026-11-04
     revised: ""
 
@@ -297,6 +565,26 @@ performance_budgets:
 #     added: 2026-03-26
 #     revised: ""
 
+
+  - system: settlement-transaction
+    status: active
+    budget_ms: 60
+    adr: docs/architecture/adr-0007-run-state-settlement-transaction.md
+    notes: "p95 <= 60 ms in one synchronous frame: settlement p95 <= 1 ms (hard 5), records p99 <= 5 ms, Save.commit p95 <= 50 ms; no await or deferred call"
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-settlement-transaction.md
+    added: 2026-11-04
+    revised: ""
+
+  - system: audio
+    status: active
+    budget_ms: 0.5
+    adr: docs/architecture/adr-0009-audio-playback-pause.md
+    notes: "request() p95 <= 0.5 ms (worst 2 ms); per-frame tick of 11 voices plus duck envelope <= 0.05 ms; 10k cue-log ring ~1.25 MB resident"
+    referenced_by:
+      - docs/architecture/adr-0009-audio-playback-pause.md
+    added: 2026-11-04
+    revised: ""
 
 # ─── API DECISIONS ───────────────────────────────────────────────────────────
 # Which engine APIs are chosen for which purpose across the project.
@@ -395,6 +683,116 @@ api_decisions:
     added: 2026-11-04
     revised: ""
 
+  - purpose: no_autoloads
+    status: active
+    api: "AppRoot (root of main.tscn) constructs every service and injects it by constructor"
+    not: "Godot autoload singletons, service locators, lookup by node name"
+    adr: docs/architecture/adr-0004-service-composition-signals.md
+    reason: "Zero autoloads makes construction order explicit and assertable; services stay independently testable"
+    referenced_by:
+      - docs/architecture/adr-0004-service-composition-signals.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: pause_mechanism
+    status: active
+    api: "SceneTree.paused = true plus an explicit PROCESS_MODE_ALWAYS allow-list (SceneFlow, UIRoot, AudioDirector, FadeLayer)"
+    not: "per-node pause flags, manual _process guards, or pausing by disabling input"
+    adr: docs/architecture/adr-0004-service-composition-signals.md
+    reason: "One authoritative pause switch; audio and UI keep running while gameplay freezes"
+    referenced_by:
+      - docs/architecture/adr-0004-service-composition-signals.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: state_signal_fanout
+    status: active
+    api: "state_changed has exactly one subscriber (AppRoot), which fans out synchronously in a fixed order"
+    not: "multiple systems connecting directly to state_changed and relying on connect() order"
+    adr: docs/architecture/adr-0004-service-composition-signals.md
+    reason: "Godot's connect() order is not a contract; a single subscriber makes ordering and reentrancy enumerable"
+    referenced_by:
+      - docs/architecture/adr-0004-service-composition-signals.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: nav_repeat
+    status: active
+    api: "Input-layer NavRepeater computes nav_steps as a pure function and pushes synthetic InputEventAction once per step"
+    not: "reading InputEvent.echo or letting the engine's GUI repeat generate navigation"
+    adr: docs/architecture/adr-0005-input-context-stack.md
+    reason: "Repeat rate must be identical across keyboard, gamepad and synthetic events and assertable headlessly"
+    referenced_by:
+      - docs/architecture/adr-0005-input-context-stack.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: rng_seed_derivation
+    status: active
+    api: "32-bit lane-separated FNV-1a over (station_id, seed, attempt), producing an int64 seed"
+    not: "String.hash(), global randi(), or seed+1 reroll increments"
+    adr: docs/architecture/adr-0006-deterministic-rng.md
+    reason: "String.hash() is not stable across engine versions; lane separation makes every candidate reproducible"
+    referenced_by:
+      - docs/architecture/adr-0006-deterministic-rng.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: shuffle_algorithm
+    status: active
+    api: "canonical id-sorted order + reverse Fisher-Yates + rejection sampling, all integer-only"
+    not: "Array.shuffle(), randi_range(), or float-weighted sampling"
+    adr: docs/architecture/adr-0006-deterministic-rng.md
+    reason: "Only an explicit algorithm yields the same menu on every platform and frame order"
+    referenced_by:
+      - docs/architecture/adr-0006-deterministic-rng.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: health_threshold_comparison
+    status: active
+    api: "integer cross-multiplication (reachable * DEN vs baseline * NUM) for the 0.9 lower bound"
+    not: "floating-point comparison against 0.9 * opt_value"
+    adr: docs/architecture/adr-0006-deterministic-rng.md
+    reason: "0.9 * 104 is not exactly representable in float; integer comparison removes a platform-dependent boundary"
+    referenced_by:
+      - docs/architecture/adr-0006-deterministic-rng.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: settings_document
+    status: active
+    api: "user://config/settings.json, canonical JSON with integers as decimal strings, temp->backup->primary replace"
+    not: "ConfigFile / user://settings.cfg, write-on-every-change, or storing settings in the career save"
+    adr: docs/architecture/adr-0008-settings-localization.md
+    reason: "Settings are machine-level, must be readable before the first frame, and must survive career deletion"
+    referenced_by:
+      - docs/architecture/adr-0008-settings-localization.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: ui_string_localization
+    status: active
+    api: "every player-visible string is a tr() key; content display_name/description use content.<type>.<id>.<field>"
+    not: "hardcoded Chinese text in scenes, resources or GDScript"
+    adr: docs/architecture/adr-0008-settings-localization.md
+    reason: "Key coverage is assertable in CI; adding a language must not rewrite content records"
+    referenced_by:
+      - docs/architecture/adr-0008-settings-localization.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: cjk_font_fallback
+    status: active
+    api: "built-in Noto Sans SC -> SystemFont list -> ThemeDB.fallback_font, with .import parameters pinned"
+    not: "relying on 4.7 default import settings or MSDF for CJK body text"
+    adr: docs/architecture/adr-0008-settings-localization.md
+    reason: "Missing glyphs degrade to a different-looking glyph instead of tofu; pinned hinting keeps 20 px strokes legible"
+    referenced_by:
+      - docs/architecture/adr-0008-settings-localization.md
+    added: 2026-11-04
+    revised: ""
+
 # Example:
 #
 # api_decisions:
@@ -410,6 +808,61 @@ api_decisions:
 #     added: 2026-03-26
 #     revised: ""
 
+
+  - purpose: settlement_transaction_boundary
+    status: active
+    api: "single pure RefCounted SettlementTransaction built by AppRoot, called only by UIRoot; one SaveSystem.commit per run inside reset_for_state(Menu, result) before the receipt mounts"
+    not: "commit in a run_settled listener, separate wallet and records commits, a second settlement pass"
+    adr: docs/architecture/adr-0007-run-state-settlement-transaction.md
+    reason: "Handoff abandonment must not write; two writers would break the single-writer transaction"
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-settlement-transaction.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: receipt_data_source
+    status: active
+    api: "immutable ReceiptSnapshot built by SettlementTransaction, carrying save_state and abort_code"
+    not: "re-running Settlement.settle or reading live Records / MetaUpgrades from ReceiptScreen"
+    adr: docs/architecture/adr-0007-run-state-settlement-transaction.md
+    reason: "The receipt must show exactly the transaction outcome, including aborted and unsaved states"
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-settlement-transaction.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: run_fault_phase
+    status: active
+    api: "fault.phase = INIT when run_started was never emitted, RUN afterwards; init_failed only means the payload has no RunResult"
+    not: "Faulted implies RUN; inferring the phase from the scene, from init_failed, or from an error-code string"
+    adr: docs/architecture/adr-0007-run-state-settlement-transaction.md
+    reason: "run_id allocation overflow is Faulted before any run exists and must get INIT copy"
+    referenced_by:
+      - docs/architecture/adr-0007-run-state-settlement-transaction.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: audio_cue_dispatch
+    status: active
+    api: "AudioDirector.request(event, payload) / play(cue_id, context) -> CueDecision; decisions live in the pure AudioPolicy RefCounted"
+    not: "direct AudioStreamPlayer.play() from UI or HUD, AudioServer bus-volume mixing, per-cue stream loading at runtime"
+    adr: docs/architecture/adr-0009-audio-playback-pause.md
+    reason: "One admission path is the only way MAX_VOICES, per-priority caps, steals, cooldowns and the cue log stay assertable"
+    referenced_by:
+      - docs/architecture/adr-0009-audio-playback-pause.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: audio_pause_semantics
+    status: active
+    api: "SceneTree.paused plus PROCESS_MODE_ALWAYS on AudioDirector / VoicePoolHost / UiTransitionPlayer; same-frame stop() of every pool voice"
+    not: "PROCESS_MODE_WHEN_PAUSED, engine auto-pause, deferred stop, replay after resume"
+    adr: docs/architecture/adr-0009-audio-playback-pause.md
+    reason: "Audio must observe Paused -> Run while paused; WHEN_PAUSED would miss the resume cue"
+    referenced_by:
+      - docs/architecture/adr-0009-audio-playback-pause.md
+    added: 2026-11-04
+    revised: ""
 
 # ─── FORBIDDEN PATTERNS ──────────────────────────────────────────────────────
 # Architecture anti-patterns explicitly banned by accepted ADRs.
@@ -481,6 +934,111 @@ forbidden_patterns:
     description: "Never expose a subset of validated records; a single ERROR keeps the whole catalog unpublished."
     why: "Downstream systems assume every id resolves; a partial catalog turns a data error into a runtime crash."
     adr: docs/architecture/adr-0001-content-data-format.md
+    added: 2026-11-04
+
+  - pattern: autoload_singleton_coupling
+    status: active
+    description: "No autoload singletons and no service locator / lookup-by-name; every service is constructor-injected by AppRoot."
+    why: "Hidden global lookup makes construction order implicit and prevents isolated tests (ADR-0004 D1-D3)."
+    adr: docs/architecture/adr-0004-service-composition-signals.md
+    added: 2026-11-04
+
+  - pattern: multi_subscriber_state_changed
+    status: active
+    description: "Only AppRoot may connect to state_changed; other systems consume the fixed-order fan-out, never connect directly."
+    why: "connect() order is not a contract; multiple subscribers make same-frame ordering and reentrancy unassertable."
+    adr: docs/architecture/adr-0004-service-composition-signals.md
+    added: 2026-11-04
+
+  - pattern: screen_polls_input_state
+    status: active
+    description: "Screens must not poll Input.is_action_just_pressed() or handle raw input events; they receive actions through ActionSink."
+    why: "Two delivery paths break first-consumer-wins and make the consumed bit inconsistent (ADR-0005 D4)."
+    adr: docs/architecture/adr-0005-input-context-stack.md
+    added: 2026-11-04
+
+  - pattern: global_rng_in_menu_generation
+    status: active
+    description: "Menu generation must not use Array.shuffle(), global randi(), or any unseeded engine RNG."
+    why: "Unseeded/global RNG breaks cross-platform reproducibility of the same (station_id, seed) menu (ADR-0006)."
+    adr: docs/architecture/adr-0006-deterministic-rng.md
+    added: 2026-11-04
+
+  - pattern: float_health_threshold
+    status: active
+    description: "The menu health gate must not compare a float against 0.9 * opt_value; use integer cross-multiplication."
+    why: "Float representation makes the boundary platform-dependent and turns a golden fixture into a permanent red light."
+    adr: docs/architecture/adr-0006-deterministic-rng.md
+    added: 2026-11-04
+
+  - pattern: hardcoded_player_visible_string
+    status: active
+    description: "Player-visible text must go through tr(); content records store translation keys, not Chinese text."
+    why: "Hardcoded text makes translation coverage unassertable and forces a content rewrite when a language is added (ADR-0008)."
+    adr: docs/architecture/adr-0008-settings-localization.md
+    added: 2026-11-04
+
+  - pattern: settings_inside_career_save
+    status: active
+    description: "Never store machine-level settings in the career save or reset them when the career is deleted."
+    why: "Settings must be readable before the first frame and survive career deletion (ADR-0008; save-system rule 20)."
+    adr: docs/architecture/adr-0008-settings-localization.md
+    added: 2026-11-04
+
+  - pattern: second_settlement_writer
+    status: active
+    description: "No system except SettlementTransaction may build or commit the end-of-run payload."
+    why: "Two writers reintroduce the split wallet/records commit ADR-0007 forbids."
+    adr: docs/architecture/adr-0007-run-state-settlement-transaction.md
+    added: 2026-11-04
+
+  - pattern: commit_at_run_settled
+    status: active
+    description: "Do not call prepare_* or SaveSystem.commit from a run_settled listener."
+    why: "run_settled precedes Handoff, where quitting must discard the result without writing."
+    adr: docs/architecture/adr-0007-run-state-settlement-transaction.md
+    added: 2026-11-04
+
+  - pattern: receipt_recomputes_settlement
+    status: active
+    description: "ReceiptScreen must never call Settlement, read RunLog, or recompute totals."
+    why: "A second arithmetic path drifts from the committed transaction and hides failure states."
+    adr: docs/architecture/adr-0007-run-state-settlement-transaction.md
+    added: 2026-11-04
+
+  - pattern: settlement_wallet_write_outside_meta
+    status: active
+    description: "Settlement must not write the wallet; only MetaUpgrades computes progression."
+    why: "Settlement is pure and has no I/O; wallet ownership is singular."
+    adr: docs/architecture/adr-0007-run-state-settlement-transaction.md
+    added: 2026-11-04
+
+  - pattern: fault_phase_collapse
+    status: active
+    description: "Do not infer INIT/RUN from the scene, from init_failed, or from Faulted alone."
+    why: "Only run_started emission distinguishes an entry failure from a post-start fault."
+    adr: docs/architecture/adr-0007-run-state-settlement-transaction.md
+    added: 2026-11-04
+
+  - pattern: audio_player_alloc_on_play
+    status: active
+    description: "Never instantiate or free an AudioStreamPlayer on the playback path; the 10-voice pool and the transition player are built once at boot."
+    why: "Pause must stop a fixed voice set in one frame, and MAX_VOICES becomes unenforceable if nodes are created per request."
+    adr: docs/architecture/adr-0009-audio-playback-pause.md
+    added: 2026-11-04
+
+  - pattern: audio_gain_on_bus
+    status: active
+    description: "Master / SFX / UI bus volume stays 0 dB; cue_volume_db is computed once per voice and only Music is written by ducking."
+    why: "The GDD volume formula already includes bus_offset, master and sfx gain; writing buses too double-attenuates and hides the formula from headless tests."
+    adr: docs/architecture/adr-0009-audio-playback-pause.md
+    added: 2026-11-04
+
+  - pattern: audio_rng_draw
+    status: active
+    description: "src/audio must not call randf/randi/randi_range/Array.shuffle, construct a RandomNumberGenerator, or consume SessionRng."
+    why: "Consuming SessionRng would make run seeds depend on audio event counts, breaking ADR-0006 reproducibility."
+    adr: docs/architecture/adr-0009-audio-playback-pause.md
     added: 2026-11-04
 
 # Example:

@@ -37,33 +37,839 @@
 #   its fields sit two columns past the dash. Quote a value that holds ": ". A
 #   line in any other shape is reported as unsupported layout, with its number.
 
+
 version: 1
-last_updated: ""
+last_updated: "2026-11-04"
 
-requirements: []
+requirements:
+  - id: TR-data-config-001
+    system: data-config
+    gdd: design/gdd/data-config.md
+    requirement: "Four typed Resource catalogs (`DishData`/`UpgradeData`/`StationData`/`BalanceData`) loaded and validated at boot; any failure → `Failed`, no partial load"
+    created: 2026-11-04
+    revised: ""
+    status: active
 
-# --- EXAMPLE ENTRIES (remove when first real entries are added) ---
-#
-# - id: TR-combat-001
-#   system: combat
-#   gdd: design/gdd/combat-system.md
-#   requirement: "Player takes damage from enemies based on attack power minus defence"
-#   created: 2026-03-10
-#   revised: ""
-#   status: active
-#
-# - id: TR-combat-002
-#   system: combat
-#   gdd: design/gdd/combat-system.md
-#   requirement: "Combo window timing is 0.4 seconds between hits"
-#   created: 2026-03-10
-#   revised: "2026-04-01"
-#   status: active
-#
-# - id: TR-combat-003
-#   system: combat
-#   gdd: design/gdd/combat-system.md
-#   requirement: "Old damage formula using raw stats"
-#   created: 2026-03-10
-#   revised: ""
-#   status: "superseded-by: TR-combat-001"
+  - id: TR-data-config-002
+    system: data-config
+    gdd: design/gdd/data-config.md
+    requirement: "Query API `get_dish/get_upgrade/get_station/get_balance` returns immutable records; no runtime mutation"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-data-config-003
+    system: data-config
+    gdd: design/gdd/data-config.md
+    requirement: "`StationData` carries `entry_fee`, `unlock_cost`, `dish_pool`, `cloy_cap`, `turn_budget`, `wave_size`; `UpgradeData` carries `cost`, `cost_growth`, `max_level`, `effect_type`, `effect_value`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-data-config-004
+    system: data-config
+    gdd: design/gdd/data-config.md
+    requirement: "Stable id namespace (`^[a-z][a-z0-9_]*$`, typed prefixes); post-release rename forbidden"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-data-config-005
+    system: data-config
+    gdd: design/gdd/data-config.md
+    requirement: "Boot state machine `Unloaded→Loading→Validating→Ready/Failed`; `Ready` gates every downstream system"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-data-config-006
+    system: data-config
+    gdd: design/gdd/data-config.md
+    requirement: "Records carry translation-key `display_name` (and `UpgradeData.description`) plus optional `Texture2D icon`; keys validated by `DISPLAY_NAME_NOT_A_KEY`, placeholder on missing icon"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-input-001
+    system: input
+    gdd: design/gdd/input.md
+    requirement: "Fixed action set (`ui_up/down/left/right/accept/cancel/pause`, `game_skip_wave`); no system outside input listens to raw events"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-input-002
+    system: input
+    gdd: design/gdd/input.md
+    requirement: "Context state machine `Blocked/Menu/Run/Paused/Modal`; `request_context`/`push_context`/`pop_context` with temporary stack and clear semantics"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-input-003
+    system: input
+    gdd: design/gdd/input.md
+    requirement: "Dual focus: mouse hover and keyboard/gamepad focus recorded and drawn separately"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-input-004
+    system: input
+    gdd: design/gdd/input.md
+    requirement: "Full keyboard/gamepad play; nav repeat delay and stick hysteresis 0.60/0.40"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-input-005
+    system: input
+    gdd: design/gdd/input.md
+    requirement: "Godot 4.7 device handling: identify by event type, never `device == 0`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-input-006
+    system: input
+    gdd: design/gdd/input.md
+    requirement: "`consume_action(action)` for `Blocked` allow-lists; first consumer wins per frame"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-scene-flow-001
+    system: scene-flow
+    gdd: design/gdd/scene-flow.md
+    requirement: "Exactly one top-level state among `Boot/Error/Menu/Run/Paused/Quit`; sole owner of transitions"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-scene-flow-002
+    system: scene-flow
+    gdd: design/gdd/scene-flow.md
+    requirement: "`request_transition(to, payload) -> bool`; per-frame validation, first legal request wins, payload handoff"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-scene-flow-003
+    system: scene-flow
+    gdd: design/gdd/scene-flow.md
+    requirement: "`Boot` waits for data `Ready/Failed`; `Error` cannot enter `Menu`/`Run`; debug reload only"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-scene-flow-004
+    system: scene-flow
+    gdd: design/gdd/scene-flow.md
+    requirement: "Pause freezes run subsystems; resume restores exact state; no turn/settlement advance while paused"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-scene-flow-005
+    system: scene-flow
+    gdd: design/gdd/scene-flow.md
+    requirement: "`state_changed(from,to)` signal; transitions take effect same frame; fades ≤0.2 s are presentation-only"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-save-system-001
+    system: save-system
+    gdd: design/gdd/save-system.md
+    requirement: "Envelope plus `progression`/`unlocks`/`records` namespaces"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-save-system-002
+    system: save-system
+    gdd: design/gdd/save-system.md
+    requirement: "Atomic write order: validate → temp → flush → primary→backup rename → temp→primary rename; failure leaves original intact"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-save-system-003
+    system: save-system
+    gdd: design/gdd/save-system.md
+    requirement: "Six load outcomes + `LoadReport` (`outcome`, reason, warnings, `writable`, `lock_live`)"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-save-system-004
+    system: save-system
+    gdd: design/gdd/save-system.md
+    requirement: "Single-writer lock; live-lock `Blocked` offers only exit/retry; new-career and delete require `lock_live = false`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-save-system-005
+    system: save-system
+    gdd: design/gdd/save-system.md
+    requirement: "One-way migration chain of pure per-version functions; failure → `Blocked`; unknown ids preserved"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-save-system-006
+    system: save-system
+    gdd: design/gdd/save-system.md
+    requirement: "`commit({namespace: value})` atomic transaction; purchase rollback vs settlement deferred-retry"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-save-system-007
+    system: save-system
+    gdd: design/gdd/save-system.md
+    requirement: "Deterministic serialization: sorted map keys, lossless int64, byte-identical round trip excluding `last_saved_at`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-run-flow-001
+    system: run-flow
+    gdd: design/gdd/run-flow.md
+    requirement: "Run lifecycle `Idle/Initializing/Active/Ending/Settling/Handoff/Failed/Faulted`; exactly one `run_id` per run"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-run-flow-002
+    system: run-flow
+    gdd: design/gdd/run-flow.md
+    requirement: "Init order: turns → capacity → menu waves → cloying in one frame; failure → `init_failed`, no `RunResult`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-run-flow-003
+    system: run-flow
+    gdd: design/gdd/run-flow.md
+    requirement: "`submit_action(eat/skip_wave/end_pickup, dish_id)` with fixed validation order and atomic commit; non-final paid skip is rejected as `NO_TURNS` when `turns_remaining = 1` before any turn/advance mutation"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-run-flow-004
+    system: run-flow
+    gdd: design/gdd/run-flow.md
+    requirement: "Only two end reasons (`TIME_EXHAUSTED`, `NO_EATABLE_DISH`); fixed priority; state frozen after `Ending`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-run-flow-005
+    system: run-flow
+    gdd: design/gdd/run-flow.md
+    requirement: "`RunLog` assembled from action-time values; `settle(RunLog)` once; `RunResult` handed off once; `run_settled` is a pre-notification and persistence happens only after the `Run -> Menu` delivery is accepted"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-run-flow-006
+    system: run-flow
+    gdd: design/gdd/run-flow.md
+    requirement: "Signals `run_started/action_committed/run_ended/run_settled/run_faulted/run_discarded`, at most once per `run_id`; `run_faulted.detail` carries `phase in {INIT, RUN}` and `run_id = 0` means allocation failed (never started)"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-run-flow-007
+    system: run-flow
+    gdd: design/gdd/run-flow.md
+    requirement: "Read-only run snapshot for HUD incl. `run_state`, `frozen`, `running_net`, `shortfall`, `action_seq`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-time-and-turns-001
+    system: time-and-turns
+    gdd: design/gdd/time-and-turns.md
+    requirement: "`initialize(turn_budget)` once per run; `INVALID_TURN_BUDGET` on bad input, no clamping"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-time-and-turns-002
+    system: time-and-turns
+    gdd: design/gdd/time-and-turns.md
+    requirement: "`spend_turn()` cost exactly 1; `can_spend_turn()` pure; no overdraft, no refund"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-time-and-turns-003
+    system: time-and-turns
+    gdd: design/gdd/time-and-turns.md
+    requirement: "`is_exhausted()` reports only; end-reason ownership stays in run-flow"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-time-and-turns-004
+    system: time-and-turns
+    gdd: design/gdd/time-and-turns.md
+    requirement: "Budget frozen for the run; changes apply next `initialize`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-stomach-capacity-001
+    system: stomach-capacity
+    gdd: design/gdd/stomach-capacity.md
+    requirement: "`initialize(upgrade_snapshot)` exactly once per run; `end_run(reason)` is the authoritative run boundary on every termination path"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-stomach-capacity-002
+    system: stomach-capacity
+    gdd: design/gdd/stomach-capacity.md
+    requirement: "`capacity_total = C0 + capacity_bonus`, range `[1,999]`; invalid/missing snapshot fails, no default 0"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-stomach-capacity-003
+    system: stomach-capacity
+    gdd: design/gdd/stomach-capacity.md
+    requirement: "`can_fit(e)` / `consume(e)` use integer `effective_satiety`, inclusive boundary, monotonic used capacity"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-stomach-capacity-004
+    system: stomach-capacity
+    gdd: design/gdd/stomach-capacity.md
+    requirement: "No “full” end state; capacity only gates individual dishes"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-stomach-capacity-005
+    system: stomach-capacity
+    gdd: design/gdd/stomach-capacity.md
+    requirement: "Read-only accessors only; no signals, no second counter"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-dish-values-001
+    system: dish-values
+    gdd: design/gdd/dish-values.md
+    requirement: "`unit_value(d) = price/satiety` is the single cross-dish comparison scale; no downstream recomputation"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-dish-values-002
+    system: dish-values
+    gdd: design/gdd/dish-values.md
+    requirement: "Static 12-dish catalog; balance audits (`menu_healthy`, `opt_value`) run in design/CI only"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-dish-values-003
+    system: dish-values
+    gdd: design/gdd/dish-values.md
+    requirement: "No runtime aggregation, optimum solving, or `opt_value` exposure"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-dish-values-004
+    system: dish-values
+    gdd: design/gdd/dish-values.md
+    requirement: "Deterministic `uv_cmp` ordering (unit value desc, id asc)"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-dish-values-005
+    system: dish-values
+    gdd: design/gdd/dish-values.md
+    requirement: "Result-style `QueryError {caller, dish_id, reason}`; no zero/placeholder returns"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-cloying-and-taste-001
+    system: cloying-and-taste
+    gdd: design/gdd/cloying-and-taste.md
+    requirement: "Per-`cloying_group` integer counters reset per run; explicit canonical group order array"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-cloying-and-taste-002
+    system: cloying-and-taste
+    gdd: design/gdd/cloying-and-taste.md
+    requirement: "`effective_satiety = satiety + max(0, min(count, cloy_cap) − floor(resistance))`, computed before increment"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-cloying-and-taste-003
+    system: cloying-and-taste
+    gdd: design/gdd/cloying-and-taste.md
+    requirement: "`酸`/`冰` cleanse decrements the highest other group once; ties by canonical order"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-cloying-and-taste-004
+    system: cloying-and-taste
+    gdd: design/gdd/cloying-and-taste.md
+    requirement: "`initialize(cloying_resistance)` before `run_started`; no persistence in MVP"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-cloying-and-taste-005
+    system: cloying-and-taste
+    gdd: design/gdd/cloying-and-taste.md
+    requirement: "Expose `extra_satiety`, `cleanse_target`, group counts to HUD before selection"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-menu-waves-001
+    system: menu-waves
+    gdd: design/gdd/menu-waves.md
+    requirement: "Deterministic seeded partition; same `(station_id, seed)` identical across platforms"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-menu-waves-002
+    system: menu-waves
+    gdd: design/gdd/menu-waves.md
+    requirement: "`visible_dishes` / `preview_dishes`; preview capped at `wave_size−1`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-menu-waves-003
+    system: menu-waves
+    gdd: design/gdd/menu-waves.md
+    requirement: "`advance_cost` 0 for empty/final wave, 1 otherwise; `end_pickup` free; non-final paid skip rejected at `turns_remaining = 1` with `NO_TURNS`"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-menu-waves-004
+    system: menu-waves
+    gdd: design/gdd/menu-waves.md
+    requirement: "`wave_reachable_opt` wave-reset DP: 924 carry states, per-dish turn cost, cloying-ignoring upper bound, ≤1e4 nodes, `DEGRADED` fallback; baseline `opt_value` runs at runtime, memoized by `(pool_fingerprint, C0, T)`, and must equal the build-time CSV"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-menu-waves-005
+    system: menu-waves
+    gdd: design/gdd/menu-waves.md
+    requirement: "`wave_healthy` lower bound `0.9 × opt_value`; up to 20 rerolls then best + warning"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-menu-waves-006
+    system: menu-waves
+    gdd: design/gdd/menu-waves.md
+    requirement: "`pool_override` accepted by initialize and health check"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-settlement-001
+    system: settlement
+    gdd: design/gdd/settlement-and-entry-fee.md
+    requirement: "`settle(RunLog)` once per `run_id`; duplicate returns `ALREADY_SETTLED`; `SettlementTransaction` additionally rejects a repeated application by `run_id + digest`, the two gates do not substitute for each other"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-settlement-002
+    system: settlement
+    gdd: design/gdd/settlement-and-entry-fee.md
+    requirement: "`total_value` int64 sum; `net_profit = total_value − entry_fee`; `broke_even` derived; no clamping"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-settlement-003
+    system: settlement
+    gdd: design/gdd/settlement-and-entry-fee.md
+    requirement: "`RunResult` schema: rows in eaten order, `return_ratio` null when fee 0, `upgrade_snapshot` passthrough"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-settlement-004
+    system: settlement
+    gdd: design/gdd/settlement-and-entry-fee.md
+    requirement: "Pure function: no I/O, clock, or RNG; checked int64 overflow returns error"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-settlement-005
+    system: settlement
+    gdd: design/gdd/settlement-and-entry-fee.md
+    requirement: "Shared `running_net(k)` / `shortfall(k)` definitions for HUD; single summation source"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-meta-upgrades-001
+    system: meta-upgrades
+    gdd: design/gdd/meta-upgrades.md
+    requirement: "Wallet is int64 with exactly three flows (run net, purchase, unlock spend); negative allowed; checked overflow"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-meta-upgrades-002
+    system: meta-upgrades
+    gdd: design/gdd/meta-upgrades.md
+    requirement: "Exponential `upgrade_price` from `cost`/`cost_growth`; linear effect per level; hard `max_level`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-meta-upgrades-003
+    system: meta-upgrades
+    gdd: design/gdd/meta-upgrades.md
+    requirement: "`resolve_upgrade_snapshot()` returns parsed bonuses plus frozen `levels` copy"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-meta-upgrades-004
+    system: meta-upgrades
+    gdd: design/gdd/meta-upgrades.md
+    requirement: "Purchase transaction: validate → memory apply → `save.commit` → success; rollback on write failure"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-meta-upgrades-005
+    system: meta-upgrades
+    gdd: design/gdd/meta-upgrades.md
+    requirement: "`prepare_run_result` computes progression only; orchestrator commits once; `WALLET_OVERFLOW` omits the progression key while records still commit; write failure returns `APPLIED_UNSAVED` and marks both namespaces dirty"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-meta-upgrades-006
+    system: meta-upgrades
+    gdd: design/gdd/meta-upgrades.md
+    requirement: "`spend(amount, reason, extra)` generic wallet transaction; `extra` merged into the same commit"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-meta-upgrades-007
+    system: meta-upgrades
+    gdd: design/gdd/meta-upgrades.md
+    requirement: "`menu_vision_useful_max = ceil((wave_size−1)/effect_value)`; no no-effect level sold"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-unlocks-001
+    system: unlocks
+    gdd: design/gdd/unlocks-and-stations.md
+    requirement: "Availability derived: `unlock_cost = 0` or id in `unlocks.stations`; dishes follow the station"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-unlocks-002
+    system: unlocks
+    gdd: design/gdd/unlocks-and-stations.md
+    requirement: "Normalize/backfill free stations and dishes; empty set → `NoPlayableStation`; never delete ids"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-unlocks-003
+    system: unlocks
+    gdd: design/gdd/unlocks-and-stations.md
+    requirement: "Unlock transaction via `meta-upgrades.spend` with `{unlocks}` merged into the same commit"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-unlocks-004
+    system: unlocks
+    gdd: design/gdd/unlocks-and-stations.md
+    requirement: "Fixed validation order incl. `NOT_IN_MENU`, `BUSY`, `INSUFFICIENT_FUNDS`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-unlocks-005
+    system: unlocks
+    gdd: design/gdd/unlocks-and-stations.md
+    requirement: "Catalog/progress/effective-unlock read APIs; id-sorted output"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-records-001
+    system: records
+    gdd: design/gdd/records-and-milestones.md
+    requirement: "`records` namespace schema: per-station best, career aggregates, earned milestones, `completed_at`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-records-002
+    system: records
+    gdd: design/gdd/records-and-milestones.md
+    requirement: "`prepare_run(RunResult)` once per `run_id`; consistency assertions; any error aborts the whole settlement transaction (no other namespace commits); `ALREADY_APPLIED` triggers no commit"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-records-003
+    system: records
+    gdd: design/gdd/records-and-milestones.md
+    requirement: "Per-station ranking by `net_profit`; strict improvement only; ties keep the old record"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-records-004
+    system: records
+    gdd: design/gdd/records-and-milestones.md
+    requirement: "Separate read-only `MilestoneData` loader with four metrics; monotonic lock-in"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-records-005
+    system: records
+    gdd: design/gdd/records-and-milestones.md
+    requirement: "UTC timestamps display-only; no logic reads the clock"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-records-006
+    system: records
+    gdd: design/gdd/records-and-milestones.md
+    requirement: "Signals `record_broken`, `milestone_earned`, `career_completed`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-in-game-hud-001
+    system: in-game-hud
+    gdd: design/gdd/in-game-hud.md
+    requirement: "Read-only projection; one immutable `HudFrame` per event; no polling between frames"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-in-game-hud-002
+    system: in-game-hud
+    gdd: design/gdd/in-game-hud.md
+    requirement: "1280×720 `canvas_items`/expand layout: top bar, card grid, right rail, detail row"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-in-game-hud-003
+    system: in-game-hud
+    gdd: design/gdd/in-game-hud.md
+    requirement: "Card composed from dish/cloying/capacity/wave providers; no sorting, recommendation, or `unit_value`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-in-game-hud-004
+    system: in-game-hud
+    gdd: design/gdd/in-game-hud.md
+    requirement: "Focus resolution and `REJECTED(reason)` feedback; non-eatable cards remain focusable"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-in-game-hud-005
+    system: in-game-hud
+    gdd: design/gdd/in-game-hud.md
+    requirement: "Fixed number formats; color always backed by text/symbol"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-in-game-hud-006
+    system: in-game-hud
+    gdd: design/gdd/in-game-hud.md
+    requirement: "`get_anchor_rect(anchor_id)` and three protected rects for onboarding"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-ui-flow-001
+    system: ui-flow
+    gdd: design/gdd/ui-flow.md
+    requirement: "Fixed screen inventory; UI stack max depth 2, modal stack max depth 2"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-ui-flow-002
+    system: ui-flow
+    gdd: design/gdd/ui-flow.md
+    requirement: "Deterministic `back_target` priority; forced `Blocked` modal ignores `ui_cancel`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-ui-flow-003
+    system: ui-flow
+    gdd: design/gdd/ui-flow.md
+    requirement: "Focus order per screen, `initial_focus`, `focus_restore`; at 125/150% text scale the same-frame reflow keeps focus by id and never clips the focus ring"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-ui-flow-004
+    system: ui-flow
+    gdd: design/gdd/ui-flow.md
+    requirement: "Receipt orchestration: the transaction runs inside `UIRoot.reset_for_state(Menu, RunResult)` before the receipt mounts; `prepare_run` -> `prepare_run_result` -> one `save.commit`; receipt opens same frame; a fatal records error means zero commits plus `settlement_aborted`"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-ui-flow-005
+    system: ui-flow
+    gdd: design/gdd/ui-flow.md
+    requirement: "Lock-first `Blocked` exits and `retry_load` path; load-report branching"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-ui-flow-006
+    system: ui-flow
+    gdd: design/gdd/ui-flow.md
+    requirement: "Machine-level settings model at `user://config/settings.json`: volumes, mute, text scale 100/125/150, reduce motion, HUD opacity; immediate effect, flush on modal close/quit, failure keeps memory values"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-ui-flow-007
+    system: ui-flow
+    gdd: design/gdd/ui-flow.md
+    requirement: "Semantic events for audio: `ui_button_activated`, `number_roll_*`, `receipt_closed`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-audio-feedback-001
+    system: audio-feedback
+    gdd: design/gdd/audio-feedback.md
+    requirement: "Event→cue mapping; fixed cue catalog published as a typed Resource validated by DataConfig; same-frame dispatch"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-audio-feedback-002
+    system: audio-feedback
+    gdd: design/gdd/audio-feedback.md
+    requirement: "Voice pool max 10 with per-priority caps, preemption rules, 50 ms guard; per-priority cap is a hard ceiling after any steal"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-audio-feedback-003
+    system: audio-feedback
+    gdd: design/gdd/audio-feedback.md
+    requirement: "Deterministic variant round-robin; per-cue cooldowns; per-`run_id` dedupe; MVP pitch jitter disabled, any future jitter derives from SeedHash only"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-audio-feedback-004
+    system: audio-feedback
+    gdd: design/gdd/audio-feedback.md
+    requirement: "`cue_volume_db = clamp(base + bus + master + sfx, -80, 0)`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-audio-feedback-005
+    system: audio-feedback
+    gdd: design/gdd/audio-feedback.md
+    requirement: "Pause silences and clears pending outcome; mute/missing-device are drop semantics; `sfx.flow.*` runs out-of-pool so the pause cue can start on the freeze frame"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-audio-feedback-006
+    system: audio-feedback
+    gdd: design/gdd/audio-feedback.md
+    requirement: "Cue request log (ring buffer 10k) with closed reason vocabulary; `priority` stays in the vocabulary but is not emitted in v1"
+    created: 2026-11-04
+    revised: "2026-11-04"
+    status: active
+
+  - id: TR-audio-feedback-007
+    system: audio-feedback
+    gdd: design/gdd/audio-feedback.md
+    requirement: "Content defects (invalid cue catalog or event map) fail boot through the data gate; playback failures degrade silently at runtime"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-first-run-onboarding-001
+    system: first-run-onboarding
+    gdd: design/gdd/first-run-onboarding.md
+    requirement: "Runs only when `RunConfig.is_first_run`; preset `pool_override` six dishes and `entry_fee_override = 40`"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-first-run-onboarding-002
+    system: first-run-onboarding
+    gdd: design/gdd/first-run-onboarding.md
+    requirement: "Fixed B0–B4 beat sequence; one beat per input; modal beats use `Blocked` allow-list"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-first-run-onboarding-003
+    system: first-run-onboarding
+    gdd: design/gdd/first-run-onboarding.md
+    requirement: "Anchors from HUD `get_anchor_rect`; bubbles never cover the three protected rects"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-first-run-onboarding-004
+    system: first-run-onboarding
+    gdd: design/gdd/first-run-onboarding.md
+    requirement: "`FirstRunExplanation` payload for the receipt; no persistence; `onboarding_finished` once per run"
+    created: 2026-11-04
+    revised: ""
+    status: active
+
+  - id: TR-first-run-onboarding-005
+    system: first-run-onboarding
+    gdd: design/gdd/first-run-onboarding.md
+    requirement: "Degradation order for missing preset/anchors/unit values; never blocks the run"
+    created: 2026-11-04
+    revised: ""
+    status: active
