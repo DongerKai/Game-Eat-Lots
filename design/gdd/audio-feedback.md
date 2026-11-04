@@ -380,7 +380,7 @@ The `duck_db` formula is defined as:
 | 结算与入场费 | 硬（事件契约）；产品意义上软 | 订阅 `broke_even`、`loss`（`settlement_started` 由界面流程在收据打开时发出）；只读事件语义，不读 `RunResult`、不重算 `net_profit` / `broke_even` | GDD 已写（`design/gdd/settlement-and-entry-fee.md`） |
 | 场景与流程管理 | 硬（状态契约）；产品意义上软 | 顶级状态转移（`Boot / Error / Menu / Run / Paused / Quit`）与 `state_changed(from, to)` 信号；驱动 `Ready` / `Frozen` / `Shutdown` 与 `flow.*` cue | GDD 已写（`design/gdd/scene-flow.md`） |
 | 纪录与里程碑 | 硬（事件契约） | 订阅 `record_broken` / `milestone_earned` / `career_completed` | GDD 已写（`design/gdd/records-and-milestones.md`） |
-| 数据配置 | 硬（数据门） | cue 目录是 `DataConfig` 的第六个清单（`res://data/audio/cue_catalog.tres`）：与其它记录同一次校验、同一次发布，任一错误整份不发布、启动期 `Boot → Error`；本系统经只读适配器访问，不自行扫描或加载文件（ADR-0009 D7/D8） | GDD 已写（`design/gdd/data-config.md`）；其清单表尚未列入 audio，缺口归该文件的复审 |
+| 数据配置 | 硬（数据门） | cue 目录是 `DataConfig` 的第六个清单（`res://data/audio/cue_catalog.tres`）：与其它记录同一次校验、同一次发布，任一错误整份不发布、启动期 `Boot → Error`；本系统经只读适配器访问，不自行扫描或加载文件（ADR-0009 D7/D8） | GDD 已写（`design/gdd/data-config.md`）；其清单表已列入 audio（2026-11-04 机械同步） |
 | 声音规范（audio-director / sound-designer，非代码系统） | 硬（内容） | cue → 音频流与变体、`base_db`、时长、录音素材；本系统只消费映射 | **未建立**（尚无 `design/audio/` 或 sound bible；见 Open Question 2） |
 
 **下游依赖方（它们把事件交给本系统，或消费本系统的行为）：**
@@ -408,8 +408,8 @@ The `duck_db` formula is defined as:
 **双向一致核对（2026-11-04 复审）：**
 
 - 上游四份 GDD（`run-flow.md`、`settlement-and-entry-fee.md`、`scene-flow.md`、`records-and-milestones.md`）与下游两份（`in-game-hud.md`、`ui-flow.md`）均已写出，并在各自的依赖 / 交叉引用表中列出「音效反馈」、采纳本文件的事件契约（含 `settlement_started` / `settlement_aborted` / `receipt_closed` / record 三信号）。`run-flow.md` 已注明 `run_settled` 不产生独立 cue。
-- `data-config.md` 尚未把 cue 目录写进它的清单表：本文件按 ADR-0009 D8 把它记为第六个清单并作为硬数据门，缺口转给该文件的复审（本文件不改外部文件）。
-- `systems-index.md` 第 17 行当前为 `In Review`，依赖已含「数据配置（cue 目录）」；索引与范围信号的编辑不在本文件范围内。
+- `data-config.md` 已按 ADR-0009 D8 把 cue 目录写进清单表并作为硬数据门（2026-11-04 机械同步；该文件的复审判定另行记录）。
+- `systems-index.md` 中音效反馈为 `Approved`，依赖已含「数据配置（cue 目录）」；索引与范围信号的编辑不在本文件范围内。
 - **W10（同层回路）**：界面流程 ⇄ 音效反馈 是同一 `Presentation` 层内的事件 / 设置回路——界面流程发语义事件并拥有音频设置，音效反馈只消费事件、不反向驱动界面流程状态，因此不是跨层循环依赖；索引 §Circular Dependencies 已按此改写，无需再改。
 
 ## Visual/Audio Requirements

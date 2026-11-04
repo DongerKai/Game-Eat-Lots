@@ -54,10 +54,10 @@ Proposed
 
 | Field | Value |
 |-------|-------|
-| **Depends On** | ADR-0003（D4 模态栈深度 2 与 `_modal_context_depth` 配对断言；D5 焦点由显式邻居解析、输入只提供重复节奏；D9 `ui_accept` / `ui_cancel` 在 `_input` 阶段被消费并 `set_input_as_handled()`）；ADR-0004（`InputRouter` 由组合根构造；`scene_changed` 扇出前已完成 `request_context`；`ui_pause` 由 `SceneFlow` 独占轮询） |
+| **Depends On** | None |
 | **Enables** | ADR-0003 的全部模态 story（无同值压栈裁定则删除生涯的深度 2 无法实现）；界面流程、局内 HUD、首局引导的输入 story |
 | **Blocks** | 任何需要「弹窗里再弹窗」或「引导压住局内输入」的 story；`QQ-06` / `QQ-13` 未闭合则 `UIRoot.handle_action` 的调用方不存在 |
-| **Ordering Note** | ADR-0003 D9 写的是「输入模块把**已消费**的动作交给 `UIRoot.handle_action`」。本 ADR 把它精确化为「先投递，由返回值为真来置位消费位」——两者语义等价（每次按下只送一次、界面不碰原始事件），差别只在于消费位对 `is_action_just_pressed` 的读者可见，而这正是 `QQ-13` 需要的。若 Required ADRs 重新编号，以文件名 `ADR-0005` 为稳定引用 |
+| **Ordering Note** | ADR-0003 D9 写的是「输入模块把**已消费**的动作交给 `UIRoot.handle_action`」。本 ADR 把它精确化为「先投递，由返回值为真来置位消费位」——两者语义等价（每次按下只送一次、界面不碰原始事件），差别只在于消费位对 `is_action_just_pressed` 的读者可见，而这正是 `QQ-13` 需要的。若 Required ADRs 重新编号，以文件名 `ADR-0005` 为稳定引用。本 ADR 无前置依赖，与 ADR-0003 / ADR-0004 是契约级共同设计：本 ADR 固定输入栈语义与 `ActionSink` 投递点；ADR-0003 消费 `UIRoot.handle_action`，ADR-0004 由组合根构造 `InputRouter`。依赖边只记在 ADR-0003 → ADR-0005 与 ADR-0004 → ADR-0005，拓扑序为 0001 → 0002 → 0005 → 0003 → 0004 → 0006..0009 |
 
 ## Context
 

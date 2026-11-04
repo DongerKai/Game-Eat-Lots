@@ -935,3 +935,29 @@ Approval stands. Post-approval registry sync (`e1b4f22`) touched only menu-waves
 Reviewed-Content-Hash: design/gdd/audio-feedback.md 0d6aad0b163bffe972683c0b41db50c8ef468dd3
 Reviewed-Content-Hash: design/registry/entities.yaml 02f5c072fc535530c710fd71d77d31e2dce021ed
 Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+
+---
+
+## Re-stamp — 2026-11-04 (cue-catalog dependency note)
+
+Approval stands. The only post-approval change to this GDD is the 数据配置
+dependency status text in two places (Dependencies table line ~135 and the
+cross-system table line ~383): from "其清单表尚未列入 audio，缺口归该文件的复审"
+to "其清单表已列入 audio（2026-11-04 机械同步）", plus the Cross-References
+status for 数据配置 from "In Review" to "Approved". The dependency itself,
+its 硬 rating, the cue-directory contract and every rule, formula and
+acceptance criterion are byte-identical to the approved content; this edit
+closes the finding the approval recorded rather than changing a decision.
+
+The referenced sync is now verified on the other side: `data-config.md` Rule 11
+loads `res://data/audio/cue_catalog.tres` as the sixth boot-gate manifest,
+`valid(D)` ends in `cueValid(C_cue)`, AC 33–35 cover the Ready path, bad rules
+and missing/wrong-type files, and that document has been re-approved in
+`data-config-review-log.md` (2026-11-04, 0 blocking). ADR-0001 §2 lists the
+same six manifests and ADR-0009 D7/D8 owns the eight `AUDIO_CUE_*` rules.
+
+Reviewed-Content-Hash: design/gdd/audio-feedback.md b02b3fa05db215dff9f4882849161e7651506ef4
+Reviewed-Content-Hash: design/registry/entities.yaml 02f5c072fc535530c710fd71d77d31e2dce021ed
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/data-config.md cd42141a823868fc47650210cb108c0ae69259a0
+Reviewed-Content-Hash: design/gdd/systems-index.md 1119e17f51ee38b2b6fdb56db5d6301d6db94f47

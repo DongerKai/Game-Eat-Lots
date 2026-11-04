@@ -280,7 +280,7 @@ res://data/audio/cue_catalog.tres      # AudioCueCatalogResource
 const CUE_CATALOG := "res://data/audio/cue_catalog.tres"
 ```
 
-它进入与其余五个清单**完全相同**的 `Loading → Validating → Ready/Failed` 流程：`Loading` 阶段一次性 `ResourceLoader.load()`（同步，ADR-0004 D4 禁止启动期异步），`Validating` 阶段跑 D7 的八条规则（作为现有第 6 阶段的子阶段 6c），任 `ERROR` → 整份 `DataConfig` 停在 `Failed`，**不发布任何部分**。发布后只读：
+它进入与其余五个清单**完全相同**的 `Loading → Validating → Ready/Failed` 流程：`Loading` 阶段一次性 `ResourceLoader.load()`（同步，ADR-0004 D4 禁止启动期异步），`Validating` 阶段跑 D7 的八条规则（作为发布阶段之前的独立子阶段 5b），任 `ERROR` → 整份 `DataConfig` 停在 `Failed`，**不发布任何部分**。发布后只读：
 
 ```gdscript
 DataConfig.get_cue(id: StringName) -> DataResult      # value = AudioCueData
@@ -583,6 +583,19 @@ Godot 4 提供的多声部播放器，理论上一个节点播全部。但它的
 - `design/gdd/scene-flow.md` — 六个顶层状态、`state_changed(from, to)`、暂停冻结、无焦点自动暂停、过渡不承载状态。
 - `design/gdd/run-flow.md` — `run_started(run_id, station_id, seed)`、`action_committed`、`run_ended` / `run_faulted` / `run_discarded`；`run_settled` 不映射 cue；`run_seed` 来源。
 - `design/gdd/time-and-turns.md`、`design/gdd/menu-waves.md` — 无独立音频信号；音频只经上述事件派生。
+
+## GDD Requirements Addressed
+
+| GDD System | Requirement | How This ADR Addresses It |
+|---|---|---|
+| `audio-feedback.md` | TR-audio-feedback-001：事件→cue 映射；固定 cue 目录；同帧派发 | D1（`AppRoot` 扇出第 4 步直接调用）、D7（`CueMap` 静态映射 + 目录）、D8（目录同帧可用）、D12（每请求一条日志） |
+| `audio-feedback.md` | TR-audio-feedback-002：10 voice；1/3/3/3；抢占；50 ms 守卫 | D5（九步准入、硬顶守卫）、D6（抢占即时停止）、D13（`RecordingSink` 可穷举） |
+| `audio-feedback.md` | TR-audio-feedback-003：确定性轮转；冷却；每 `run_id` 去重 | D11（`play_index`）、D5 第 5/6 步（`dedupe` / `cooldown`）、D7 字段 |
+| `audio-feedback.md` | TR-audio-feedback-004：音量公式与钳制 | D9（voice 上一次计算；总线 0 dB）、D2（无双重衰减）、D12（日志 `volume_db`） |
+| `audio-feedback.md` | TR-audio-feedback-005：暂停静默；清 `pending_outcome`；mute/无设备 drop | D3（同帧 0 ms 停池）、D4（唯一转场例外）、D9（mute 立即静音）、D5 第 2/3/4 步 |
+| `audio-feedback.md` | TR-audio-feedback-006：1 万条日志；封闭词表 | D12（字段、容量、枚举、额外只读视图） |
+| `audio-feedback.md` | TR-audio-feedback-007：内容缺陷启动期阻断；运行期播放失败静默降级 | D7（目录与 `CueMap` 校验）、D8（`DATA_FAILED` 启动门）、D14（运行期降级） |
+| `ui-flow.md` | TR-ui-flow-007：音频语义事件 | D7 `CueMap` 的事件侧；`ui_button_activated` / `number_roll_*` / `receipt_closed` 由 UI 发出，音频只消费 |
 
 ## TR Coverage
 

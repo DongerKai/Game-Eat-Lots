@@ -672,3 +672,141 @@ Reviewed-Content-Hash: design/gdd/audio-feedback.md 8ad91f894b044ae735d9c55d1360
 Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 2ef73066ae97ea1591a4ebaaeba6d4a97dcf4955
 Reviewed-Content-Hash: design/gdd/systems-index.md 63d73495be76b5b37ed9bac50452c07ef281d41a
 ```
+
+---
+
+## Review — 2026-11-04 — Verdict: APPROVED
+
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean mode — Phase 3b skipped)
+Blocking items: 0 | Recommended: 4
+Prior verdict resolved: Round 3 approval; this round re-reviews the cue-catalog
+sync only (mechanical remediation of ADR-0001's sixth manifest / ADR-0009 D7-D8).
+
+### Change Under Review
+
+The document gained the audio cue catalog as a load-time manifest: Summary,
+Rule 2, Rule 9 APIs, new Rule 11, a `cueValid(C_cue)` term in `valid(D)`, the
+`C_cue` / `cueValid` variables, three edge cases, the 音效反馈 dependency row in
+both the narrative and the table, the Visual/Audio note, the Cross-References
+note, the AC preamble and AC 33–35. Nothing else was touched; no balance value
+changed.
+
+### Required Before Implementation
+
+None.
+
+### Findings
+
+1. **Ordinal numbering — fixed during this review.** The sync first called the
+   audio cue catalog "第五条由本系统加载的清单" (Rule 2) and "第五条本系统清单"
+   (Rule 11 heading), while `adr-0001` §2, `adr-0009` D4/D8 and
+   `audio-feedback.md` all call it the **第六个清单** (milestone is fifth in the
+   ADR manifest table). A reader reconciling the GDD with the ADR would have
+   found two different "fifth manifests". Corrected to
+   "启动门的第六条清单、也是本系统自己加载的五份清单之一", with the milestone
+   catalog explicitly placed at the fifth slot and outside this schema.
+
+2. **Rule delegation is faithful.** `cueValid(C)` is defined as "目录无
+   `AUDIO_CUE_*` ERROR" and the document states it does not restate field
+   semantics. The count matches ADR-0009 D7 exactly: schema, duplicate id,
+   unknown bus, bad range, empty streams, missing stream, zero/!= expected
+   duration, priority — eight rules, all `ERROR`, all fatal to the whole
+   publication.
+
+3. **Formula placement is correct.** `valid(D)` now ends in
+   `∧ cueValid(C_cue)`; `C_cue` and `cueValid` are both declared in the
+   Variables table with source `data file` / `calculated`. A literal
+   implementation of the formula has every symbol it needs.
+
+4. **Failure semantics are consistent with the boot gate.** Cascading failure
+   ("任一 `ERROR` 即整体 `Failed`，不发布任何部分") matches Rule 1 and AC 17;
+   missing / wrong-type catalog reuses `CATALOG_FILE_MISSING` /
+   `CATALOG_WRONG_TYPE`, both of which exist in ADR-0001 §5's diagnostic table.
+   Runtime playback failure is correctly declared out of scope and routed to
+   the audio system's silent degradation (ADR-0009 D14).
+
+5. **Bidirectional dependency is recorded.** 音效反馈 appears as a 硬 downstream
+   consumer in both the Dependencies narrative (line ~199) and the table
+   (line ~200), with `AudioCatalogView` named as the read-only adapter;
+   `audio-feedback.md` already lists 数据配置 as 硬 and points back to this
+   document. Upstream is still "无", with an explicit note that the cue schema
+   comes from ADR-0009 rather than from a GDD dependency — so no new edge and
+   no new cycle.
+
+6. **Acceptance criteria are executable and scoped.** AC 33 covers the Ready
+   path plus `get_cue` / `has_cue` / `cue_catalog()`; AC 34 covers four bad-rule
+   fixtures and repeats the all-or-nothing assertion; AC 35 covers missing and
+   wrong-type files. The AC preamble excludes 33–35 from the default-fixture
+   rule, so earlier criteria remain independently runnable.
+
+### Recommended Revisions
+
+1. `valid(D)` now consumes a second input. Renaming the predicate to
+   `valid(D, C_cue)` (or `valid(content)`) would keep the signature and the
+   prose "记录集合合法性" aligned; today the extra argument is explained only
+   in the Variables table.
+2. AC 34 samples four of the eight rules. ADR-0009's test plan mandates one
+   fixture per rule, so coverage is not lost project-wide; saying "至少" in
+   AC 34 (or pointing to ADR-0009's fixture list) would prevent a QA reader
+   from assuming four is the complete set.
+3. `cue_catalog()` does not restate its `READY`-only precondition in Rule 9;
+   the ADR does. One clause would close the gap.
+4. The registry's one-line DataConfig interface summary
+   (`architecture.yaml:105`) lists `get_cue` but omits `has_cue` /
+   `cue_catalog()`, which the detailed entries (`:328`, `:504`) do include.
+   Registry wording only; no design impact.
+
+### Specialist Disagreements
+
+None — lean mode.
+
+### Completeness
+
+`gdd-structure-check.sh` reports all six required sections present; Player
+Fantasy and Tuning Knobs remain absent (optional at this tier, unchanged from
+round 3). Acceptance criteria now run 1–35 with the pre-existing duplicate
+"23" label carried forward unchanged; the review does not renumber it because
+renumbering would break external citations, and both entries are independently
+identifiable by content.
+
+### Dependency Graph
+
+No edge added. 数据配置 → 音效反馈 is a read-only consumer edge already
+recorded on both sides; 数据配置 still has zero upstream GDD dependencies.
+`adr-dep-graph.sh` reports no `CYCLE` and the order
+`0001, 0002, 0005, 0003, 0004, 0008, 0006, 0007, 0009` is unchanged by this
+edit.
+
+### Registry Values
+
+`registry.sh validate`: entities 79, TR 104, architecture 83, 0 problems.
+`get_cue` / `has_cue` / `cue_catalog()` already exist in `architecture.yaml`
+(lines 105, 328, 504), and `TR-audio-feedback-001/007` already attribute the
+sixth-manifest gate to ADR-0009; no registry edit was needed for this sync.
+
+### Verdict Rationale
+
+The sync is additive and defers field semantics to the ADR that owns them,
+which is the correct division: this GDD owns execution order, aggregation and
+all-or-nothing publication. The one real defect found — the fifth/sixth
+ordinal contradiction — was a wording error introduced by the sync itself and
+is now fixed in all three places it appeared. Formula, edge cases, dependency
+table, cross-reference and ACs agree with `adr-0001` §2/§5b, `adr-0009` D7/D8
+and `audio-feedback.md`. The four recommendations are precision items, not
+implementability or testability defects. Approved; the index row returns to
+`Approved` and the approved count to 18.
+
+---
+
+Receipt at stamp time:
+```
+Reviewed-Content-Hash: design/gdd/data-config.md cd42141a823868fc47650210cb108c0ae69259a0
+Reviewed-Content-Hash: design/registry/entities.yaml 02f5c072fc535530c710fd71d77d31e2dce021ed
+Reviewed-Content-Hash: docs/registry/architecture.yaml 57e780c48f452224903dcff5c053973437146a74
+Reviewed-Content-Hash: design/gdd/audio-feedback.md b02b3fa05db215dff9f4882849161e7651506ef4
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 7cb99488fee8beeba202523848adecd3c06c2c7c
+Reviewed-Content-Hash: design/gdd/scene-flow.md 07753accfc002be7257cbcdd17323c73c2b6845a
+Reviewed-Content-Hash: design/gdd/systems-index.md 1119e17f51ee38b2b6fdb56db5d6301d6db94f47
+```

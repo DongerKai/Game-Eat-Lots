@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 > **谁可以把状态改为 `Accepted`：用户，或 `technical-director` 在用户明确确认后。
 > 其他 agent 与任何 skill 都不能自行设置。** 引用 `Proposed` ADR 的 story 会被置为
@@ -24,7 +24,7 @@ Proposed
 
 ## Summary
 
-数据配置是《回本》唯一的数值来源，也是启动时唯一必须先通过的门：所有菜品、升级、档口、平衡与里程碑数值都必须来自可校验的数据记录，任何一条不合法都不能进入游戏。本 ADR 决定用带类型的 Godot `Resource`（`.tres`）加显式清单资源作为唯一内容格式，由 `DataConfig` 在启动时全有或全无地加载与校验，里程碑目录由「纪录与里程碑」自带的只读加载器并入同一道启动门。
+数据配置是《回本》唯一的数值来源，也是启动时唯一必须先通过的门：所有菜品、升级、档口、平衡、里程碑与音频 cue 数值都必须来自可校验的数据记录，任何一条不合法都不能进入游戏。本 ADR 决定用带类型的 Godot `Resource`（`.tres`）加显式清单资源作为唯一内容格式，由 `DataConfig` 在启动时全有或全无地加载与校验，里程碑目录由「纪录与里程碑」自带的只读加载器并入同一道启动门，音频 cue 目录作为第六个清单由 `DataConfig` 自己加载（ADR-0009）。
 
 ## Engine Compatibility
 
@@ -65,6 +65,8 @@ Proposed
 
 - 全部 18 个已设计系统的 GDD 为 Approved；`data-config.md` 明确了四类记录
   （`DishData` / `UpgradeData` / `StationData` / `BalanceData`）及字段与校验规则。
+- ADR-0009 追加 `AudioCueCatalogResource` 作为第六个清单，schema 与
+  `AUDIO_CUE_*` 规则归其 D7，加载与发布归本 ADR 的同一道启动门。
 - `records-and-milestones.md` 的 OQ2 已定：`MilestoneData` 不进入数据配置 schema，
   由纪录系统自带只读加载器提供，并与数据配置的 `Ready` 门并列。
 - `architecture.md` v1 的启动顺序是 `DataConfig.load()` → `ready` → `Save.load()`
@@ -84,6 +86,7 @@ Proposed
 ### Requirements
 
 - 必须支持四类记录加里程碑目录，字段与取值范围与 GDD 一致。
+- 必须把音频 cue 目录作为第六个清单并入同一道启动门（ADR-0009 D8）。
 - 必须支持稳定 id、类型前缀、发布后不可改名。
 - 必须在启动时完成结构、字段、引用、双向一致性与环检测，并输出每一条违反项的
   文件、记录 id、字段名、期望值与实际值。
@@ -97,7 +100,7 @@ Proposed
 
 ### 1. 记录格式：纯类型化 `Resource`，不做运行时 JSON/CSV 解析
 
-五类记录都是 `Resource` 子类，一条记录一个 `.tres`：
+六类记录都是 `Resource` 子类；除音频 cue 外，一条记录一个 `.tres`：
 
 | 记录 | 基类 | 归属 | 文件位置 |
 |---|---|---|---|
@@ -106,6 +109,11 @@ Proposed
 | `StationData` | `ContentRecord` | Foundation / 数据配置 | `res://data/station/*.tres` |
 | `BalanceData` | `Resource` | Foundation / 数据配置 | `res://data/balance.tres` |
 | `MilestoneData` | `ContentRecord` | Feature / 纪录与里程碑 | `res://data/milestone/*.tres` |
+| `AudioCueData` | `Resource` | Presentation / 音效反馈 | `res://data/audio/cue_catalog.tres` 的 `cues` 内嵌子资源 |
+
+`AudioCueData` 是唯一不以独立 `.tres` 落盘的记录：它作为
+`AudioCueCatalogResource.cues` 的子资源内嵌在单一目录文件中（ADR-0009 D7），
+使音频目录一次加载、一次校验、一次发布，并与 `CueMap` 的双向校验共用同一份数据。
 
 `ContentRecord` 是 4.5 `@abstract` 基类，只携带 `id: StringName` 与只读访问器；
 `BalanceData` 是单例，不需要 id。
@@ -136,6 +144,7 @@ Proposed
 | `StationCatalogResource` | `res://data/catalog/station_catalog.tres` | `records: Array[StationData]` |
 | `BalanceCatalogResource` | `res://data/catalog/balance_catalog.tres` | `balance: BalanceData` |
 | `MilestoneCatalogResource` | `res://data/milestone/milestone_catalog.tres` | `records: Array[MilestoneData]` |
+| `AudioCueCatalogResource` | `res://data/audio/cue_catalog.tres` | `schema_version: int`、`cues: Array[AudioCueData]`、`duck_db: float`、`duck_attack_ms: int`、`duck_release_ms: int`（由 ADR-0009 D7/D8 引入） |
 
 `DataConfig` 只按固定 `res://` 路径 `ResourceLoader.load()`，**永不** 用 `DirAccess`
 扫描 `res://data/`。理由：
@@ -207,7 +216,7 @@ Unloaded ──load()──► Loading ──全部文件读入──► Validat
 
 ### 5. 校验流程与错误词汇
 
-校验分六个阶段，按顺序执行；每阶段收集全部独立诊断，不因第一条错误提前退出：
+校验分六个阶段（另有 5b 音频 cue 子阶段），按顺序执行；每阶段收集全部独立诊断，不因第一条错误提前退出：
 
 | 阶段 | 检查 | 前置 |
 |---|---|---|
@@ -216,7 +225,8 @@ Unloaded ──load()──► Loading ──全部文件读入──► Validat
 | 3. 字段 | 整数范围、枚举、标签表、有限浮点、设计带警告 | 阶段 2 无错误 |
 | 4. 引用 | `station_id` 存在、`dish_pool` 存在且双向一致、前置存在且无环、至少一个免费档口 | 阶段 2 无重复 id、阶段 1 无 `null` |
 | 5. 警告 | 缺图标、文件名不一致、`cost_growth` 偏离设计带 | 阶段 1 完成 |
-| 6. 发布 | 建立只读目录、封存记录、状态 `Ready` | 前五阶段无 ERROR |
+| 5b. 音频 cue | ADR-0009 D7 的八条 `AUDIO_CUE_*` 规则（schema、id、bus、范围、stream、priority） | 阶段 1 的 cue 目录类型正确 |
+| 6. 发布 | 建立只读目录、封存记录、状态 `Ready` | 前五阶段与 5b 无 ERROR |
 
 **阶段跳过规则**：若某阶段的前置不成立，该阶段不执行，并在报告中写入
 `CHECKS_SKIPPED`（警告级），`detail` 指明被跳过的阶段与原因。跳过的检查不得
@@ -261,6 +271,16 @@ Unloaded ──load()──► Loading ──全部文件读入──► Validat
 | `MILESTONE_UNKNOWN_STATION` | ERROR | 档口过滤器指向不存在的档口 |
 | `MILESTONE_STATION_FILTER_ON_CAREER` | ERROR | 生涯类指标（终身净利、结算局数）带档口过滤器 |
 | `MILESTONE_NO_COMPLETION_PATH` | WARNING | 没有任何 `required_for_completion = true` 的里程碑 |
+| `AUDIO_CUE_SCHEMA` | ERROR | `AudioCueCatalogResource.schema_version` 不为 1 |
+| `AUDIO_CUE_DUPLICATE_ID` | ERROR | 音频 cue id 重复 |
+| `AUDIO_CUE_UNKNOWN_BUS` | ERROR | cue `bus` 不是 `SFX` / `UI` |
+| `AUDIO_CUE_BAD_RANGE` | ERROR | cue 数值越界、pitch 非 1.0、`max_voices` 超硬顶或 `PLAY_THROUGH_FREEZE` 授予非 `sfx.flow.pause` |
+| `AUDIO_CUE_NO_STREAM` | ERROR | cue 的 `streams` 为空 |
+| `AUDIO_CUE_STREAM_MISSING` | ERROR | cue 引用的 `AudioStream` 为 `null` |
+| `AUDIO_CUE_ZERO_DURATION` | ERROR | stream 长度为 0 或与 `expected_length_ms` 偏差超过 ±50 ms |
+| `AUDIO_CUE_BAD_PRIORITY` | ERROR | cue `priority` 不在 1…4 |
+
+`AUDIO_CUE_UNMAPPED` / `AUDIO_CUE_ORPHAN` 是 `AudioDirector.bind_catalog()` 的错误，不属于 `DataConfig` 报告；两者同样使 `Boot → Error`（ADR-0009 D7/D8）。
 
 `NO_UNLOCKED_STATION` 采用 ERROR 而非运行期兜底：`unlocks-and-stations.md`
 规则 4 与 `data-config.md` 规则 7 都建议把它加为启动校验。解锁系统的
@@ -346,6 +366,7 @@ res://data/
     balance_catalog.tres     ─┘
   dish/*.tres  upgrade/*.tres  station/*.tres  balance.tres
   milestone/milestone_catalog.tres  milestone/*.tres
+  audio/cue_catalog.tres            # AudioCueCatalogResource（ADR-0009）
 
 AppRoot（组合根）
   ├─ DataConfig.load()        Unloaded→Loading→Validating→Ready|Failed
@@ -354,7 +375,7 @@ AppRoot（组合根）
   └─ Save.load() → SceneFlow Boot→Menu
                           └─ 任一失败 → Boot→Error（不构造 gameplay）
 
-下游（菜品数值 / 腻度 / 菜单波次 / 局外升级 / 餐局流程 / 结算 / 解锁 / HUD / UI）
+下游（菜品数值 / 腻度 / 菜单波次 / 局外升级 / 餐局流程 / 结算 / 解锁 / HUD / UI / 音效反馈）
   └─ DataConfig.get_dish / get_upgrade / get_station / get_balance（只读）
 ```
 
@@ -385,6 +406,9 @@ func get_dish(id: StringName) -> DataResult            # value: DishData
 func get_upgrade(id: StringName) -> DataResult         # value: UpgradeData
 func get_station(id: StringName) -> DataResult         # value: StationData
 func get_dish_icon(id: StringName) -> DataResult       # value: Texture2D；已知 id 永不为 null
+func get_cue(id: StringName) -> DataResult             # value: AudioCueData
+func has_cue(id: StringName) -> bool
+func cue_catalog() -> AudioCueCatalogResource          # 前置条件：READY
 func get_balance() -> BalanceData                      # 前置条件：READY
 
 
@@ -423,7 +447,10 @@ enum Code {
     MILESTONE_ID_SYNTAX, MILESTONE_DUPLICATE_ID, MILESTONE_EMPTY_FIELD,
     MILESTONE_UNKNOWN_METRIC, MILESTONE_THRESHOLD_RANGE,
     MILESTONE_UNKNOWN_STATION, MILESTONE_STATION_FILTER_ON_CAREER,
-    MILESTONE_NO_COMPLETION_PATH
+    MILESTONE_NO_COMPLETION_PATH,
+    AUDIO_CUE_SCHEMA, AUDIO_CUE_DUPLICATE_ID, AUDIO_CUE_UNKNOWN_BUS,
+    AUDIO_CUE_BAD_RANGE, AUDIO_CUE_NO_STREAM, AUDIO_CUE_STREAM_MISSING,
+    AUDIO_CUE_ZERO_DURATION, AUDIO_CUE_BAD_PRIORITY
 }
 
 var code: Code
@@ -497,15 +524,18 @@ func get_milestone_catalog() -> MilestoneCatalog
 5. `Ready` 之前不得发布任何记录；查询必须返回 `NOT_READY`，不得返回 `null`、
    空记录或部分目录。
 6. `Failed` 必须是进程级终态；`load()` 不得重试，恢复只能靠重启。
-7. 每条记录必须登记在对应清单中；运行时不得扫描 `res://` 目录来发现记录。
+7. 每条记录必须登记在对应清单中（`AudioCueData` 登记在 `AudioCueCatalogResource.cues`）；运行时不得扫描 `res://` 目录来发现记录。
 8. 校验器必须收集全部独立诊断，并显式报告被跳过的阶段（`CHECKS_SKIPPED`）。
 9. 里程碑目录必须在 `DataConfig` `Ready` 之后、`Save.load()` 之前加载；失败走
    同一条 `Boot → Error`。
 10. 展示层必须通过 `get_dish_icon()` 取图标；不得对 `DishData.icon` 自行兜底。
-11. 导出预设必须包含全部 catalog / record / milestone 资源：开启
+11. 导出预设必须包含全部 catalog / record / milestone / audio cue 资源：开启
     「Export all resources in the project」，或把每个清单显式列为依赖。
     仅靠代码里的固定路径 **不会** 让资源进入导出包。
 12. 发布后 id 基线测试（`published_ids.txt`）必须进 CI；已发布 id 消失即失败。
+13. 音频 cue 目录必须在 `Validating` 的 5b 子阶段跑 ADR-0009 D7 的规则；
+    `AudioDirector.bind_catalog()` 的 `CueMap` 双向校验在 `DataConfig Ready`
+    之后执行，失败同样走 `Boot → Error`。
 
 **不得**
 
@@ -617,7 +647,7 @@ func get_milestone_catalog() -> MilestoneCatalog
 
 | GDD System | Requirement | How This ADR Addresses It |
 |---|---|---|
-| `data-config.md` | TR-data-config-001：四类类型化 Resource catalog，启动加载校验，失败无部分加载 | 决策 1、2、4；五类记录 + 显式清单；全有或全无状态机 |
+| `data-config.md` | TR-data-config-001：四类类型化 Resource catalog，启动加载校验，失败无部分加载 | 决策 1、2、4；六类记录 + 显式清单；全有或全无状态机 |
 | `data-config.md` | TR-data-config-002：查询 API 返回不可变记录，无运行时修改 | 决策 4；公开 getter-only 属性、防御性数组拷贝、`_` 前缀存储字段 |
 | `data-config.md` | TR-data-config-003：`StationData` / `UpgradeData` 字段集合 | 决策 1；记录类与 GDD 字段一一对应，校验器覆盖取值范围 |
 | `data-config.md` | TR-data-config-004：稳定 id 命名空间 `^[a-z][a-z0-9_]*$`，发布后改名禁止 | 决策 3；类型前缀、重复检测、`published_ids.txt` + CI 基线 |
@@ -625,6 +655,7 @@ func get_milestone_catalog() -> MilestoneCatalog
 | `data-config.md` | TR-data-config-006：`display_name` 与可选 `Texture2D icon`，展示只读，缺失用占位 | 决策 8；警告不阻断、`get_dish_icon()` 解析器、记录不变 |
 | `data-config.md` | Core Rule 7 / OQ3 / OQ4 / OQ5：启动校验、热重载、打包格式、目录组织 | 决策 1、2、5、9；目录布局已定、`tres` 源 + 导出二进制、MVP 不热重载 |
 | `records-and-milestones.md` | TR-records-004：独立只读 `MilestoneData` 加载器，四种指标，单调锁存 | 决策 7；Records 拥有的 `MilestoneCatalog`，四种指标校验、id 升序、并入启动门 |
+| `audio-feedback.md` | TR-audio-feedback-001 / 007（目录契约与内容缺陷启动阻断） | 决策 2 / 5；第六清单同门加载、`AUDIO_CUE_*` 诊断、全有或全无 |
 | `unlocks-and-stations.md` | Rule 4 建议：至少一个 `unlock_cost = 0` 的档口加为启动校验 | 决策 5；`NO_UNLOCKED_STATION` ERROR，保留 `NoPlayableStation` 防御路径 |
 | `architecture.md` | Boot flow：`DataConfig.load()` → `ready` → `Save.load()`；失败 `Boot → Error` | 决策 6；组合根编排，里程碑目录插入 `DataConfig Ready` 与 `Save.load()` 之间 |
 
@@ -646,6 +677,7 @@ func get_milestone_catalog() -> MilestoneCatalog
 2. 先实现纯函数 `CatalogValidator` 与单元测试（不碰文件 I/O）。
 3. 实现 `DataConfig` 状态机与固定路径加载。
 4. 实现 `MilestoneCatalog` 与 Records 访问器。
+4b. 实现 `AudioCueCatalogResource` 读取与 ADR-0009 D7 校验（5b 子阶段）。
 5. 接入 `AppRoot` 启动编排与 `Boot → Error` payload。
 6. 生成 `data/published_ids.txt` 基线（首个公开版本前）。
 
@@ -671,13 +703,15 @@ func get_milestone_catalog() -> MilestoneCatalog
   `Boot → Error` 且未构造 gameplay。
 - 新增：缺失图标 → `Ready`、`errors() = 0`、`warnings() = 1`，`get_dish_icon()`
   返回非空占位纹理。
-- 新增：导出包开启二进制转换后，五个清单全部加载且记录数与源数据一致。
+- 新增：导出包开启二进制转换后，六个清单全部加载且记录数与源数据一致。
+- 新增：cue 目录含重复 id / 未知 bus / 空 streams / 越界 priority → `Failed`，
+  报告含对应 `AUDIO_CUE_*`，99 条好记录也不可见。
 - 新增：300 条记录下 `Failed` 报告包含被跳过阶段的 `CHECKS_SKIPPED`，不得静默。
 
 ## Related
 
 - `docs/architecture/architecture.md` — 分层、启动顺序、API Boundaries、原则 7（数据驱动）。
-- `design/gdd/data-config.md` — 四类记录、字段、校验规则、状态机、AC。
+- `design/gdd/data-config.md` — 四类记录与音频 cue 目录、字段、校验规则、状态机、AC。
 - `design/gdd/records-and-milestones.md` — 里程碑目录归属与 `MilestoneData` 字段。
 - `design/gdd/unlocks-and-stations.md` — `NoPlayableStation` 与免费档口建议。
 - `design/gdd/save-system.md` — 规则 2 / 14：只存 id、未知 id 原样保留。

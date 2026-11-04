@@ -8,7 +8,7 @@
 
 ## Summary
 
-数据配置是《回本》唯一的数值来源：菜品、升级、档口都是带类型的 Godot Resource，按稳定 id 加载并在启动时校验。它保证游戏里的每个平衡数字都能被找到、被修改、被验证，代码里不写死任何数值。玩家不直接接触它，但 HUD 上的每个数字都来自这里。
+数据配置是《回本》唯一的数值来源：菜品、升级、档口与音频 cue 都是带类型的 Godot Resource，按稳定 id 加载并在启动时校验。它保证游戏里的每个平衡数字都能被找到、被修改、被验证，代码里不写死任何数值。玩家不直接接触它，但 HUD 上的每个数字都来自这里。
 
 > **Quick reference** — Layer: `Foundation` · Priority: `MVP` · Key deps: `None`
 
@@ -25,7 +25,7 @@
 ### Core Rules
 
 1. **唯一数值来源**：菜品、升级、档口的每一处可调数值都来自数据记录；GDScript 中不得出现平衡数字字面量（0、1 等结构性常量除外）。
-2. **四类记录，四类 Resource**：`DishData`、`UpgradeData`、`StationData`、`BalanceData`，字段固定，在 Godot 编辑器里可视化编辑。`MilestoneData` 是否成为第五类由纪录与里程碑 Open Question 2 决定，当前不在 schema 内。
+2. **四类玩法记录，四类 Resource**：`DishData`、`UpgradeData`、`StationData`、`BalanceData`，字段固定，在 Godot 编辑器里可视化编辑。音频 cue 目录（`AudioCueCatalogResource`）是启动门的第六条清单、也是本系统自己加载的五份清单之一，见规则 11。`MilestoneData` 不在本 schema 内，由「纪录与里程碑」的只读加载器提供；它占启动门第五条清单的位置。
 3. **`DishData` 字段**：
    - `id: StringName` — 稳定唯一，格式 `^[a-z][a-z0-9_]*$`
    - `display_name: String` — **必须是 `tr()` key**，语法见规则 7 的 `DISPLAY_NAME_NOT_A_KEY`
@@ -54,9 +54,10 @@
 6. **id 是契约**：按类型命名空间隔离（`dish_*` / `upgrade_*` / `station_*`）。发布后不得改名——改名等于删除旧记录并新增，会让存档失效。
 7. **启动即校验**：加载全部记录 → 校验 → 建立目录 → Ready。任一规则失败就停在这里，不进入游戏。建议增加一条：至少存在一个 `unlock_cost = 0` 的档口；当前由「解锁与档口」在运行期兜底（`NoPlayableStation`）。**`display_name` 与 `description` 是翻译 key，不是中文文本**：`DishData` / `UpgradeData` / `StationData` 的 `display_name`，以及 `UpgradeData.description`，值必须匹配 `^content\.(dish|upgrade|station)\.[a-z0-9_]+\.[a-z_]+$`；不匹配时写 `DISPLAY_NAME_NOT_A_KEY` warning（不阻断启动，记录保持 key 原样往返）。本系统只校验语法，不查翻译表——翻译由 `tr()` 在呈现层解析，翻译表缺失属于 CI 检查（ADR-0008 §5）。这条关闭 Open Question 6。
 8. **运行时只读**：局内状态（当前饱腹、净利、剩余时间格）属于餐局流程，任何系统都不得写回数据记录。
-9. **查询走目录**：下游系统通过 `get_dish(id)` / `get_upgrade(id)` / `get_station(id)` / `get_balance()` 取记录；不得自行扫描资源目录或按文件名猜测。
+9. **查询走目录**：下游系统通过 `get_dish(id)` / `get_upgrade(id)` / `get_station(id)` / `get_cue(id)` / `get_balance()` 取记录，通过 `has_cue(id)` / `cue_catalog()` 查询音频目录；不得自行扫描资源目录或按文件名猜测。
 10. **`BalanceData` 字段（单例）**：
    - `base_capacity: int` — 1–999，默认 20（基础胃容量 C0，由「胃容量」消费；回答其 Open Question 1）
+11. **音频 cue 目录（启动门第六清单，本系统加载的五份之一）**：`DataConfig` 加载 `res://data/audio/cue_catalog.tres`（`AudioCueCatalogResource`，由 ADR-0009 D7/D8 引入）。它与上述清单同一 `Loading → Validating → Ready/Failed` 流程，内容规则是 ADR-0009 D7 的八条 `AUDIO_CUE_*`（schema、id、bus、范围、stream、priority）；任一 `ERROR` 即整体 `Failed`，不发布任何部分。里程碑目录是启动门的第五条清单，但由「纪录与里程碑」的只读加载器加载，不在本系统 schema 内。
 
 ### States and Transitions
 
@@ -80,6 +81,7 @@
 | 局外升级 | 下游读取 | `UpgradeData` 的全部字段 | 硬 |
 | 餐局流程 / 结算与入场费 | 下游读取 | 餐局流程解析 `station_id`；结算读取 `entry_fee` | 硬 |
 | 存档 | 下游引用 | 只存 id 与等级/数值，不存记录本身 | 硬 |
+| 音效反馈 | 下游读取 | `get_cue(id)` / `has_cue(id)` / `cue_catalog()`；经 `AudioCatalogView` 只读适配 | 硬 |
 
 **接口所有权**：数据配置拥有全部已定义记录类型的查询与校验；下游只读，不拥有写入路径。
 
@@ -89,7 +91,7 @@
 
 The `valid_record_set` formula is defined as:
 
-`valid(D) = uniqueIds(D_dish) ∧ uniqueIds(D_upg) ∧ uniqueIds(D_sta) ∧ (∀d ∈ D_dish: R_dish(d)) ∧ (∀u ∈ D_upg: R_upg(u)) ∧ (∀s ∈ D_sta: R_sta(s)) ∧ (∀b ∈ D_bal: R_bal(b)) ∧ |D_bal| = 1`
+`valid(D) = uniqueIds(D_dish) ∧ uniqueIds(D_upg) ∧ uniqueIds(D_sta) ∧ (∀d ∈ D_dish: R_dish(d)) ∧ (∀u ∈ D_upg: R_upg(u)) ∧ (∀s ∈ D_sta: R_sta(s)) ∧ (∀b ∈ D_bal: R_bal(b)) ∧ |D_bal| = 1 ∧ cueValid(C_cue)`
 
 其中：
 
@@ -115,11 +117,15 @@ The `valid_record_set` formula is defined as:
 | `turn_budget` | int | 1–INT32_MAX | data file | 每局回合预算 |
 | `wave_size` | int | 1–8（设计带；校验只要求 ≥ 1） | data file | 每波揭示的菜数；默认 4 |
 | `base_capacity` | int | 1–999 | data file | 基础胃容量 C0 |
+| `C_cue` | `AudioCueCatalogResource` | 1 个 | data file | 音频 cue 目录；字段与规则见 ADR-0009 D7 |
+| `cueValid(C)` | bool | {true, false} | calculated | 目录无 `AUDIO_CUE_*` ERROR |
 | `hasPrefix(id, p)` / `hasDuplicates(xs)` | bool | {true, false} | calculated | id 命名空间与池唯一性谓词 |
 | `TAGSET` | StringName[7] | 固定 | constant | 酸 / 甜 / 苦 / 辣 / 鲜 / 冰 / 油 |
 | `valid(D)` | bool | {true, false} | calculated | 是否允许启动 |
 
 **Output Range:** `valid(D) ∈ {true, false}`，无中间态。false 时阻断启动，并输出每一条违反项的记录 id 与字段名。
+
+`cueValid(C_cue)` 不重复定义字段规则：它等价于 ADR-0009 D7 的八条规则全部通过。本 GDD 只规定执行与汇总位置，字段语义不在此复制。
 
 **Example:** 2 个档口、4 道菜、2 项升级。档口 `station_canteen` 的 `entry_fee=30`、`cloy_cap=3`、`dish_pool=[dish_fried_rice, dish_braised_pork]`；`dish_fried_rice` 的 `price=8`、`satiety=2`、`taste_tags=[oil]`、`station_id=station_canteen`；`upgrade_capacity` 的 `cost=40`、`max_level=3`、`effect_type=STOMACH_CAPACITY`、`effect_value=1`。所有引用互相指回，`valid(D)=true`。
 
@@ -147,6 +153,9 @@ The `valid_record_set` formula is defined as:
 
 - **If 同类型两条记录共用同一个 id**：加载失败，报出两条记录的文件路径与 id；不加载任何记录。
 - **If `BalanceData` 缺失或不止一个**：校验失败。`BalanceData` 是单例：零个会让 `get_balance()` 返回 null、胃容量没有 C0；多个则取哪个未定义。
+- **If `cue_catalog.tres` 缺失或类型错误**：校验失败（`CATALOG_FILE_MISSING` / `CATALOG_WRONG_TYPE`），主场景不实例化。
+- **If cue 目录内容非法**（schema 不为 1、id 重复、bus 未知、streams 为空或缺失、时长不符、priority 越界）：校验失败，报告含对应 `AUDIO_CUE_*`，不发布任何部分。
+- **If 运行期 cue 播放失败**：与本系统无关——数据配置只校验目录；播放失败由音效反馈静默降级，不触发 `Failed`（ADR-0009 D8/D14）。
 - **If `satiety` 为 0**：校验失败。下游的单位价值计算以饱腹为分母，0 会让局面无法定义；不钳制。
 - **If `satiety` ≥ 7**：校验失败，报出菜品 id 与字段名。7 格基础饱腹即使没有腻度追加也会越过 `effective_satiety` 的声明值域（1–(6 + `cloy_cap`)），是一条能通过旧校验、却让胃容量与结算同时越界的静默错误。
 - **If `price` 为 0**：合法（例如免费白水）。下游单位价值为 0，照常参与结算。
@@ -170,7 +179,7 @@ The `valid_record_set` formula is defined as:
 
 ## Dependencies
 
-**上游依赖：无。** 数据配置是基础层系统，不依赖任何其他系统；它只依赖 Godot 的 Resource 加载机制。
+**上游依赖：无。** 数据配置是基础层系统，不依赖任何其他系统；它只依赖 Godot 的 Resource 加载机制。音频 cue 目录的字段定义与 `AUDIO_CUE_*` 规则来自 ADR-0009 D7，不构成 GDD 上游依赖。
 
 **下游依赖方：**
 
@@ -188,13 +197,14 @@ The `valid_record_set` formula is defined as:
 | 解锁与档口 | 硬 | `get_station(id)` → `unlock_cost`、`dish_pool`；`get_dish(id)` 存在性；建议启动校验「至少一个 `unlock_cost = 0` 的档口」 | GDD 已写（`design/gdd/unlocks-and-stations.md`） |
 | 界面流程 | 硬（显示只读） | `StationData.display_name` / `entry_fee`、里程碑目录；只用于显示，不参与玩法判定 | GDD 已写（`design/gdd/ui-flow.md`） |
 | 局内 HUD | 软（间接） | 通过菜品数值/时间与回合取得数字，不直接读 catalog | GDD 已写（`design/gdd/in-game-hud.md`） |
+| 音效反馈 | 硬 | `get_cue(id)` / `has_cue(id)` / `cue_catalog()`；只读适配 | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 场景与流程管理 | 硬 | `Boot` 期读取加载与校验的最终结果（`Ready` / `Failed`），决定进入 Menu 还是 Error | GDD 已写 |
 
 **双向一致要求**：以上每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「数据配置」为上游依赖。以上下游系统的 GDD 均已完成并已列出本系统。
 
 ## Visual/Audio Requirements
 
-**不适用。** 数据配置不渲染、不播放任何内容。它唯一可见的输出是启动校验报告，面向开发者而非玩家：
+**不适用。** 数据配置不渲染、不播放任何内容。它只加载并校验音频 cue 目录，不持有播放器；播放与降级归音效反馈（ADR-0009）。它唯一可见的输出是启动校验报告，面向开发者而非玩家：
 
 - 校验失败：日志输出文件路径、记录 id、字段名、期望值与实际值。
 - 校验通过但有警告（例如缺 `icon`）：WARNING 级日志，并使用占位图标。
@@ -209,13 +219,13 @@ The `valid_record_set` formula is defined as:
 
 ## Cross-References
 
-**None — this system references no other GDD.** 数据配置是最先设计的系统。以上下游系统的 GDD 均已完成，并已在各自的 Cross-References 中回指本系统。
+**None — this system references no other GDD.** 数据配置是最先设计的系统。以上下游系统的 GDD 均已完成，并已在各自的 Cross-References 中回指本系统。音频 cue 目录的 schema 与 `AUDIO_CUE_*` 规则来自 ADR-0009 D7/D8，不引入 GDD 依赖。
 
 ## Acceptance Criteria
 
-每条都能由 QA 在不读本 GDD 的情况下独立执行。测试夹具放在 `tests/fixtures/data/`，每条用例使用独立夹具。
+每条都能由 QA 在不读本 GDD 的情况下独立执行。测试夹具放在 `tests/fixtures/data/`，每条用例使用独立夹具；除 AC 33–35 外，夹具默认包含一个合法 cue 目录。
 
-1. **GIVEN** 夹具含 1 条 `DishData`、1 条 `UpgradeData`、1 条 `StationData`、1 个 `BalanceData` 单例，互相引用完整，**WHEN** 启动，**THEN** 状态依次为 Unloaded → Loading → Validating → Ready，`get_dish` / `get_upgrade` / `get_station` / `get_balance` 都能取到对应记录。
+1. **GIVEN** 夹具含 1 条 `DishData`、1 条 `UpgradeData`、1 条 `StationData`、1 个 `BalanceData` 单例，以及一个合法 cue 目录，互相引用完整，**WHEN** 启动，**THEN** 状态依次为 Unloaded → Loading → Validating → Ready，`get_dish` / `get_upgrade` / `get_station` / `get_balance` 都能取到对应记录。
 2. **GIVEN** 两个 dish 夹具 id 同为 `dish_rice`，**WHEN** 校验，**THEN** 状态为 Failed，日志含重复 id `dish_rice`，主场景未被实例化。
 3. **GIVEN** id 为 `dish_Rice_01`（含大写）或 `dish-1abc`（缺 `dish_` 前缀），**WHEN** 校验，**THEN** Failed；id 为 `dish_a_b1` 时 **THEN** Ready。
 4. **GIVEN** `price=-1`，**WHEN** 校验，**THEN** Failed；`price=0` 时 **THEN** Ready。
@@ -248,6 +258,9 @@ The `valid_record_set` formula is defined as:
 30. **GIVEN** 缺少 `BalanceData`（零个）或有两个 `BalanceData`，**WHEN** 校验，**THEN** Failed；恰好一个时 **THEN** Ready（三个独立夹具）。
 31. **GIVEN** `cost_growth` 分别为 `1.2`、`1.6`，**WHEN** 校验，**THEN** 均为 Ready 且不产生 warning（设计带内）；`=1.0` 时 **THEN** Ready（硬下限）；`=0.99` 或 NaN / INF 时 **THEN** Failed；`=1.7` 时 **THEN** Ready 但记一条 `COST_GROWTH_OUTSIDE_DESIGN_BAND` 警告（不阻断）。
 32. **GIVEN** `StationData` 未显式填写 `wave_size`，**WHEN** 加载，**THEN** 取默认值 `4`；显式填写 `1` 时 **THEN** Ready 且菜单波次按单波处理；`=0` 时 **THEN** Failed（与 AC 26 同一规则的两个方向）。
+33. **GIVEN** 夹具含四类记录、`BalanceData` 与合法 cue 目录，**WHEN** 启动，**THEN** 状态为 Ready，`get_cue(id)` 返回对应 `AudioCueData`，`has_cue` 与 `cue_catalog()` 可用。
+34. **GIVEN** cue 目录 id 重复、`bus` 未知、`streams` 为空、`priority` 越界（四个独立夹具），**WHEN** 校验，**THEN** Failed，报告含对应 `AUDIO_CUE_*`，且 99 条好记录也取不到。
+35. **GIVEN** `cue_catalog.tres` 缺失或类型错误，**WHEN** 加载，**THEN** Failed（`CATALOG_FILE_MISSING` / `CATALOG_WRONG_TYPE`），主场景未实例化。
 
 **无法直接断言、已改写或转为开放问题的规则**：
 - 「不得硬编码平衡数字」：静态扫描需要先定义"平衡字面量"的白名单，转为第 23 条的行为验证；静态规则列为 Open Question。

@@ -7,7 +7,7 @@
 - Engine: Godot 4.7 (pinned; installed version NOT DETERMINED — no editor on this machine)
 - GDDs Covered: 18 (all designed systems; #19 在线挑战 and #20 同屏合作 are Not Started)
 - ADRs Referenced: ADR-0001 内容数据格式；ADR-0002 持久化格式；ADR-0003 场景与屏幕架构；ADR-0004 服务组合与信号；ADR-0005 输入上下文栈；ADR-0006 确定性随机；ADR-0007 局内状态与结算事务；ADR-0008 设置与本地化；ADR-0009 音频播放与暂停（均为 Proposed）
-- Architecture Review: 2026-11-04 — FAIL — 56 covered / 4 partial / 44 gaps；ADR-0003↔0005↔0004 依赖环（见 `docs/architecture/architecture-review-2026-11-04.md`）
+- Architecture Review: 2026-11-04 — FAIL — 56 covered / 4 partial / 44 gaps。机械修复已应用（2026-11-04）：ADR-0005 `Depends On: None` 解除 0003↔0005↔0004 依赖环；ADR-0001 补入 ADR-0009 的第六清单；ADR-0009 补 `## GDD Requirements Addressed`。44 gaps 与 9 份 ADR 的接受仍待处理（见 `docs/architecture/architecture-review-2026-11-04.md`）
 - TD-ARCHITECTURE: 2026-11-04 — skipped — lean mode
 - LP-FEASIBILITY: 2026-11-04 — skipped — lean mode
 
