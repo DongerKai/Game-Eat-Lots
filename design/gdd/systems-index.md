@@ -66,12 +66,12 @@ were found.
 | 10 | 菜单波次 | Gameplay | Vertical Slice | In Review | design/gdd/menu-waves.md | 菜品数值, 数据配置, 餐局流程 |
 | 11 | 结算与入场费 | Economy | MVP | In Review | design/gdd/settlement-and-entry-fee.md | 菜品数值, 腻度与口味, 胃容量, 时间与回合, 餐局流程 |
 | 12 | 局外升级 | Progression | MVP | In Review | design/gdd/meta-upgrades.md | 结算与入场费, 存档, 数据配置 |
-| 13 | 解锁与档口 | Progression | Vertical Slice | Designed | design/gdd/unlocks-and-stations.md | 局外升级, 存档, 数据配置 |
-| 14 | 纪录与里程碑 | Progression | Vertical Slice | Designed | design/gdd/records-and-milestones.md | 结算与入场费, 存档, 数据配置 |
-| 15 | 局内 HUD | UI | MVP | Designed | design/gdd/in-game-hud.md | 餐局流程, 时间与回合, 胃容量, 菜品数值, 输入, 结算与入场费, 腻度与口味, 菜单波次 |
-| 16 | 界面流程 | UI | MVP | Designed | design/gdd/ui-flow.md | 餐局流程, 结算与入场费, 局外升级, 场景与流程管理, 输入, 存档, 纪录与里程碑, 音效反馈, 数据配置 |
-| 17 | 音效反馈 | Audio | Vertical Slice | Designed | design/gdd/audio-feedback.md | 餐局流程, 结算与入场费, 场景与流程管理 |
-| 18 | 首局引导 | Meta | Vertical Slice | Designed | design/gdd/first-run-onboarding.md | 餐局流程, 局内 HUD, 输入, 场景与流程管理, 菜品数值, 结算与入场费 |
+| 13 | 解锁与档口 | Progression | Vertical Slice | Needs Revision | design/gdd/unlocks-and-stations.md | 局外升级, 存档, 数据配置 |
+| 14 | 纪录与里程碑 | Progression | Vertical Slice | Needs Revision | design/gdd/records-and-milestones.md | 结算与入场费, 存档, 数据配置 |
+| 15 | 局内 HUD | UI | MVP | Needs Revision | design/gdd/in-game-hud.md | 餐局流程, 时间与回合, 胃容量, 菜品数值, 输入, 结算与入场费, 腻度与口味, 菜单波次 |
+| 16 | 界面流程 | UI | MVP | Needs Revision | design/gdd/ui-flow.md | 餐局流程, 结算与入场费, 局外升级, 场景与流程管理, 输入, 存档, 纪录与里程碑, 音效反馈, 数据配置 |
+| 17 | 音效反馈 | Audio | Vertical Slice | Needs Revision | design/gdd/audio-feedback.md | 餐局流程, 结算与入场费, 场景与流程管理 |
+| 18 | 首局引导 | Meta | Vertical Slice | Needs Revision | design/gdd/first-run-onboarding.md | 餐局流程, 局内 HUD, 输入, 场景与流程管理, 菜品数值, 结算与入场费 |
 | 19 | 在线挑战 | Meta | Full Vision | Not Started | — | 结算与入场费, 存档 |
 | 20 | 同屏合作 | Meta | Full Vision | Not Started | — | 几乎全部系统（延后） |
 
@@ -241,7 +241,7 @@ Vertical Slice tier, and the rest are Full Vision.
 |--------|-------|
 | Total systems identified | 20 |
 | Design docs started | 18 |
-| Design docs reviewed | 12 |
+| Design docs reviewed | 18 |
 | Design docs approved | 4 |
 
 > 场景与流程管理于 2026-11-03 通过设计评审（Approved），随后补写了 Formulas 章节并在
