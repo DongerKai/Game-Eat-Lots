@@ -238,7 +238,7 @@ The `calibration_ratio` formula is defined as:
 ### 审查产出的使用方式
 
 - **CI**：每次改 `.tres` 后跑 `menu_healthy`、`same_group_dominated_pairs` 与 `opt_value`；这三项越界即失败。`cross_dominated_pairs` 只记录、不设门槛——跨组支配本来就允许，只要有用途。`unjustified_dominated` 不在 CI 中：`purpose` 不是数据字段，它是人工评审步骤（见 Open Question 7）。
-- **设计期**：改入场费或初始容量后重算 `calibration_ratio`；菜单波次生成单次菜单时，其 `opt_value` 相对全池校准值的偏差不得超过 ±10%，否则该次刷新重掷。
+- **设计期**：改入场费或初始容量后重算 `calibration_ratio`。运行期的菜单划分闸门只有一条，且由「菜单波次」拥有：`wave_reachable_opt ≥ 0.9 × opt_value(pool, C0, T)`，未达标重掷。**不存在逐划分的 ±10% 双侧重掷规则**；整池 `opt_value` 的回归由本系统 CI 的 `menu_healthy` / `opt_value` 断言拦截，不进入运行时。
 
 ## Edge Cases
 
@@ -252,7 +252,7 @@ The `calibration_ratio` formula is defined as:
 - **If 菜单只有 1 道菜**：`uv_span = 0`、`menu_healthy = false`。可以开始游戏（数据合法），但没有任何算术可做；这是可玩性缺陷，不是崩溃。
 - **If 所有菜 `satiety = 1`**：容量永不成为约束，最优解退化为"挑最贵的 T 道"，除法变成装饰。`menu_healthy = false`（违反 Core Rule 7 的档位覆盖），禁止作为可发布菜单。
 - **If 菜单内所有菜单位价值相同**：`uv_span = 0` → `menu_healthy = false`。这是"看起来很多选择、实际只有一个答案"的典型退化。
-- **If 单次刷新菜单的 `opt_value` 偏离全池校准值超过 ±10%**：「菜单波次」应重掷该次刷新。本条是跨系统契约，不归本系统执行；本系统只提供计算。
+- **If 某个菜单划分让 `wave_reachable_opt` 跌破「菜单波次」的下界**：由「菜单波次」重掷该划分；本系统只提供 `opt_value` 与 `C0`，不定义、也不检查任何逐划分的上界。整池 `opt_value` 的回归由本系统 CI 断言负责。
 - **If 玩家在局内连续选择同一 `cloying_group` 的菜**：本系统不做任何处理。惩罚系数、叠加顺序与上限全部属于「腻度与口味」；本系统只提供 `cloying_group` 与 `satiety`。
 - **If `uv_cmp` 的乘积超出 int64**：仅当上游放宽 `price` / `satiety` 到 int64 全范围时才会发生。当前 schema 上限为 INT32_MAX，乘积约 `4.6×10¹⁸ < 9.22×10¹⁸`，安全；若未来放宽，必须改用 128 位整数或在数据配置加界，不得静默截断。
 - **If 平衡审查失败但数据合法**：游戏照常启动，只写审查报告。把平衡问题变成启动错误，会让内容作者无法进入游戏调试。
@@ -369,7 +369,7 @@ The `calibration_ratio` formula is defined as:
 - **Core Rule 1（合法 ≠ 平衡）**：这是职责划分，不是可执行判定；由第 14、20–23 条间接覆盖。
 - **Core Rule 6（首局替换建议）**：建议文案与触发属于「首局引导」，本系统只保证结算期能取到单位价值数据。
 - **`unjustified_dominated`**：用途列不是 `DishData` 字段，CI 只能算原始跨组支配对；用途核对是人工评审步骤（Open Question 7）。
-- **±10% 菜单重掷**：属于「菜单波次」契约，本系统只提供 `opt_value`，不在本 GDD 内断言。
+- **±10% 菜单重掷**：已撤销（2026-11-04 交叉复审）。运行期只有「菜单波次」的单侧下界 `0.9 × opt_value`；本系统不保留双侧重掷契约，也不重复声明它。
 
 ## Open Questions
 

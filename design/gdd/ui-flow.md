@@ -76,7 +76,7 @@
 
 18. **错误屏是受限态，不是主菜单的变体** — `ErrorScreen` 显示可读的错误说明；唯一的退出控件是「退出」，debug 构建额外显示「重新加载数据」并展示失败文件与记录 id。**不存在任何进入 `Menu` 或 `Run` 的控件**；release 构建中「重新加载数据」不是存在后被拒绝，而是根本不存在（`场景与流程管理` 规则 9、UI Requirements 2）。错误信息不能只靠颜色传达；`ui_cancel` 不产生隐藏动作。
 
-19. **进入失败、故障与放弃只给提示，不给收据** — `Menu` 根屏因 `init_failed = true` 或 `fault` 明细进入时，显示非模态提示「本局未能开始」+ 原因（debug 显示故障码与字段），不打开收据、不入账、不写纪录；焦点回到「开始营业」，提示在确认、取消或下一次屏幕变化时消失，同一事件不重复弹出。`abandoned = true` 进入时显示「本局已放弃，收益不计」的非模态提示，同样不打开收据。提示层不阻塞输入，不改变主菜单的可用控件。
+19. **进入失败、故障与放弃只给提示，不给收据** — `Menu` 根屏因 `init_failed = true` 或 `fault` 明细进入时，按 **`fault.phase`** 分支：`INIT`（或 `phase` 缺失）显示「本局未能开始」+ 原因；`RUN` 显示「本局结算失败，收益不计」+ 原因。两者都只是非模态提示（debug 显示故障码与字段），不打开收据、不入账、不写纪录；焦点回到「开始营业」，提示在确认、取消或下一次屏幕变化时消失，同一事件不重复弹出。**不得对 `RUN` 使用「本局未能开始」**——玩家已经玩过这一局，用过那套文案就是把整局说成没发生。`abandoned = true` 进入时显示「本局已放弃，收益不计」的非模态提示，同样不打开收据。提示层不阻塞输入，不改变主菜单的可用控件。
 
 20. **存档载入结果：成功的安静，异常的必须说清楚** — 进入 `Menu` 后读取一次 `LoadReport`。`Fresh` / `Loaded` / `Migrated` 不弹提示（`Migrated` 的迁移写回由保存指示体现）。`Recovered` 显示一次非模态说明，写明来源是备份与可能丢失的范围，玩家可关闭，**不重复弹出**。`ReadOnly` 显示一次非模态说明，提供「以只读继续」与「退出」两个出口；只读期间隐藏购买/解锁入口，**不提供「新建生涯」**（避免隔离对方正在写的文件）。`Blocked` 显示**强制模态**，按锁与原因给出口（`存档` UI Requirements 4）：若 `LoadReport.lock_live = true`，无论原因只给「退出」「重试」；否则更新版本 / 无法读取 → 「退出」「新建生涯（旧档保留）」，迁移失败 → 「退出」「重试」。默认焦点为「退出」，`ui_cancel` 无效，**不得提供覆盖保存**。强制模态同样经 `push_context(Modal)` 获得焦点陷阱，并显式消费 `ui_cancel` 为空操作；窗口关闭请求仍按 `场景与流程管理` 规则 10 直接退出（`Menu` 中无需确认），不算第三个按钮。`Blocked` 未解决前，主菜单的其他控件不可操作；选择「新建生涯」后由存档建立新生涯，界面流程刷新钱包、升级、纪录与主菜单；选择「重试」则调用 `存档.retry_load()` 并停留在 `Menu`；选择「退出」则请求 `Quit`。`LoadReport.writable = false`（`Blocked` / `ReadOnly`）时，所有写盘依赖的动作（购买、解锁、任何写入入口）禁用并显示原因（`局外升级` 规则 19）。
 
@@ -139,7 +139,7 @@
 | `Modal1`（放弃确认） | 确认 | `MenuRoot` | 请求 `Paused → Menu, abandoned = true`；提示「本局已放弃」 |
 | `Modal1`（退出确认） | 确认 | `Quit` | `flush()`；失败时二次确认；通知音效 `quit` |
 | 任意 | 顶层状态变化 | 按新状态重建 | 丢弃屏幕栈与模态栈；不得保留旧状态界面 |
-| `MenuRoot` | `init_failed` / `fault` / `abandoned` | `MenuRoot` | 显示非模态提示；不打开收据 |
+| `MenuRoot` | `init_failed` / `fault(phase)` / `abandoned` | `MenuRoot` | 显示非模态提示（`fault.phase = INIT` → 「本局未能开始」；`RUN` → 「本局结算失败，收益不计」）；不打开收据 |
 | `MenuRoot` | `Recovered` | `MenuRoot` | 一次非模态说明；可关闭、不重复 |
 | `MenuRoot` | `Blocked` | `Modal1` | 强制模态；按锁与原因：锁存活 → 退出/重试；否则按原因：退出/新建生涯 或 退出/重试 |
 | 任意 `Menu` 界面 | 存档写入成功 | 不变 | 显示 1.5 秒「已保存」；不改变状态 |
@@ -160,7 +160,7 @@
 | 音效反馈 | 同级协调（双向） | 界面流程拥有主音量 / 音效音量 / 静音 / 减少重复音效四项设置值；音效反馈消费它们。界面流程发 `ui_button_activated(control_id)`、收据 `number_roll_started/finished`、`receipt_closed(reason)`；音效不订阅原始输入、不读 `RunResult` | 硬（事件与设置契约）；播放本身为软 |
 | 数据配置 | 上游（显示只读） | 读：`get_station(station_id)` 的 `display_name`、`entry_fee`；`get_dish(dish_id)` → `display_name`（收据菜名）。**只用于显示，不参与任何玩法判定** | 硬（显示） |
 | 局内 HUD | 同级协调 | 无数据依赖。屏幕归属：HUD 画局内一屏；界面流程画暂停菜单、收据、菜单、升级、设置、错误屏。`Paused` 时暂停菜单覆盖 HUD 但不卸载；`Settling` 时收据覆盖 HUD；HUD 保留到收据出现的那一帧 | 协调 |
-| 首局引导（#18） | 上游（预置/载荷）+ 下游（软） | 读 `get_first_run_preset()`（`pool_override` 六道 + `entry_fee_override = 40`）与 `FirstRunExplanation` 载荷（收据讲解块）；订阅 `onboarding_finished` 决定下一次 `is_first_run`；可在控件上叠加讲解与高亮，可请求 `Blocked` 上下文 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
+| 首局引导（#18） | 上游（预置/载荷）+ 下游（软） | 读 `get_first_run_preset()`（`pool_override` 六道 + `entry_fee_override = 40`）与 `FirstRunExplanation` 载荷（收据讲解块）；**不订阅 `onboarding_finished` 做首局判定**——`is_first_run` 只按 `records.career.runs_settled == 0` 计算；可在控件上叠加讲解与高亮，可请求 `Blocked` 上下文 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 | 解锁与档口（#13，未设计） | 下游（软） | 将来在主菜单提供档口选择；MVP 只有一个档口，主菜单不显示选择器。接口见 Open Questions 5、6 | 软 |
 
 **接口所有权**：界面流程拥有屏幕集合、屏幕栈、焦点顺序、模态呈现、收据的打开时机与呈现编排、设置模型与界面语义事件。上游拥有各自的数据、判定与状态；任何系统不得直接写界面栈、焦点或模态栈，也不得替界面流程决定收据内容。界面流程不得替上游计算任何玩法数值，也不得把显示值回写成数据。
@@ -390,7 +390,7 @@ The `displayed_value` formula is defined as:
 - **If `request_transition(Menu → Run, RunConfig)` 返回 `false`**：留在主菜单，显示可见原因，焦点回到「开始营业」；不进入加载态、不重试、不假装开始。
 - **If 收据「再来一局」的切换请求被拒绝**：留在收据，显示原因，焦点回到「再来一局」；不组装第二份 `RunConfig`、不关闭收据。
 - **If `RunConfig` 组装失败**（档口无法解析）：主菜单的「开始营业」禁用并显示原因；不发起切换。
-- **If `init_failed` 与 `abandoned` 同时出现**：`init_failed` 优先，显示「本局未能开始」；`abandoned` 提示不显示（本局从未开始）。
+- **If `init_failed` 与 `abandoned` 同时出现**：`init_failed` 优先，按 `fault.phase` 选文案（`INIT` → 「本局未能开始」；`RUN` → 「本局结算失败，收益不计」）；`abandoned` 提示不显示。
 - **If 退出确认的 `flush()` 失败**：显示「未保存，仍要退出？」并再确认一次；取消回到打开确认前的界面，确认则进入 `Quit`。
 - **If 窗口关闭请求到达时已有普通模态打开**：在 `Menu` 中直接请求 `Quit`（`场景与流程管理` 规则 10 对 `Menu` 不要求确认），并丢弃模态；在 `Paused` 中关闭当前模态、打开退出确认；任何情况下不叠加第二层模态。
 - **If 窗口关闭请求到达时 `Blocked` 强制模态打开**：映射为 `Blocked` 的「退出」出口，直接请求 `Quit`；不打开第二个模态，不覆盖存档。

@@ -43,7 +43,7 @@
 15. **暂停是冻结，不是一个局内状态**：本系统只持有 `frozen` 标志，由场景与流程管理的冻结/恢复通知驱动。冻结期间不提交动作、不判定结束、不调用结算、不请求交接；恢复后从暂停前的精确状态继续。暂停与恢复不消耗回合、不改变 `run_id` 或日志。
 16. **放弃与退出不是结算**：顶层状态在不由本系统发起交接的情况下离开 `Run` / `Paused` 进入 `Menu` 或 `Quit`（暂停菜单放弃、直接退出、窗口关闭确认），本系统丢弃本局全部状态并广播 `run_discarded`；不产生 `RunResult`、不结算、不写纪录。下一局从全新的 `RunConfig` 开始。
 17. **重开是全新一局**：结算屏“再来一局”是一次新的 `Menu → Run`，分配新的 `run_id`、新的 `run_seed`（`RunConfig.seed` 为空时），所有子系统重置；上一局的任何字段都不延续。“重开”不是独立生命周期事件——每一次开始都是重置。
-18. **失败不是卡死**：容量不一致、结算错误、日志含未知菜等不变式失败时进入 `Faulted`，以 ERROR 记录 `run_id` 与违反的字段，并通过当前唯一可用的无结果返回（`Run → Menu`，`init_failed = true` 附带 `fault` 明细）离开 `Run`。若返回请求因同帧 `Menu → Run` 已生效而被拒绝，留在 `Faulted` 并在下一帧重发。绝不把玩家留在 `Run` 里，也绝不伪造 `RunResult`。该返回通道复用 `init_failed` 是暂定方案，见 Open Questions。
+18. **失败不是卡死**：容量不一致、结算错误、日志含未知菜等不变式失败时进入 `Faulted`，以 ERROR 记录 `run_id` 与违反的字段，并通过当前唯一可用的无结果返回（`Run → Menu`，`init_failed = true` 附带 `fault` 明细）离开 `Run`。**`fault` 必须携带 `phase ∈ {INIT, RUN}`**：`INIT` = 初始化阶段失败、`run_started` 从未发出、本局从未开始；`RUN` = 开局之后的不变式或结算失败、玩家已经玩过这一局。界面流程按 `phase` 选择文案，不得对 `RUN` 说「本局未能开始」。若返回请求因同帧 `Menu → Run` 已生效而被拒绝，留在 `Faulted` 并在下一帧重发。绝不把玩家留在 `Run` 里，也绝不伪造 `RunResult`。
 19. **确定性**：给定同一 `RunConfig`（含显式种子）与同一动作序列，`run_seed`、`end_reason` 与 `RunLog` 必须逐字段相同——**`run_id` 除外**，它按局递增。本系统不使用系统时钟或未播种随机数；种子在 `run_started` 中记录，供复盘与复现。
 20. **交接尽量单帧、不做等待态**：动作提交、结束判定与结算都在触发帧内完成；返回请求在切换合法的第一帧发出，最迟下一帧——因同帧 `Menu → Run` 已生效而被拒绝时顺延一帧。不插入加载、过场或“结算中”状态。淡入淡出属于表现层，且不得推迟状态生效（场景与流程管理规则 12）。
 21. **首局钩子**：`RunConfig` 可以携带 `is_first_run` 与可选的 `pool_override`，本系统把它们原样转交首局引导与菜单波次，除此之外对首局不做任何特殊处理。首局引导可以压入 Blocked 输入上下文，但不得改变本局状态、结束条件或生命周期。
@@ -445,8 +445,8 @@ The `transition_cost` rule is defined as:
 
 | # | 问题 | 负责人 | 何时解决 |
 |---|---|---|---|
-| 1 | **结算失败的返回通道**：场景与流程管理只有 `init_failed`，没有 `run_faulted`。本 GDD 暂定复用 `init_failed = true` 并附 `fault` 明细。是否给 #3 增加独立 payload（或允许无 payload 返回）？ | systems-designer + game-designer | 场景与流程管理复审时 |
-| 2 | **输入 GDD 把 `ui_pause` 列为本系统的读取项**，但顶层暂停由场景与流程管理消费；本系统不应重复读取。是否修正输入 GDD 的下游行？ | game-designer（输入） | `/consistency-check` 时 |
+| 1 | **结算失败的返回通道**：**已回答（2026-11-04 交叉复审）**：继续复用 `init_failed = true`，但 `fault` 必须带 `phase ∈ {INIT, RUN}`，由界面流程据此区分「本局未能开始」与「本局结算失败，收益不计」。不再需要给 #3 增加独立 payload。 | systems-designer + game-designer | 已解决 |
+| 2 | **输入 GDD 把 `ui_pause` 列为本系统的读取项**，但顶层暂停由场景与流程管理消费；本系统不应重复读取。**已回答（2026-11-04）**：输入 GDD 的下游行已改为 `ui_accept` / `game_skip_wave`，不含 `ui_pause`。 | game-designer（输入） | 已解决 |
 | 3 | **`game_skip_wave` 的语义与命名**：输入 GDD 描述为“跳过悬停的菜品卡”，菜单波次实现为“跳过当前波 / 最后一波结束取餐”。是否改名为 `game_skip_wave` 或拆成两个动作？ | game-designer（输入 + 菜单波次） | 写 `/ux-design` 局内 HUD 前 |
 | 4 | **放弃/退出的清理通知**：场景与流程管理从 `Paused → Menu (abandoned)` 或 `Quit` 时没有显式通知本系统；本 GDD 暂定由本系统观察顶层状态来丢弃。是否增加 `run_discarded` 通知？ | systems-designer | 场景与流程管理复审时 |
 | 5 | **首局 6 道菜的菜池注入**：本 GDD 预留 `RunConfig.pool_override`，但菜单波次当前只读 `StationData.dish_pool`。是用专用档口、数据覆盖还是让菜单波次接受覆盖？ | game-designer（首局引导 + 菜单波次） | 首局引导 GDD 编写时 |

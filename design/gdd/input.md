@@ -73,10 +73,10 @@ Godot 4.6 起鼠标焦点与键盘/手柄焦点分离，因此输入层负责分
 |---|---|---|---|
 | 场景与流程管理 | 下游读取 + 请求上下文 | `request_context(ctx, clear_stack := true)`；`context_changed(from, to)` | 硬 |
 | 界面流程 | 下游读取 + 请求上下文 | 焦点、导航、`ui_accept`、`ui_cancel`；`push_context(Modal)` / `pop_context()` | 硬 |
-| 餐局流程 | 下游读取 | 每回合的 `ui_accept`、`game_skip_wave`、`ui_pause` | 硬 |
+| 餐局流程 | 下游读取 | 每回合的 `ui_accept`、`game_skip_wave`（`ui_pause` 由场景与流程管理消费，本系统不为它读取） | 硬 |
 | 局内 HUD | 下游读取 | 菜品卡的悬停、点击、右键 | 硬 |
 | 首局引导 | 下游读取 + 请求上下文 | `push_context(Blocked)` / `pop_context()`；`ui_pause` 始终允许，`allow` 追加引导需要的动作 | 软 |
-| 音效反馈 | 下游读取 | 动作触发事件（用于 UI 音效） | 软 |
+| 音效反馈 | 无直接依赖 | 本系统**不**向音效发送任何事件。音效只订阅界面流程与 HUD 发出的语义事件（`ui_button_activated`、`dish_action_rejected` 等），不读原始输入动作——见 `design/gdd/audio-feedback.md` | — |
 
 **接口所有权**：输入拥有动作映射、上下文状态机与双焦点记录。下游只查询动作与焦点，**不修改映射表**；上下文另经 `request_context` / `push_context` / `pop_context` 请求（规则 12），不直接赋值。
 
@@ -168,7 +168,7 @@ The `stick_engaged` formula is defined as:
 | 餐局流程 | 硬 | 每回合的 `ui_accept`、`game_skip_wave`、`ui_pause` | GDD 已写（`design/gdd/run-flow.md`） |
 | 局内 HUD | 硬 | 菜品卡的悬停、点击、右键 | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 首局引导 | 软 | 请求 Blocked 上下文；`ui_pause` 始终允许，`allow` 追加指定动作 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
-| 音效反馈 | 软 | 动作触发事件 | GDD 已写（`design/gdd/audio-feedback.md`） |
+| 音效反馈 | 无 | 无直接依赖；音效只消费界面流程与 HUD 的语义事件，不订阅原始输入 | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 场景与流程管理 | 硬 | 顶层状态切换时调用 `request_context(default_ctx, clear_stack := true)`；订阅 `context_changed`；由它订阅 `ui_pause` 驱动 `Run ⇄ Paused` | GDD 已写 |
 
 **双向一致（已完成）**：索引第 5、15、16 行的 `Depends On` 已分别记录「输入」；场景与流程管理的 GDD 也已完成并把「输入」列为上游依赖，索引第 3 行已记为「数据配置, 输入」。以上系统编写各自 GDD 时必须同样列出「输入」为上游依赖。
@@ -181,7 +181,7 @@ The `stick_engaged` formula is defined as:
 - **鼠标悬停**：使用与焦点不同的样式，两者可以同时出现且可区分（Godot 4.6 双焦点）。
 - **无效操作**：点击空白处不产生视觉反馈，也不消耗时间格。
 
-音效由「音效反馈」系统负责；输入只发出动作事件，不自己选音。
+音效由「音效反馈」系统负责；输入不发出任何音效事件，也不选音。音效只订阅界面流程与 HUD 的**语义事件**（已提交的控件激活、动作被拒、数字滚动），不订阅原始输入动作——因此焦点移动、悬停与「按下但未提交」不会产生声音（`design/gdd/audio-feedback.md` 规则 19）。
 
 ## Game Feel
 

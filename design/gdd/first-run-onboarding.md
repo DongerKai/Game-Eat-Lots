@@ -71,7 +71,7 @@
 
 14. **收据讲解是 payload，不是本系统绘制的界面**：`B4` 产出 `FirstRunExplanation`（两段短文案、逐行单位价值的取舍说明、一处替换建议、一条首笔升级建议），交给界面流程在收据屏上渲染。本系统不拥有收据的布局、顺序、字体或折叠；收据没有出现（放弃、故障、`init_failed`）时本系统静默结束，不补弹窗。
 
-15. **完成判定**：`beats_required` 全部展示过、且 `B4` payload 已交付，即视为完成，广播一次 `onboarding_finished(ALL_BEATS)`。完成不写任何持久化；「下一局还算不算首局」由组装方决定（推荐规则：`records.career.runs_settled == 0`）。
+15. **完成判定**：`beats_required` 全部展示过、且 `B4` payload 已交付，即视为完成，广播一次 `onboarding_finished(ALL_BEATS)`。完成不写任何持久化。**「下一局还算不算首局」只有一个判据，由组装方按 `records.career.runs_settled == 0` 判定**；`onboarding_finished` 只用于关闭本局的遮罩与讲解，**不参与该判定**——否则「先跳过、再放弃」会让下一局在第一局从未结算的情况下丢掉教学。
 
 16. **跳过**：模态 beat 上按 `ui_cancel`，或点击气泡上的「跳过引导」文字按钮，立即跳过本局的全部引导：弹出 `Blocked`、丢弃剩余 beat、不再显示任何提示与收据讲解，广播一次 `onboarding_finished(SKIPPED)`。**不二次确认**——跳过的代价为零，确认框只是多一次点击。跳过只影响本局，不写存档。
 
@@ -126,7 +126,7 @@
 | 结算与入场费 | 上游 | `RunResult.rows[]` 的 `price`、`satiety`、`extra_satiety`、`effective_satiety`、`unit_value`、`effective_unit_value`；`entry_fee`、`total_value`、`net_profit` | 硬（`B4`） |
 | 菜单波次 | 上游（间接） | 接收 `pool_override`；`get_run_menu() -> StringName[]`（本局有效菜单，供 `replacement_hint`）；只读当前波的可见数与波序用于 B2 文案 | 软 |
 | 腻度与口味 | 上游（间接） | 读 `focused_dish_id` 的组计数与 `extra_satiety` 用于 B3 触发与文案；不写计数 | 软 |
-| 界面流程 | 下游 | 取预置（`pool_override` / `entry_fee_override`）；接收 `FirstRunExplanation` 并渲染收据讲解；读取 `onboarding_finished` 决定下一次 `is_first_run` | 硬（UI） |
+| 界面流程 | 下游 | 取预置（`pool_override` / `entry_fee_override`）；接收 `FirstRunExplanation` 并渲染收据讲解；**不据 `onboarding_finished` 判定首局**——`is_first_run` 只按 `records.career.runs_settled == 0` | 硬（UI） |
 | 局外升级 | 下游（仅文案） | `B4` 的「首笔升级建议」读升级目录与当前钱包，只出文字，不购买、不高亮按钮 | 软 |
 | 存档 | 无直接调用 | 不读写任何命名空间 | — |
 | 音效反馈 | 下游（订阅） | `onboarding_beat_shown(beat_id)`、`onboarding_finished(reason)` | 软 |
@@ -366,7 +366,7 @@ uv_gap      = unit_value(best_menu) − worst_eaten.effective_unit_value
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 界面流程 | 硬（UI） | 取首局预置；渲染 `FirstRunExplanation`；据 `onboarding_finished` 决定下一次 `is_first_run` | GDD 已写（`design/gdd/ui-flow.md`） |
+| 界面流程 | 硬（UI） | 取首局预置；渲染 `FirstRunExplanation`；`is_first_run` 只按 `records.career.runs_settled == 0` 判定，`onboarding_finished` 不参与 | GDD 已写（`design/gdd/ui-flow.md`） |
 | 菜单波次 | 软 | 接收并应用 `pool_override`（当前只读 `StationData.dish_pool`，见 Open Questions） | GDD 已写（`design/gdd/menu-waves.md`） |
 | 腻度与口味 | 软 | 提供焦点菜的组计数与 `extra_satiety` 供 B3 触发；不接受任何写入 | GDD 已写（`design/gdd/cloying-and-taste.md`） |
 | 局外升级 | 软（仅文案） | `B4` 的首笔升级建议读目录与钱包，只出文字 | GDD 已写（`design/gdd/meta-upgrades.md`） |

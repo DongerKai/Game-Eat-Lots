@@ -1,8 +1,8 @@
 # Systems Index: 回本 (Break Even)
 
-> **Status**: Approved
+> **Status**: Needs Revision
 > **Created**: 2026-11-03
-> **Last Updated**: 2026-11-03
+> **Last Updated**: 2026-11-04
 > **Source Concept**: design/gdd/game-concept.md
 
 ---
@@ -62,10 +62,10 @@ were found.
 | 6 | 时间与回合 | Core | MVP | Approved | design/gdd/time-and-turns.md | 餐局流程 |
 | 7 | 胃容量 | Gameplay | MVP | Approved | design/gdd/stomach-capacity.md | 餐局流程, 数据配置 |
 | 8 | 菜品数值 | Gameplay | MVP | Approved | design/gdd/dish-values.md | 数据配置 |
-| 9 | 腻度与口味 | Gameplay | MVP | Approved | design/gdd/cloying-and-taste.md | 菜品数值, 餐局流程 |
-| 10 | 菜单波次 | Gameplay | Vertical Slice | Approved | design/gdd/menu-waves.md | 菜品数值, 数据配置, 餐局流程 |
+| 9 | 腻度与口味 | Gameplay | MVP | Needs Revision | design/gdd/cloying-and-taste.md | 菜品数值, 餐局流程 |
+| 10 | 菜单波次 | Gameplay | Vertical Slice | Needs Revision | design/gdd/menu-waves.md | 菜品数值, 数据配置, 餐局流程 |
 | 11 | 结算与入场费 | Economy | MVP | Approved | design/gdd/settlement-and-entry-fee.md | 菜品数值, 腻度与口味, 胃容量, 时间与回合, 餐局流程 |
-| 12 | 局外升级 | Progression | MVP | Approved | design/gdd/meta-upgrades.md | 结算与入场费, 存档, 数据配置 |
+| 12 | 局外升级 | Progression | MVP | Needs Revision | design/gdd/meta-upgrades.md | 结算与入场费, 存档, 数据配置 |
 | 13 | 解锁与档口 | Progression | Vertical Slice | Approved | design/gdd/unlocks-and-stations.md | 局外升级, 存档, 数据配置 |
 | 14 | 纪录与里程碑 | Progression | Vertical Slice | Approved | design/gdd/records-and-milestones.md | 结算与入场费, 存档, 数据配置 |
 | 15 | 局内 HUD | UI | MVP | Approved | design/gdd/in-game-hud.md | 餐局流程, 时间与回合, 胃容量, 菜品数值, 输入, 结算与入场费, 腻度与口味, 菜单波次 |
