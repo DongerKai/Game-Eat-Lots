@@ -31,7 +31,7 @@
 6. **跳过即失去** — 被跳过的菜在本局不再出现。代价不是回合，是那几道菜本身；回合代价只用于跨波。
 7. **可见度升级买预览，不买整波** — `MENU_VISION` 每级揭示下一波中的若干道菜：`preview_dishes = min(menu_vision, wave_size − 1)`。**不提供"看到整波"**：12 道菜各出现一次时，看到两整波（8 道）就能推出第三波，等于全知。
 8. **回合是共享预算** — 吃菜与跳过共用 `T` 个回合：`eats + skips ≤ T`。跳过不是免费的额外动作，它从同一份时间里扣。
-9. **菜单健康（运行期，基准预计算）** — 开局按本局种子划分后，用**构建期预计算**的 `opt_value(pool, C0, T)` 表校验三件事：每波非空、划分恰好覆盖菜池一次、**可达最优落在基准的双侧带 `[0.9, 1.1]` 内**。基准是**本局实际菜池**（`pool_override` 非空时为覆盖池），`C0 = 20`、`T = turn_budget`、`cloying_resistance = 0`。未达标就换下一个种子重掷，最多 20 次；仍不达标则采用得分最高的一次并写 warning，不阻断开局。单次健康校验按**节点数**计（有界 DP ≤ 5×10⁴ 节点，墙钟 ≤ 50 ms 仅作二级护栏）；超节点预算时只检查每波非空与覆盖，返回 `DEGRADED` 并写 warning。
+9. **菜单健康（运行期，基准预计算）** — 开局按本局种子划分后，用**构建期预计算**的 `opt_value(pool, C0, T)` 表校验三件事：每波非空、划分恰好覆盖菜池一次、**可达最优 ≥ 0.9 × `opt_value(pool, C0, T)`**（只卡下界；上界为防回归断言，由 `dish-values` 处理）。**健康校验不计腻度**：`wave_reachable_opt` 用静态 `satiety`，因此结果是真实可达值的**上界**，只用于挡明显坏的划分。基准是**本局实际菜池**（`pool_override` 非空时为覆盖池），`C0 = 20`、`T = turn_budget`。未达标就换下一个种子重掷，最多 20 次；仍不达标则采用得分最好的一次并写 warning，不阻断开局。单次校验用 `(菜序位置, 剩余容量, 剩余回合)` DP，≤ 12 × 21 × 11 ≈ 2.8×10³ 态、≤ 10⁴ 节点；超节点预算时只检查每波非空与覆盖，返回 `DEGRADED` 并写 warning。
 10. **确定性** — 同一 `(station_id, seed)` 产生同一划分。洗牌只使用显式种子的随机数，不依赖字典遍历、资源扫描顺序或平台。
 11. **可见度在开局锁定** — `menu_vision` 由「餐局流程」在开局传入并锁定。中途升级不改变本局的划分或预览。
 12. **不聚合** — 本系统不计算总分、也不替玩家判断该吃哪道。它只回答"现在能看到哪些菜、下一波要花什么代价"。
@@ -152,20 +152,20 @@ advance_cost(run) =
 
 The `wave_reachable_opt` formula is defined as:
 
-`wave_reachable_opt(M, seed, C, T, menu_vision) = max { Σ price(d) : s 是合法出餐序列 }`
+`wave_reachable_opt(M, seed, C0, T) = max { Σ price(d) : s 是合法出餐序列 }`
 
-合法出餐序列 `s` 是：按波序逐波进行；每一波内选择**一个有序子序列**吃掉（顺序影响腻度解腻）；可以随时花 1 回合结束当前波并丢弃剩余菜；满足 `Σ satiety_eff ≤ C` 与 `eats + skips ≤ T`。
+合法出餐序列 `s` 是：按波序逐波进行；每一波内选择一个子序列吃掉；可以随时花 1 回合结束当前波并丢弃剩余菜；满足 `Σ satiety ≤ C0` 与 `eats + skips ≤ T`。**健康校验不计腻度**（用静态 `satiety`），因此本值是真实可达值的上界，只用于挡明显坏的划分。
 
 **Variables:**
 
 | Variable | Type | Range | Source | Description |
 |---|---|---|---|---|
-| `C` | int | ≥ 1 | 胃容量系统 | 一局容量 |
+| `C0` | int | ≥ 1 | 数据配置 `BalanceData.base_capacity` | 基础容量 20 |
 | `T` | int | ≥ 1 | 时间与回合 | 一局回合数 |
-| `satiety_eff` | int | 1–9 | 腻度与口味 | 实际饱腹，含重复追加 |
+| `satiety` | int | 1–9 | 数据配置 `DishData.satiety` | 静态饱腹；健康校验不计腻度 |
 | `wave_reachable_opt` | int | 0–Σprice | calculated | 该划分下最优玩家能拿到的分数 |
 
-**Output Range:** `[0, opt_value(M, C, T)]`，且永不超过静态最优。可达最优用 `(波索引, 剩余容量, 剩余回合)` 的有界动态规划求值：状态数 3 × 21 × 11 = 693，单次校验节点数 ≤ 5×10⁴。
+**Output Range:** `[0, opt_value(M, C0, T)]`，且永不超过静态最优。可达最优用 `(菜序位置, 剩余容量, 剩余回合)` 的有界动态规划求值：状态数 ≤ 12 × 21 × 11 ≈ 2.8×10³，单次校验节点数 ≤ 10⁴。
 
 **Example:** 三波划分良好、无需跳过时 = **104**（静态最优完整可达）。若前两波各含一道最优餐之外的菜（炒青菜、海鲜锅），最优玩家各付 1 回合跳过 → 8 道菜 → **95**，仍在 0.9 阈值（94）之上。
 
@@ -174,7 +174,7 @@ The `wave_reachable_opt` formula is defined as:
 The `wave_healthy` formula is defined as:
 
 ```
-wave_healthy(M, seed) =
+wave_healthy(M, seed, pool, C0, T) =
   UNHEALTHY  若 (∃i: |W_i| = 0) ∨ (⊎ W_i ≠ M)
           ∨ (可达检查已执行 ∧ wave_reachable_opt < 0.9 × opt_value(pool, C0, T))
   DEGRADED   若 非空与覆盖通过 ∧ 可达检查因超节点预算被跳过
@@ -186,13 +186,13 @@ wave_healthy(M, seed) =
 | Variable | Type | Range | Source | Description |
 |---|---|---|---|---|
 | `opt_value(pool, C0, T)` | int | ≥ 0 | 菜品数值 | 本局实际菜池的静态最优；`pool_override` 非空时为覆盖池，否则为档口全池 |
-| 双侧带 | int 区间 | ≥ 0 | calculated | `[0.9, 1.1] × opt_value(pool, C0, T)`；MVP 全池 104 → `[94, 115]` |
+| 下界 | int | ≥ 0 | calculated | `0.9 × opt_value(pool, C0, T)`；MVP 全池 104 → 94。上界不参与判定，由 `dish-values` 的防回归断言处理 |
 | `wave_healthy` | enum | `HEALTHY` / `DEGRADED` / `UNHEALTHY` | calculated | 该划分是否可开局；`DEGRADED` 表示可达检查未执行 |
 | `可达检查已执行` | bool | {true, false} | calculated | 节点预算内完成了可达最优 DP |
 
-**Output Range:** `{true, false}`。**注意这里校验的是可达最优，不是全池最优**——全池最优对任何洗牌都等于 104，用它做校验等于永远通过（死代码）。只有当菜池大于回合预算、或腻度的顺序约束被波次切断时，可达最优才会低于全池。
+**Output Range:** `HEALTHY` / `DEGRADED` / `UNHEALTHY`。**注意这里校验的是可达最优，不是全池最优**——全池最优对任何洗牌都等于 104，用它做校验等于永远通过（死代码）。只有当菜池大于回合预算、或腻度的顺序约束被波次切断时，可达最优才会低于全池。
 
-**Example:** 12 道菜、3 波、无跳过 → 可达 104 ≥ 94 → `wave_healthy = true`。前两波各含一道菜池外的菜（炒青菜、海鲜锅）时，最优玩家各付 1 回合跳过 → 8 道菜 → 95，仍通过。**当前参数下阈值偏宽，重掷很少触发**——0.9 × 104 = 93.6 的带宽能吸收两次跳过。只有当菜池大于回合预算（后续档口）、或腻度的解腻菜被波次切到无法插入时，可达最优才会真正跌破这条线；届时这个校验才成为主要闸门。
+**Example:** 12 道菜、3 波、无跳过 → 可达 104 ≥ 94 → `wave_healthy = HEALTHY`。前两波各含一道菜池外的菜（炒青菜、海鲜锅）时，最优玩家各付 1 回合跳过 → 8 道菜 → 95，仍通过。**当前参数下阈值偏宽，重掷很少触发**——0.9 × 104 = 93.6 的带宽能吸收两次跳过。只有当菜池大于回合预算（后续档口）、或腻度的解腻菜被波次切到无法插入时，可达最优才会真正跌破这条线；届时这个校验才成为主要闸门。
 
 ## Edge Cases
 

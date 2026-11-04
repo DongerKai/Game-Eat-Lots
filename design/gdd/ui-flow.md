@@ -78,7 +78,7 @@
 
 19. **进入失败、故障与放弃只给提示，不给收据** — `Menu` 根屏因 `init_failed = true` 或 `fault` 明细进入时，显示非模态提示「本局未能开始」+ 原因（debug 显示故障码与字段），不打开收据、不入账、不写纪录；焦点回到「开始营业」，提示在确认、取消或下一次屏幕变化时消失，同一事件不重复弹出。`abandoned = true` 进入时显示「本局已放弃，收益不计」的非模态提示，同样不打开收据。提示层不阻塞输入，不改变主菜单的可用控件。
 
-20. **存档载入结果：成功的安静，异常的必须说清楚** — 进入 `Menu` 后读取一次 `LoadReport`。`Fresh` / `Loaded` / `Migrated` 不弹提示（`Migrated` 的迁移写回由保存指示体现）。`Recovered` 显示一次非模态说明，写明来源是备份与可能丢失的范围，玩家可关闭，**不重复弹出**。`ReadOnly` 显示一次非模态说明，提供「以只读继续」与「退出」两个出口；只读期间隐藏购买/解锁入口，**不提供「新建生涯」**（避免隔离对方正在写的文件）。`Blocked` 显示**强制模态**，按原因给出口（`存档` UI Requirements 4）：更新版本 / 无法读取 → 「退出」「新建生涯（旧档保留）」；迁移失败 / 持锁不可读 → 「退出」「重试」。默认焦点为「退出」，`ui_cancel` 无效，**不得提供覆盖保存**。强制模态同样经 `push_context(Modal)` 获得焦点陷阱，并显式消费 `ui_cancel` 为空操作；窗口关闭请求仍按 `场景与流程管理` 规则 10 直接退出（`Menu` 中无需确认），不算第三个按钮。`Blocked` 未解决前，主菜单的其他控件不可操作；选择「新建生涯」后由存档建立新生涯，界面流程刷新钱包、升级、纪录与主菜单；选择「重试」则调用 `存档.retry_load()` 并停留在 `Menu`；选择「退出」则请求 `Quit`。`LoadReport.writable = false`（`Blocked` / `ReadOnly`）时，所有写盘依赖的动作（购买、解锁、任何写入入口）禁用并显示原因（`局外升级` 规则 19）。
+20. **存档载入结果：成功的安静，异常的必须说清楚** — 进入 `Menu` 后读取一次 `LoadReport`。`Fresh` / `Loaded` / `Migrated` 不弹提示（`Migrated` 的迁移写回由保存指示体现）。`Recovered` 显示一次非模态说明，写明来源是备份与可能丢失的范围，玩家可关闭，**不重复弹出**。`ReadOnly` 显示一次非模态说明，提供「以只读继续」与「退出」两个出口；只读期间隐藏购买/解锁入口，**不提供「新建生涯」**（避免隔离对方正在写的文件）。`Blocked` 显示**强制模态**，按锁与原因给出口（`存档` UI Requirements 4）：若 `LoadReport.lock_live = true`，无论原因只给「退出」「重试」；否则更新版本 / 无法读取 → 「退出」「新建生涯（旧档保留）」，迁移失败 → 「退出」「重试」。默认焦点为「退出」，`ui_cancel` 无效，**不得提供覆盖保存**。强制模态同样经 `push_context(Modal)` 获得焦点陷阱，并显式消费 `ui_cancel` 为空操作；窗口关闭请求仍按 `场景与流程管理` 规则 10 直接退出（`Menu` 中无需确认），不算第三个按钮。`Blocked` 未解决前，主菜单的其他控件不可操作；选择「新建生涯」后由存档建立新生涯，界面流程刷新钱包、升级、纪录与主菜单；选择「重试」则调用 `存档.retry_load()` 并停留在 `Menu`；选择「退出」则请求 `Quit`。`LoadReport.writable = false`（`Blocked` / `ReadOnly`）时，所有写盘依赖的动作（购买、解锁、任何写入入口）禁用并显示原因（`局外升级` 规则 19）。
 
 21. **保存指示安静、不阻塞、不发声** — 每次成功写入生涯档后显示「已保存」，约 `SAVE_INDICATOR_SECONDS = 1.5` 秒后淡出；不阻塞输入、不移动布局、不发出声音。首次建立生涯与迁移写回同样显示（`存档` UI Requirements 1）。失败提示按场景区分：购买失败显示「未保存，购买未生效」并恢复按钮；纪录写入失败显示「纪录可能未保存」，不打断收据阅读；钱包溢出显示「入账失败」；`APPLIED_UNSAVED` 在钱包旁显示「本次会话不保存」标记（`存档` UI Requirements 2、`局外升级` UI Requirements）。**设置写入不显示生涯保存指示**——设置不属于生涯档（`存档` 规则 20）。
 
@@ -156,7 +156,7 @@
 | 结算与入场费 | 上游（数据） | 读：`RunResult` 的 `rows`、`total_value`、`entry_fee`、`net_profit`、`return_ratio` / `return_percent_x10`、容量/回合/腻度明细；`broke_even` 派生谓词。**不重算、不排序、不展示最优解** | 硬 |
 | 局外升级 | 上游（数据） | 读：`get_wallet()`、`get_catalog()`、`get_level(id)`、`next_price(id)`、`can_purchase(id)`、`resolve_upgrade_snapshot()`、`progression_changed`。写：`prepare_run_result(result)` 恰好一次、`purchase(id)` | 硬 |
 | 纪录与里程碑 | 上游（数据） | 读：`snapshot()`、`get_milestone_catalog()`、`milestone_progress(id)`、`record_broken` / `milestone_earned` / `career_completed` 信号。写：`prepare_run(result)` 恰好一次（由界面流程作为结算事务编排者调用） | 硬 |
-| 存档 | 上游（数据） | 读：`LoadReport`（`outcome`、`writable`、`warnings`）、`SaveStatus` / `save_status_changed`。写：`commit({progression, records[, unlocks]})`、`flush()`、`delete_career(confirm_token)` | 硬 |
+| 存档 | 上游（数据） | 读：`LoadReport`（`outcome`、`writable`、`warnings`、`lock_live`）、`SaveStatus` / `save_status_changed`、`retry_load()`。写：`commit({progression, records[, unlocks]})`、`flush()`、`delete_career(confirm_token)` | 硬 |
 | 音效反馈 | 同级协调（双向） | 界面流程拥有主音量 / 音效音量 / 静音 / 减少重复音效四项设置值；音效反馈消费它们。界面流程发 `ui_button_activated(control_id)`、收据 `number_roll_started/finished`、`receipt_closed(reason)`；音效不订阅原始输入、不读 `RunResult` | 硬（事件与设置契约）；播放本身为软 |
 | 数据配置 | 上游（显示只读） | 读：`get_station(station_id)` 的 `display_name`、`entry_fee`；`get_dish(dish_id)` → `display_name`（收据菜名）。**只用于显示，不参与任何玩法判定** | 硬（显示） |
 | 局内 HUD | 同级协调 | 无数据依赖。屏幕归属：HUD 画局内一屏；界面流程画暂停菜单、收据、菜单、升级、设置、错误屏。`Paused` 时暂停菜单覆盖 HUD 但不卸载；`Settling` 时收据覆盖 HUD；HUD 保留到收据出现的那一帧 | 协调 |
@@ -501,7 +501,7 @@ The `displayed_value` formula is defined as:
 | `SettingsModal` | 任意有界面的状态 | 音频：主音量、音效音量、静音、减少重复音效；无障碍：文本缩放、减少动态；显示：HUD 不透明度；次级：删除生涯（两次确认）；「关闭」 | 主音量滑杆 | `ui_cancel` → 关闭并恢复打开前焦点 |
 | `ConfirmModal` | 任一确认动作 | 标题、后果文案、「取消」、「确认」；不可逆/破坏性动作默认「取消」 | 「取消」 | `ui_cancel` → 取消 |
 | `ReadOnlyNotice` | `LoadReport = ReadOnly` | 非模态说明；「以只读继续」「退出」；隐藏购买/解锁 | 「以只读继续」 | 可关闭 |
-| `BlockedModal` | `LoadReport = Blocked` | 四种原因；更新版本 / 无法读取 → 退出/新建生涯；迁移失败 / 持锁不可读 → 退出/重试；无「覆盖保存」 | 「退出」 | `ui_cancel` 无效（强制模态） |
+| `BlockedModal` | `LoadReport = Blocked` | 锁优先：`lock_live` → 退出/重试；否则更新版本 / 无法读取 → 退出/新建生涯，迁移失败 → 退出/重试；无「覆盖保存」 | 「退出」 | `ui_cancel` 无效（强制模态） |
 | `NoticeLayer` | 各种事件 | 保存指示、恢复说明、进入失败/放弃提示、完成横幅 | 无（非模态） | 可关闭项用 `ui_accept` / `ui_cancel` 关闭 |
 
 **焦点与顺序**：每个屏幕的焦点顺序按屏幕位置（上→下、左→右），不按节点树；初始焦点以上表为准。模态打开时焦点移入模态并形成陷阱，关闭后回到打开它的控件；若该控件已不可用，退回父屏幕顺序表的第一个可用控件。禁用控件不可获焦，且必须在控件旁给出原因。鼠标悬停与键盘/手柄焦点分别绘制（`输入` 规则 8）；鼠标点击只激活悬停控件，一次点击只发一次 `ui_button_activated`。
@@ -583,7 +583,7 @@ The `displayed_value` formula is defined as:
 **存档**
 
 25. **GIVEN** `LoadReport = Fresh / Loaded / Migrated`，**WHEN** 进入主菜单，**THEN** 不弹载入提示；**GIVEN** `Recovered`，**THEN** 显示一次非模态说明，可关闭且不重复。
-26. **GIVEN** `LoadReport = Blocked`，**WHEN** 进入主菜单，**THEN** 模态深度为 1、默认焦点「退出」、`ui_cancel` 无效、无「覆盖保存」；更新版本 / 无法读取只给「退出」「新建生涯（旧档保留）」，迁移失败 / 持锁不可读只给「退出」「重试」；主菜单其他控件不可操作；「新建生涯」隔离旧档并刷新钱包/升级/纪录，「重试」调用 `存档.retry_load()`；窗口关闭按 `Menu` 规则直接 `Quit`。
+26. **GIVEN** `LoadReport = Blocked`，**WHEN** 进入主菜单，**THEN** 模态深度为 1、默认焦点「退出」、`ui_cancel` 无效、无「覆盖保存」；`lock_live = true` 时任何原因只给「退出」「重试」；非锁时更新版本 / 无法读取只给「退出」「新建生涯（旧档保留）」，迁移失败只给「退出」「重试」；主菜单其他控件不可操作；「新建生涯」隔离旧档并刷新钱包/升级/纪录，「重试」调用 `存档.retry_load()`；窗口关闭按 `Menu` 规则直接 `Quit`。
 27. **GIVEN** 一次成功写入，**WHEN** 保存完成，**THEN** 显示「已保存」约 1.5 秒后淡出；不阻塞输入、不移动布局、不发声；**GIVEN** 购买写盘失败，**THEN** 显示「未保存，购买未生效」并恢复按钮；**GIVEN** 设置写入失败，**THEN** 只显示「设置可能未保存」，不显示生涯保存指示。
 28. **GIVEN** `LoadReport.writable = false`，**WHEN** 打开升级页，**THEN** 所有购买按钮禁用并显示原因；`purchase` 不被调用。
 

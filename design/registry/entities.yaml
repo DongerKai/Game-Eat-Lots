@@ -572,12 +572,11 @@ formulas:
     variables:
       - M
       - seed
-      - C
+      - C0
       - T
-      - menu_vision
-    output_range: [0, 99999]
-    expression: "max sum(price(d)) over legal wave play sequences (ordered subsets per wave; each skip costs 1 turn; eats + skips <= T; sum(effective_satiety) <= C)"
-    notes: "Generation-time only. Small search space at MVP (65 ordered subsets per wave). 104 with no skips, 100 with one, 95 with two."
+    output_range: "[0, opt_value(pool, C0, T)]"
+    expression: "max sum(price(d)) over legal wave play sequences (subsets per wave; each skip costs 1 turn; eats + skips <= T; sum(satiety) <= C0)"
+    notes: "Generation-time only. The health check ignores cloying and uses static satiety, so this is an upper bound on the true reachable value, used only to reject obviously bad partitions. Bounded DP over (dish position, remaining capacity, remaining turns), <= 1e4 nodes. 104 with no skips, 100 with one, 95 with two."
     added: "2026-11-03"
     revised: ""
 
@@ -594,7 +593,7 @@ formulas:
       - T
     output_range: "HEALTHY | DEGRADED | UNHEALTHY"
     expression: "UNHEALTHY if any wave empty or waves do not partition M or (reachable check ran and wave_reachable_opt < 0.9 * opt_value(pool, C0, T)); DEGRADED if non-empty/partition pass but the reachable check was skipped over the node budget; HEALTHY otherwise"
-    notes: "Boolean gate for a generated partition. MVP threshold 94 (0.9 x 104). Reroll up to 20 seeds; accept the best with a warning rather than blocking the run."
+    notes: "Three-state gate (HEALTHY / DEGRADED / UNHEALTHY) for a generated partition. DEGRADED means the reachable check was skipped over the node budget. MVP lower bound 94 (0.9 x 104); the upper bound is not enforced here. Reroll up to 20 seeds; accept the best with a warning rather than blocking the run."
   - name: total_value
     status: active
     source: design/gdd/settlement-and-entry-fee.md
