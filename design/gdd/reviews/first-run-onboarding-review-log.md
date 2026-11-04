@@ -154,3 +154,117 @@ Reviewed-Content-Hash: design/gdd/ui-flow.md 8f8255543b934bb5bfc11e7cbe914b66874
 Reviewed-Content-Hash: design/gdd/save-system.md 5d80a9bdcd8ffc603a0fa7d635fc736b40a4fe04
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
 Reviewed-Content-Hash: design/gdd/systems-index.md 182d446c25ab8aa50ccf7d672bc2132eeb2b22d3
+
+---
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 3 | Recommended: 13
+Summary: The teaching economy still reproduces exactly — base satiety 20 = capacity 20, six dishes need 21–22 cells, best five 82 against fee 40 for +42 / 205.0%, and the 12-yuan stomach upgrade is affordable. Four of the six prior blockers are fully closed: HUD now exposes `get_anchor_rect` and `get_protected_rects()` (OQ 8 closed), 界面流程 applies `get_first_run_preset()` with both overrides, the three named contract gaps have landed, and the satiety set is corrected to `{2,3,4,6}`. Two blockers are only partially closed: the `ui_accept` ownership fix specifies `consume_action` for B1 only and still attributes exclusivity to the `Blocked` whitelist in the edge cases, so a B0 confirm can still reach HUD and eat the first dish; and `replacement_hint` now names `run_menu` but 菜单波次 exposes no interface that returns the run's full effective menu, while this GDD's own 菜单波次 row says the guide never reads more than the current wave. A new downstream gap also remains: 界面流程 has no `FirstRunExplanation` (or `onboarding_finished`) receiving contract anywhere in its receipt spec, so B4's core output has no landing.
+Prior verdict resolved: No — 4 of 6 resolved, 2 partially (see mapping below)
+Suggested index status: `18 | 首局引导 | Meta | Vertical Slice | Needs Revision | design/gdd/first-run-onboarding.md | 餐局流程, 局内 HUD, 输入, 场景与流程管理, 菜品数值, 结算与入场费`
+Note: this GDD may not be edited in this session and `entities.yaml` may not be edited; the registry item below is for the orchestration session.
+
+Prior-blocker resolution:
+- **#1 `ui_accept` ownership — PARTIAL.** `consume_action` now exists (`input.md:54`, API AC `:222`) and B1 calls it (`:187`). But the mechanism is scoped to "B1 的模态分支"; B0 advances on `ui_accept` (`:48`, `:171`) and is never said to consume it. HUD's first-frame focus is the first eatable card (`in-game-hud.md:57`, AC 35), and HUD submits the focused dish on every `ui_accept` without reading the context (`:55`, AC 22; `:183`), so a B0 confirm can eat a dish. Edge case `:340` still asserts "吃菜在 `Blocked` 下本就到不了餐局流程" — the availability-is-not-exclusivity rationale the first review rejected. AC 6 checks `turns_remaining` / `capacity_used` (eating costs 1 turn, `time-and-turns.md:19`, so the bug is test-detectable) but no AC states B0 consumes the confirm.
+- **#2 `replacement_hint` domain — PARTIAL.** The domain is now `run_menu` (`:310`, `:320`), the example is corrected to 麻婆豆腐 with `uv_gap = 6.00 − 3.33 = 2.67` (`:331`), and `skipped = ∅` is labelled an unreachable defensive branch (`:327`, `:347`). But `run_menu` is sourced from 菜单波次 (`:320`) while `menu-waves.md` exposes only `visible_dishes` / `preview_dishes` / wave index (`:62-63`), never the full run menu; and this GDD's own 菜单波次 row (`:127`) says "本系统不读波次内部，只读当前波的可见数与波序" — the two statements contradict each other. In the `pool_override`-ignored degradation path the guide also has no way to learn the real pool (it does not query 数据配置, `:389`).
+- **#3 HUD anchor contract — RESOLVED.** `in-game-hud.md:175,394` now provide `get_anchor_rect(anchor_id) -> Rect2`, `get_protected_rects() -> Rect2[3]`, and OQ 8 is closed (`:541`).
+- **#4 界面流程 applies the preset — RESOLVED.** `ui-flow.md:57` fetches `首局引导.get_first_run_preset()` and sets both `pool_override` and `entry_fee_override`; AC at `:556` verifies it.
+- **#5 Stale contract claims — RESOLVED for the three named gaps.** `input.md:52,54` (`allow`, `consume_action`), `run-flow.md:65` (`entry_fee_override`), `menu-waves.md:62,69,176-184` (`pool_override` in partition and health check) all landed. Residual bidirectional claims are listed as recommended items 3–5.
+- **#6 Satiety set — RESOLVED.** `:296` now reads `2 / 3 / 4 / 6`, matching the registry.
+
+Findings:
+- [BLOCKING] Formulas `beat_next` (`:187`) / Detailed Design rule 6 (`:56`) / Edge Cases (`:340`) / AC 6 (`:463`): `consume_action` is specified only for B1. B0 also advances on `ui_accept`, and no rule consumes that confirm; HUD submits its focused (first, eatable) card on `ui_accept` without consulting the context. `:340` still explains exclusivity by the `Blocked` whitelist rather than by consumption. State that every modal beat consumes its advance action before advancing (B0 and B1), and rewrite `:340`.
+- [BLOCKING] Formulas `replacement_hint` (`:310`, `:320`) / Interactions 菜单波次 (`:127`): `run_menu` has no provider. `menu-waves.md` exposes `visible_dishes`, `preview_dishes`, skip cost and wave index — not the run's full effective menu — while this GDD's own row says the guide reads only the current wave. Add the getter on the 菜单波次 side (e.g. `get_run_menu() -> StringName[]`) and update both rows, or redefine `skipped` against a provider that exists.
+- [BLOCKING] Detailed Design rule 14 (`:72`) / Interactions 界面流程 (`:129`) / Dependencies (`:369`) / OQ 4 (`:504`): 界面流程 has no `FirstRunExplanation` receiving contract. `ui-flow.md` names `首局引导` (`:163`, `:442`, `:556`) but its receipt spec (`:63`, `:497`) has no explanation block, no replacement hint, no first-upgrade suggestion, and no teaching-price disclaimer ("正式食堂是 85 元", required by `:298`); it also never subscribes `onboarding_finished`. Close OQ 4 against the now-written `ui-flow.md` and define the receiving side, or narrow the claim.
+
+- [RECOMMENDED] Registry (`entities.yaml:1128-1134`): the `replacement_hint` entry still lists `station.dish_pool` and not `run_menu`. The GDD is now right and the owned registry entry is stale; regenerate it (orchestration session — `entities.yaml` is out of scope here).
+- [RECOMMENDED] Core Rule 3 (`:33`) / Interactions (`:129`): this GDD never declares `get_first_run_preset()`, although `ui-flow.md:57,163` calls it by that name. Name the getter in this system's own interface so the contract is two-sided.
+- [RECOMMENDED] Interactions (`:129`) / Dependencies (`:369`): the GDD says 界面流程 reads `onboarding_finished` to decide the next `is_first_run`, but `ui-flow.md:57` computes `is_first_run = career.runs_settled == 0` and never reads the signal. Describe the actual path (records → `runs_settled`) or make the signal the contract.
+- [RECOMMENDED] Interactions (`:132`) / Dependencies (`:373`) versus Cross-References note (`:394`) / Visual-Audio (`:406`): 音效反馈 is still listed as a downstream subscriber of `onboarding_beat_shown` / `onboarding_finished`, while `:394` correctly says `audio-feedback.md` has no 首局引导 row and `:406` treats silence as a legal degradation. Move it to "不属于依赖" or add the row there.
+- [RECOMMENDED] Interactions (`:119-132`) / Dependencies (`:356-374`): the six 硬 rows are still 软 on the upstream side — `run-flow.md:126`, `in-game-hud.md:175,394`, `input.md:78`, `scene-flow.md`, `dish-values.md`, `settlement-and-entry-fee.md:339`. Reconcile, at least for the four contract-level rows (输入, 局内 HUD, 餐局流程, 结算).
+- [RECOMMENDED] Open Questions (`:504`): OQ 4's premise "界面流程尚未设计" is false — `ui-flow.md` exists and is 90 KB. The real open item is its OQ 11 (`ui-flow.md:632`): how the guide anchors 界面流程 controls. Answer it (even if the answer is "B4 is a payload; the guide anchors no 界面流程 control").
+- [RECOMMENDED] Quick reference (`:13`): key deps list five systems; the Dependencies table has six. 结算与入场费 is still missing.
+- [RECOMMENDED] Beat table (`:50-51`) / rule 8 (`:60`) / `beat_next` (`:173-174`): B2/B3's 推进条件 says "下一次 `action_committed`，或 `run_ended`", but rule 8 says they are complete the moment they are shown. Reword to "展示后即完成；下一次 `action_committed` 时清掉残留提示".
+- [RECOMMENDED] Detailed Design (`:54`): "每条 beat 只讲一件事…一条气泡不得同时讲两件事" is still contradicted by its own content — B0 carries four facts (fee, capacity, turns, dish count) and B2 carries three (hard cap, table does not fit, waves/skip loses dishes). Restate as "each beat resolves one decision" or split B2.
+- [RECOMMENDED] Formulas (`:211`): "只有吃菜数 ≤ 2 … B3 才可能不触发" remains false for 3–4 dish runs. 海鲜锅 + 糖醋里脊 + 炸鸡腿 (the 酸 cleanses 鲜) never reaches a `group_count ≥ 1` focus, so B3 does not trigger at three dishes. `beats_required` already handles it; only the justification overstates.
+- [RECOMMENDED] Formulas (`:295`): the drop alternatives "(79 / 78 / 76 / 81)" still omit dropping 海鲜锅, `94 − 20 = 74`. Five alternatives exist for six dishes.
+- [RECOMMENDED] AC 29 (`:495`): the test exercises `skipped = ∅`, which `:327` now correctly marks unreachable in the teaching run. Reframe it as a unit-level defensive test rather than a playthrough AC.
+- [RECOMMENDED] Dependencies status column (`:358-363`): "GDD 已写" mixes in review states for two rows (`In Review` for scene-flow, `Approved` for dish-values) and asserts nothing for the others. Mark the unstable ones explicitly, since B4's fee path and the anchor contract still depend on GDDs under revision.
+
+Advisory (not counted):
+- Formulas (`:247`): the `W / H` range "1280×720 – 4320" still mixes an aspect pair with a single number (4K is 3840×2160), and `w`'s lower clamp of 280 is unreachable at any supported width (`0.36 × 1280 = 460.8`).
+- Formulas (`:309`): `argmin effective_unit_value` uses a value the registry annotates "Never used for sorting or gate decisions". The registry's own `replacement_hint` entry encodes the same argmin, so this is a registry wording problem; one clarifying clause would close it.
+- States (`:114`): `init_failed` from `Idle` → `Cancelled` — the run never started, so there is nothing to tear down. Scope the row to states after `Intro` or call it a no-op.
+- Formulas (`:342`, `:173`): B2 can display on the same frame as the player's first commit (2-frame anchor wait, then the first `action_committed` fallback), so the capacity lesson can arrive after the decision it explains. No timer is allowed, so this may be accepted — but say so.
+- Formulas (`:325`): `uv_gap ∈ [−7, 7]` is a loose domain bound; the MVP pool cannot reach either extreme (max static UV 7.00, min effective UV ≈ 2.86). State it as a bound rather than an observed range.
+
+### Design Review: 首局引导（First-Run Onboarding）
+Specialists consulted: none (lean mode)
+Re-review: Yes — prior verdict was NEEDS REVISION on 2026-11-04
+
+#### Completeness: 6/6 required sections present
+`modes.workflow: standard`. Required: Overview, Detailed Design, Formulas, Edge Cases, Dependencies, Acceptance Criteria — all present. Formulas is required because the system defines numeric rules (activation predicate, beat transitions, bubble geometry, text cap, replacement threshold). Player Fantasy and Tuning Knobs remain advisory at `standard`; both are carried inline (`## Game Feel`; geometry knobs at `:86`).
+
+#### Dependency Graph
+Every declared dependency has a GDD on disk, and all six dish ids resolve to `station_canteen` entries.
+- ✓ run-flow.md — Approved — `entry_fee_override` (`:65`), `pool_override` (`:69`)
+- ✓ in-game-hud.md — `get_anchor_rect` + `get_protected_rects()` present (`:175`, `:394`); OQ 8 closed
+- ✓ input.md — `allow` (`:52`) and `consume_action` (`:54`); hard/soft still 软 (`:78`)
+- ✓ scene-flow.md — `clear_stack := true` on top-level switch
+- ✓ dish-values.md — Approved — rules 5/6/11 match the citations
+- ✓ settlement-and-entry-fee.md — `RunResult` carries every field B4 needs (`:83`)
+- ✓ ui-flow.md — applies the preset (`:57`); **no `FirstRunExplanation` receiver** (blocking item 3)
+- ✓ menu-waves.md — `pool_override` in `initialize` and health check (`:62`, `:69`); **no full-menu getter** (blocking item 2)
+- ✓ cloying-and-taste.md / meta-upgrades.md / save-system.md — as claimed
+- ✓ audio-feedback.md — exists, **no 首局引导 row** (recommended item 4)
+
+#### Registry Values
+Searched the whole document for all 78 `entities.yaml` entry names plus the numeric keys they carry. Clean:
+- Six dish prices/satieties/groups/UVs match exactly (20/18/16/15/13/12; 6/4/3/3/2/2; 鲜/肉/肉/鲜/油/辣; 3.33/4.5/5.33/5.0/6.5/6.0), and all six are `station_canteen`.
+- `first_run_entry_fee = 40`, `first_run_pool_size = 6`, `first_run_pool` order, `onboarding_active` expression are byte-consistent.
+- `cloy_cap = 3`, `wave_size_default = 4`, `capacity_total = 20`, `station_canteen_turn_budget = 10` all match.
+- Arithmetic re-reproduces: 20 = capacity; +1 鲜 +1 肉 → 22; one cleanse → 21; best five `94 − 12 = 82`; `82 − 40 = +42`; `82/40 = 205.0%`; three dishes `54 → +14`; two dishes lose; `ceil(6/4) = 2` → 4+2.
+Conflicts:
+- `entities.yaml:1128-1134` — `replacement_hint` still lists `station.dish_pool` rather than `run_menu`. Registry is stale against its owning GDD (recommended item 1).
+
+#### Required Before Implementation
+1. **[BLOCKING]** Extend the `consume_action` rule to every modal beat: B0's `ui_accept` must be consumed before advancing, and `:340`'s "Blocked 下本就到不了" rationale must be replaced with the consumption mechanism. Add `eaten_count` to AC 6.
+2. **[BLOCKING]** Give `run_menu` a provider: add a full-effective-menu getter to 菜单波次 and update this GDD's 菜单波次 row, or redefine `skipped` against a provider that exists. The current Formulas row and Interactions row contradict each other.
+3. **[BLOCKING]** Define 界面流程's receiving side for `FirstRunExplanation` (including the teaching-price disclaimer) and `onboarding_finished`, and close OQ 4 against the now-written `ui-flow.md`.
+
+#### Recommended Revisions
+Items 1–13 above. The highest-leverage are the registry sync (1), the missing `get_first_run_preset()` declaration (2), the `onboarding_finished` claim (3), and the audio-feedback contradiction (4).
+
+#### Specialist Disagreements
+None — lean mode, Phase 3b not run. Every finding is from the main review.
+
+#### Unstable Interfaces
+- **界面流程** — no B4 contract; blocking item 3 is a change to a now-written but unreviewed document.
+- **菜单波次** — `pool_override` landed, but the menu getter blocking item 2 needs does not exist.
+- **结算与入场费 / 局内 HUD / 输入** — all under revision; re-check the fee path, the anchor rects, and the consume semantics before writing epics.
+
+#### Scope Signal
+Rough scope signal: **L** — 6 upstream + 6 downstream systems, 7 formula blocks plus a frozen content table, a new input-consumption mechanism, and two cross-document payload contracts. `systems-index.md:214` still records `S`; that is low by the review scale.
+
+### Verdict: NEEDS REVISION
+
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 3f99e25a3d35bd4922c0717adc033569a50abafb
+Reviewed-Content-Hash: design/registry/entities.yaml f8361d463dc6172ce3c22a462bccce6d2037d35c
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md ed8848ea7c41823db26e22fb7d5df5f998fc0234
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 654e48d14dbf85fdbab3b923e590a4f356dd0218
+Reviewed-Content-Hash: design/gdd/input.md 9432d857ed18dc216dc5a038f81608ae9e10d975
+Reviewed-Content-Hash: design/gdd/scene-flow.md 4efc24d198112aa612551f5b3e5bdeeac28cd52e
+Reviewed-Content-Hash: design/gdd/dish-values.md 60a580b19c4b2f980cd0a33df73e8c3aa32f6d3e
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 5734623b4a60d9072657ef631c8ae61f05359f21
+Reviewed-Content-Hash: design/gdd/menu-waves.md ce532d3265df1ed7555ba5aa46383be35bbee4a1
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md 1c8fd48bbdff0e8d24e5e436a8d801545df4da0b
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md b9b9235e9a4ad7d8739ad778e98dd147b1c72f94
+Reviewed-Content-Hash: design/gdd/audio-feedback.md f6ac7fbd915341f63761529b664028eec6b216c0
+Reviewed-Content-Hash: design/gdd/ui-flow.md 21482b6d00538b95af113995e613b8df29985a8a
+Reviewed-Content-Hash: design/gdd/save-system.md 772ed596d68eb5cbae207b7bac9a170ec55c1524
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+Reviewed-Content-Hash: design/gdd/systems-index.md 0c3efa52308253f2243c0771bff7c9b6d3ae5933
