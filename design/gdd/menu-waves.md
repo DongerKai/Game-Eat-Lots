@@ -31,7 +31,7 @@
 6. **跳过即失去** — 被跳过的菜在本局不再出现。代价不是回合，是那几道菜本身；回合代价只用于跨波。
 7. **可见度升级买预览，不买整波** — `MENU_VISION` 每级揭示下一波中的若干道菜：`preview_dishes = min(menu_vision, wave_size − 1)`。**不提供"看到整波"**：12 道菜各出现一次时，看到两整波（8 道）就能推出第三波，等于全知。
 8. **回合是共享预算** — 吃菜与跳过共用 `T` 个回合：`eats + skips ≤ T`。跳过不是免费的额外动作，它从同一份时间里扣。
-9. **菜单健康（运行期，基准预计算）** — 开局按本局种子划分后，用**构建期预计算**的 `opt_value(pool, C0, T)` 表校验三件事：每波非空、划分恰好覆盖菜池一次、**可达最优落在基准的双侧带 `[0.9, 1.1]` 内**。基准是**本局实际菜池**（`pool_override` 非空时为覆盖池），`C0 = 20`、`T = turn_budget`、`cloying_resistance = 0`。未达标就换下一个种子重掷，最多 20 次；仍不达标则采用得分最高的一次并写 warning，不阻断开局。单次健康校验预算 ≤ 300 ms（12 道菜、3 波最坏情形实测 40–250 ms）；超预算时只检查每波非空与覆盖，跳过可达最优检查并写 warning。
+9. **菜单健康（运行期，基准预计算）** — 开局按本局种子划分后，用**构建期预计算**的 `opt_value(pool, C0, T)` 表校验三件事：每波非空、划分恰好覆盖菜池一次、**可达最优落在基准的双侧带 `[0.9, 1.1]` 内**。基准是**本局实际菜池**（`pool_override` 非空时为覆盖池），`C0 = 20`、`T = turn_budget`、`cloying_resistance = 0`。未达标就换下一个种子重掷，最多 20 次；仍不达标则采用得分最高的一次并写 warning，不阻断开局。单次健康校验按**节点数**计（有界 DP ≤ 5×10⁴ 节点，墙钟 ≤ 50 ms 仅作二级护栏）；超节点预算时只检查每波非空与覆盖，返回 `DEGRADED` 并写 warning。
 10. **确定性** — 同一 `(station_id, seed)` 产生同一划分。洗牌只使用显式种子的随机数，不依赖字典遍历、资源扫描顺序或平台。
 11. **可见度在开局锁定** — `menu_vision` 由「餐局流程」在开局传入并锁定。中途升级不改变本局的划分或预览。
 12. **不聚合** — 本系统不计算总分、也不替玩家判断该吃哪道。它只回答"现在能看到哪些菜、下一波要花什么代价"。
@@ -165,7 +165,7 @@ The `wave_reachable_opt` formula is defined as:
 | `satiety_eff` | int | 1–9 | 腻度与口味 | 实际饱腹，含重复追加 |
 | `wave_reachable_opt` | int | 0–Σprice | calculated | 该划分下最优玩家能拿到的分数 |
 
-**Output Range:** `[0, opt_value(M, C, T)]`，且永不超过静态最优。搜索空间在 MVP 下很小：每波 4 道菜的有序子序列共 65 种，三波合计约 2.7×10⁵ 条序列，生成期可穷举；不需要动态规划。
+**Output Range:** `[0, opt_value(M, C, T)]`，且永不超过静态最优。可达最优用 `(波索引, 剩余容量, 剩余回合)` 的有界动态规划求值：状态数 3 × 21 × 11 = 693，单次校验节点数 ≤ 5×10⁴。
 
 **Example:** 三波划分良好、无需跳过时 = **104**（静态最优完整可达）。若前两波各含一道最优餐之外的菜（炒青菜、海鲜锅），最优玩家各付 1 回合跳过 → 8 道菜 → **95**，仍在 0.9 阈值（94）之上。
 
@@ -173,7 +173,13 @@ The `wave_reachable_opt` formula is defined as:
 
 The `wave_healthy` formula is defined as:
 
-`wave_healthy(M, seed) = (∀i: |W_i| ≥ 1) ∧ (⊎ W_i = M) ∧ (0.9 × opt_value(pool, C0, T) ≤ wave_reachable_opt ≤ 1.1 × opt_value(pool, C0, T))`
+```
+wave_healthy(M, seed) =
+  UNHEALTHY  若 (∃i: |W_i| = 0) ∨ (⊎ W_i ≠ M)
+          ∨ (可达检查已执行 ∧ wave_reachable_opt < 0.9 × opt_value(pool, C0, T))
+  DEGRADED   若 非空与覆盖通过 ∧ 可达检查因超节点预算被跳过
+  HEALTHY    其余
+```
 
 **Variables:**
 
@@ -181,7 +187,8 @@ The `wave_healthy` formula is defined as:
 |---|---|---|---|---|
 | `opt_value(pool, C0, T)` | int | ≥ 0 | 菜品数值 | 本局实际菜池的静态最优；`pool_override` 非空时为覆盖池，否则为档口全池 |
 | 双侧带 | int 区间 | ≥ 0 | calculated | `[0.9, 1.1] × opt_value(pool, C0, T)`；MVP 全池 104 → `[94, 115]` |
-| `wave_healthy` | bool | {true, false} | calculated | 该划分是否可开局 |
+| `wave_healthy` | enum | `HEALTHY` / `DEGRADED` / `UNHEALTHY` | calculated | 该划分是否可开局；`DEGRADED` 表示可达检查未执行 |
+| `可达检查已执行` | bool | {true, false} | calculated | 节点预算内完成了可达最优 DP |
 
 **Output Range:** `{true, false}`。**注意这里校验的是可达最优，不是全池最优**——全池最优对任何洗牌都等于 104，用它做校验等于永远通过（死代码）。只有当菜池大于回合预算、或腻度的顺序约束被波次切断时，可达最优才会低于全池。
 
@@ -192,7 +199,7 @@ The `wave_healthy` formula is defined as:
 - **If 菜池大小不能被 `wave_size` 整除**：最后一波只包含余数道菜，不补齐、不重复画菜。12 / 4 整除，MVP 不会触发；下一个档口可能触发。
 - **If 菜池小于 `wave_size`**：`wave_size` 在生成时钳制为 `|dish_pool|`，产生一波。单波等于全菜单可见，本系统在该档口退化为无波次——写进平衡报告，不报错。
 - **If `wave_size < 1`**：视为配置错误，由数据配置在加载期拒绝。
-- **If 某一波为空**：不可能由合法划分产生（划分恰好覆盖菜池）；若出现说明生成有 bug，`wave_healthy = false`，重掷种子。
+- **If 某一波为空**：不可能由合法划分产生（划分恰好覆盖菜池）；若出现说明生成有 bug，`wave_healthy = UNHEALTHY`，重掷种子。
 - **If 最后一波被吃完**：不再有"下一波"动作；系统向餐局流程发出"无可吃菜"信号，由后者结束本局。
 - **If 在最后一波点"下一波"**：按钮变为「结束取餐」，不扣回合，直接结束本局；剩余菜作废。这是主动停止，不是错误。
 - **If 玩家把每一波都跳过/结束**：本局 0 道菜、净利 = −入场费。这是合法的失败方式，不是错误；结算照常展示。
@@ -313,8 +320,8 @@ The `wave_healthy` formula is defined as:
 
 **生成健康**
 
-15. **GIVEN** 候选划分的 `wave_reachable_opt = 95`，**WHEN** 执行健康检查（阈值 94 = ⌈0.9 × 104⌉），**THEN** 通过、不重掷、尝试计数 = 1、采用该划分。
-16. **GIVEN** 候选划分的 `wave_reachable_opt = 93`，**WHEN** 执行健康检查，**THEN** 触发重掷，最多 20 次；20 次仍未达标则采用最好的一次、写一条 warning、本局照常开始（不阻塞），检查函数不抛异常。
+15. **GIVEN** 可达检查已执行、候选划分的 `wave_reachable_opt = 95`，**WHEN** 执行健康检查（阈值 94 = ⌈0.9 × 104⌉），**THEN** `HEALTHY`、不重掷、尝试计数 = 1、采用该划分。
+16. **GIVEN** 可达检查已执行、候选划分的 `wave_reachable_opt = 93`，**WHEN** 执行健康检查，**THEN** `UNHEALTHY`、触发重掷，最多 20 次；20 次仍未达标则采用最好的一次、写一条 warning、本局照常开始（不阻塞），检查函数不抛异常。
 
 **边界与状态**
 
@@ -323,7 +330,8 @@ The `wave_healthy` formula is defined as:
 19. **GIVEN** 跳过第 1 波、吃光第 2 与第 3 波共 8 道（`eats = 8`、`skips = 1`、回合 = 9），**WHEN** 吃下第 3 波最后一道，**THEN** 向餐局流程发出恰好一次"无可吃菜"信号，本局结束并出现结算界面。
 20. **GIVEN** 第 2 波剩 A、B、C 三道，**WHEN** 点击"下一波"，**THEN** 立即提交、不弹二次确认，按钮已显示将失去 3 道；提交后三者不可再获得。
 21. **GIVEN** 本波尚余 3 道，**WHEN** 吃下第 1 道，**THEN** `consume` 返回 `NONE`，`wave_index` 不变。
-22. **GIVEN** 一个可达最优超出 `[0.9, 1.1] × opt_value(pool, C0, T)` 的候选划分，**WHEN** 健康校验，**THEN** 重掷；`pool_override` 非空时按覆盖池的 `opt_value` 计算基准。
+22. **GIVEN** 可达检查已执行、一个可达最优低于 `0.9 × opt_value(pool, C0, T)` 的候选划分，**WHEN** 健康校验，**THEN** 返回 `UNHEALTHY` 并重掷；`pool_override` 非空时按覆盖池的 `opt_value` 计算基准。
+23. **GIVEN** 注入一个超出节点预算的候选生成器，**WHEN** 开局，**THEN** 只做非空与覆盖校验、返回 `DEGRADED`、写一条 warning、不重掷、不抛异常、本局正常开始。
 
 > **测试夹具**：用例 3 需要 `(station_id, seed) → 划分` 的基准文件；用例 16 需要向健康检查注入一个必然不达标的候选生成器；用例 18 需要一个能固定"红烧肉在第 1 波、糖醋里脊在第 2 波"的 seed。三者都不得为通过测试而修改 12 道菜的真实数值。
 

@@ -592,8 +592,8 @@ formulas:
       - pool
       - C0
       - T
-    output_range: [0, 1]
-    expression: "(all waves non-empty) and (waves partition M) and (0.9 * opt_value(pool, C0, T) <= wave_reachable_opt <= 1.1 * opt_value(pool, C0, T))"
+    output_range: "HEALTHY | DEGRADED | UNHEALTHY"
+    expression: "UNHEALTHY if any wave empty or waves do not partition M or (reachable check ran and wave_reachable_opt < 0.9 * opt_value(pool, C0, T)); DEGRADED if non-empty/partition pass but the reachable check was skipped over the node budget; HEALTHY otherwise"
     notes: "Boolean gate for a generated partition. MVP threshold 94 (0.9 x 104). Reroll up to 20 seeds; accept the best with a warning rather than blocking the run."
   - name: total_value
     status: active
@@ -780,7 +780,7 @@ formulas:
       - L
     output_range: "Fresh | Loaded | Migrated | Recovered | ReadOnly | Blocked"
     expression: "Blocked if readable(P) and version(P) > V; ReadOnly if L = live and readable(P); Blocked if L = live; Fresh if P empty and B empty; Loaded if readable(P) and valid(P) and version(P) = V; Migrated if readable(P) and valid(P) and version(P) < V and migrate succeeds; Blocked if readable(P) and valid(P) and version(P) < V and migrate fails; Recovered if backup valid and migratable; else Blocked"
-    notes: "Load decision for the save system. P = primary file, B = backup, V = SAVE_SCHEMA_VERSION, L = lock state. valid(x) means structurally legal under the schema of its declared version(x), so a version-0 fixture can migrate. ReadOnly = a live lock over any readable file (browse, no write, no migration). A readable primary whose migration fails is Blocked, never Recovered; a higher-than-current version never falls back to the backup."
+    notes: "Load decision for the save system. P = primary file, B = backup, V = SAVE_SCHEMA_VERSION, L = lock state. valid(x) means structurally legal under the schema of its declared version(x), so a version-0 fixture can migrate. ReadOnly = a live lock over a readable primary with version(P) <= V (browse, never write; an older version renders via in-memory read-only migration and is not migrated on disk). A higher-than-current version is Blocked before the lock branches; a live-lock Blocked offers only exit/retry, never a new career. A readable primary whose migration fails is Blocked, never Recovered."
     added: "2026-11-03"
     revised: ""
 
