@@ -25,7 +25,7 @@
 ### Core Rules
 
 1. **单一顶层状态**：任意时刻恰好一个顶层状态。集合固定为六个：`Boot`、`Error`、`Menu`、`Run`、`Paused`、`Quit`。不为细分界面新增顶层状态——结算、升级、设置都是 `Menu` 内的界面，由界面流程推进。
-2. **唯一切换入口与合法性**：所有顶层切换只经 `request_transition(to, payload)`，并返回该请求是否被接受（bool）。其他系统不得自行挂载/卸载场景或写状态。请求先校验 `(current, to)` 是否在下面的转移表内：合法则在该帧渲染前生效；非法则拒绝、保持原状态并记日志。**一帧内的多个请求全部针对帧初状态校验**，按到达顺序取第一个合法者生效，其余一律拒绝并各记日志——后到的请求不会因为前一个已经改变状态而重新变得合法。**日志级别**：普通非法转移与同帧落败记 WARNING；在非 `Run` 状态收到 `RunResult` 记 ERROR。调用方拿到 `false` 即知 payload 未被交付，不得假设成功。**幂等空操作**：若 `to == current` 且 payload 为空，返回 `true`，不改变状态、不发信号、不记日志（同一帧重复的 `Paused → Run` 落到此路径）；若 `to == current` 但带 payload，返回 `false`（payload 未被交付）。**作用域**：`Quit` 终态与 `Boot` 尚未完成校验期间不适用幂等空操作——这两段时间内任何请求一律返回 `false`。
+2. **唯一切换入口与合法性**：所有顶层切换只经 `request_transition(to, payload)`，并返回该请求是否被接受（bool）。其他系统不得自行挂载/卸载场景或写状态。请求先校验 `(current, to)` 是否在下面的转移表内：合法则在该帧渲染前生效；非法则拒绝、保持原状态并记日志。**一帧内的多个请求全部针对帧初状态校验**，按到达顺序取第一个合法者生效，其余一律拒绝并各记日志——后到的请求不会因为前一个已经改变状态而重新变得合法。**日志级别**：普通非法转移与同帧落败记 WARNING；在非 `Run` 状态收到 `RunResult` 记 ERROR。调用方拿到 `false` 即知 payload 未被交付，不得假设成功。**幂等空操作**：若 `to == current` 且 payload 为空，返回 `true`，不改变状态、不发信号、不记日志（同一帧重复的 `Paused → Run` 落到此路径）；若 `to == current` 但带 payload，返回 `false`（payload 未被交付）。**作用域**：`Quit` 终态：任何请求返回 `false`；`Boot` 尚未完成校验期间：同状态请求返回 `false`，其余请求按规则 6 处理——`Boot → Quit` 仍合法并返回 `true`。
 3. **状态 → 输入上下文**：切换生效时，本系统调用 `request_context(default_ctx, clear_stack := true)`（输入 GDD 规则 12），把输入置于该状态的默认上下文并清空临时栈：`Boot` → Blocked、`Error` → Menu、`Menu` → Menu、`Run` → Run、`Paused` → Paused。`Error` 沿用 Menu 上下文只是为了让唯一按钮可以被导航与确认；`Error` 内不存在任何能触发 `Menu` 或 `Run` 的动作。`Modal` 与 `Blocked` 可由界面流程或首局引导临时压栈；本系统不感知其内容，只在顶层切换时保证输入栈回到该状态的默认上下文。
 4. **启动序列**：进入 `Boot` 后读取数据配置的加载与校验结果；`Ready` → `Menu`，`Failed` → `Error`。启动期间输入为 Blocked。
 5. **一局的进入**：`Menu → Run` 携带 `RunConfig`，由发起方（界面流程）组装：`station_id` 与当前局外升级等级快照。本系统不读存档、不组装 `RunConfig`，只原样转交。
@@ -65,7 +65,7 @@
 
 **非法转移一律拒绝**，包括：`Error → Menu`、`Error → Run`、`Menu → Paused`、任何从 `Quit` 出发的转移，以及从 `Boot` 发起但校验结果尚未返回时的所有请求——**唯独 `Boot → Quit` 例外**，退出在启动阶段始终合法（规则 10）。
 
-**同状态请求的判定**：请求的目标状态与当前状态相同时，**不带 payload 者**直接返回、不触发切换、不记警告（幂等空操作）；**带 payload 者按该请求自己的语义拒绝**，并记其规定的日志级别——例如 `Run` 中再次请求开始一局（带 `RunConfig`）、或在非 `Run` 状态收到 `RunResult`。payload 是否存在是区分这两种情形的唯一判据。
+**同状态请求的判定**：请求的目标状态与当前状态相同时，**不带 payload 者**直接返回、不触发切换、不记警告（幂等空操作）；**带 payload 者按该请求自己的语义拒绝**，并记其规定的日志级别——例如 `Run` 中再次请求开始一局（带 `RunConfig`）、或在非 `Run` 状态收到 `RunResult`。payload 是否存在是区分这两种情形的唯一判据。以上幂等空操作不适用于 `Quit` 终态与 `Boot` 待校验期；这两段时间的作用域见规则 2。
 
 ### Interactions with Other Systems
 
@@ -134,7 +134,7 @@ The `transition_total` formula is defined as:
 - **If 同一帧内 `ui_pause` 与结算回传同时到达**：两者都按帧初状态校验。帧初为 `Run` 时先到者决定状态——`ui_pause` 先到则变 `Paused`，结算先到则变 `Menu`；后到者拒绝并记 WARNING，被拒绝的 `RunResult` 不交付。餐局流程依据 `request_transition` 返回 `false` 重新发起，不假设成功。
 - **If 暂停菜单的「继续」与退出/放弃确认同时出现**：`ui_accept` 只由界面流程按当前焦点消费，本系统不监听该动作；只有界面流程发出的 `Paused → Run` 请求才会恢复，因此不存在恢复与对话确认争同一动作的情形。
 - **If 请求的转移不在转移表内**：拒绝、保持原状态、记 WARNING，不向请求方抛异常。
-- **If 请求的目标状态与当前状态相同且不携带 payload**：直接返回，不触发切换、不记警告——幂等空操作。携带 payload 的同状态请求按非法转移处理：拒绝、保持原状态；`RunResult` 记 ERROR，其余记 WARNING。
+- **If 请求的目标状态与当前状态相同且不携带 payload**：直接返回，不触发切换、不记警告——幂等空操作（`Quit` 终态与 `Boot` 待校验期除外，见规则 2）。携带 payload 的同状态请求按非法转移处理：拒绝、保持原状态；`RunResult` 记 ERROR，其余记 WARNING。
 - **If `Boot` 尚未拿到校验结果就收到切换请求**：除 `Quit` 外全部拒绝；请求方不得假设状态已就绪。
 - **If 结算回传 `RunResult` 时当前不在 `Run`**（例如已经放弃本局）：拒绝并记 ERROR——防止重复结算或跨局结算。
 - **If `Run` 中收到第二次"开始一局"请求**：拒绝（不在合法转移表内），本局继续。
@@ -240,7 +240,7 @@ The `transition_total` formula is defined as:
 14. **GIVEN** `Run` 或 `Paused`，**WHEN** 请求退出或窗口关闭，**THEN** 先要求确认；确认后进入 `Quit` 且本局作废，取消则回到原状态。
 15. **GIVEN** `Error`，**WHEN** 请求 `Menu` 或 `Run`，**THEN** 拒绝、保持 `Error`、记 WARNING，调用方不收到异常。
 16. **GIVEN** 同一帧收到多个合法请求，**WHEN** 该帧渲染前结算，**THEN** 仅第一个生效，其余拒绝并各记 WARNING；后到请求不因状态已改变而变得合法。
-17. **GIVEN** 当前状态不是 `Quit` 且 `Boot` 已完成校验，请求目标等于当前状态且不携带 payload，**WHEN** 处理该请求，**THEN** 返回 `true`、状态不变且不记 WARNING；**GIVEN** 当前为 `Quit` 或 `Boot` 待校验期，**THEN** 返回 `false`（见 AC 19）。
+17. **GIVEN** 当前状态不是 `Quit` 且 `Boot` 已完成校验，请求目标等于当前状态且不携带 payload，**WHEN** 处理该请求，**THEN** 返回 `true`、状态不变且不记 WARNING；**GIVEN** 当前为 `Quit`，或当前为 `Boot` 待校验期且请求目标等于当前状态，**THEN** 返回 `false`（见 AC 19）；**GIVEN** `Boot` 待校验期请求 `Quit`，**THEN** 返回 `true`（规则 6 的例外）。
 18. **GIVEN** `Run`，**WHEN** 再次请求开始一局，**THEN** 拒绝并记 WARNING，本局继续。
 19. **GIVEN** 处于 `Quit`，**WHEN** 收到任何切换请求，**THEN** 全部拒绝，状态不变。
 20. **GIVEN** 除进入 `Quit` 外的任意顶层切换生效，**WHEN** 切换完成，**THEN** 输入临时栈被清空并置于目标状态的默认上下文。
@@ -252,7 +252,7 @@ The `transition_total` formula is defined as:
 26. **GIVEN** 本系统的公开接口，**WHEN** 查找写状态、写存档、改数值或挂载场景的入口，**THEN** 均不存在。
 27. **GIVEN** `Run` 中 `RunConfig.station_id` 无法解析，**WHEN** 餐局流程请求返回菜单，**THEN** 切为 `Menu` 且携带 `init_failed = true`，不产生 `RunResult`、不写纪录。
 28. **GIVEN** `Paused`，**WHEN** 玩家按 `ui_accept`，**THEN** 本系统不自行恢复 `Run`（不监听该动作）；只有界面流程请求恢复才切回 `Run`。退出确认 `Modal` 打开时同理，`ui_accept` 只属于对话框。
-29. **GIVEN** 任一请求被拒绝，**WHEN** 调用 `request_transition`，**THEN** 返回 `false`，调用方据此可以重新发起。**GIVEN** 当前不是 `Quit` 且 `Boot` 已就绪、目标状态与当前相同且不带 payload，**WHEN** 请求，**THEN** 返回 `true`，状态不变、不发切换信号、不记日志；**GIVEN** 目标状态与当前相同但带 payload，或当前为 `Quit` / `Boot` 待校验期，**THEN** 返回 `false`。
+29. **GIVEN** 任一请求被拒绝，**WHEN** 调用 `request_transition`，**THEN** 返回 `false`，调用方据此可以重新发起。**GIVEN** 当前不是 `Quit` 且 `Boot` 已就绪、目标状态与当前相同且不带 payload，**WHEN** 请求，**THEN** 返回 `true`，状态不变、不发切换信号、不记日志；**GIVEN** 目标状态与当前相同但带 payload，或当前为 `Quit`，或当前为 `Boot` 待校验期且目标等于当前状态，**THEN** 返回 `false`。
 30. **GIVEN** 视觉过渡尚未播完，**WHEN** 收到新的合法请求，**THEN** 立即生效并中止未完成的过渡。
 31. **GIVEN** 任意合法请求，**WHEN** `request_transition` 返回 `true`，**THEN** 该请求所在帧的渲染即显示目标状态，`state_latency_frames = 0`；不得出现"状态已变但画面仍是旧状态"的中间帧。
 32. **GIVEN** `/ux-design` 给出 `FADE_OUT` 与 `FADE_IN`，**WHEN** 检查其和，**THEN** `transition_total ≤ 0.20 s`；**GIVEN** 无障碍设置关闭过渡，**THEN** `FADE_OUT = FADE_IN = 0` 且切换照常在同一帧生效。

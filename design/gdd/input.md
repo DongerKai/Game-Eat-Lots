@@ -34,7 +34,7 @@ Godot 4.6 起鼠标焦点与键盘/手柄焦点分离，因此输入层负责分
    | `ui_pause` | Esc、P | Start | — |
    | `game_skip_wave` | S | X | 右键（任意位置） |
 
-2. **上下文决定语义**：Esc 在 InputMap 中同时绑定 `ui_cancel` 与 `ui_pause`（映射层不能按上下文区分）；消费时按上下文取一个：Run / Paused 取 `ui_pause`（暂停 / 恢复），Menu / Modal 取 `ui_cancel`（返回 / 关闭），Blocked 只取 `allow` 白名单内的动作（默认仅 `ui_pause`）。Paused 中 `ui_cancel` 由 Backspace 触发（打开退出确认）；Esc 不打开退出确认。
+2. **上下文决定语义**：Esc 在 InputMap 中同时绑定 `ui_cancel` 与 `ui_pause`（映射层不能按上下文区分）；消费时按上下文取一个：Run / Paused 取 `ui_pause`（暂停 / 恢复），Menu / Modal 取 `ui_cancel`（返回 / 关闭），Blocked 取 `ui_pause` 与 `allow` 追加的动作。Paused 中 `ui_cancel` 由 Backspace 触发（打开退出确认）；Esc 不打开退出确认。
 3. **初始焦点**：每个界面打开时把键盘/手柄焦点放在主操作上（第一道菜、第一项升级、主按钮）。
 4. **完整可玩**：每个界面与局内操作都必须能只用键盘或手柄完成；鼠标是可选加速器。
 5. **触发时机**：动作在按下瞬间触发一次。忽略操作系统按键回显（`event.echo`）；长按不重复触发 `ui_accept` 或 `game_skip_wave`。
@@ -74,7 +74,7 @@ Godot 4.6 起鼠标焦点与键盘/手柄焦点分离，因此输入层负责分
 | 界面流程 | 下游读取 + 请求上下文 | 焦点、导航、`ui_accept`、`ui_cancel`；`push_context(Modal)` / `pop_context()` | 硬 |
 | 餐局流程 | 下游读取 | 每回合的 `ui_accept`、`game_skip_wave`、`ui_pause` | 硬 |
 | 局内 HUD | 下游读取 | 菜品卡的悬停、点击、右键 | 硬 |
-| 首局引导 | 下游读取 + 请求上下文 | `push_context(Blocked)` / `pop_context()`，只放行引导需要的动作 | 软 |
+| 首局引导 | 下游读取 + 请求上下文 | `push_context(Blocked)` / `pop_context()`；`ui_pause` 始终允许，`allow` 追加引导需要的动作 | 软 |
 | 音效反馈 | 下游读取 | 动作触发事件（用于 UI 音效） | 软 |
 
 **接口所有权**：输入拥有动作映射、上下文状态机与双焦点记录。下游只查询动作与焦点，**不修改映射表**；上下文另经 `request_context` / `push_context` / `pop_context` 请求（规则 12），不直接赋值。
@@ -166,7 +166,7 @@ The `stick_engaged` formula is defined as:
 | 界面流程 | 硬 | 导航、`ui_accept`、`ui_cancel`、初始焦点、双焦点状态 | GDD 已写（`design/gdd/ui-flow.md`） |
 | 餐局流程 | 硬 | 每回合的 `ui_accept`、`game_skip_wave`、`ui_pause` | GDD 已写（`design/gdd/run-flow.md`） |
 | 局内 HUD | 硬 | 菜品卡的悬停、点击、右键 | GDD 已写（`design/gdd/in-game-hud.md`） |
-| 首局引导 | 软 | 请求 Blocked 上下文，只放行指定动作 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
+| 首局引导 | 软 | 请求 Blocked 上下文；`ui_pause` 始终允许，`allow` 追加指定动作 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 | 音效反馈 | 软 | 动作触发事件 | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 场景与流程管理 | 硬 | 顶层状态切换时调用 `request_context(default_ctx, clear_stack := true)`；订阅 `context_changed`；由它订阅 `ui_pause` 驱动 `Run ⇄ Paused` | GDD 已写 |
 

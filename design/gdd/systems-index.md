@@ -54,7 +54,7 @@ were found.
 
 | # | System Name | Category | Priority | Status | Design Doc | Depends On |
 |---|-------------|----------|----------|--------|------------|------------|
-| 1 | 数据配置 | Core | MVP | In Review | design/gdd/data-config.md | — |
+| 1 | 数据配置 | Core | MVP | Approved | design/gdd/data-config.md | — |
 | 2 | 输入 | Core | MVP | In Review | design/gdd/input.md | — |
 | 3 | 场景与流程管理 | Core | MVP | In Review | design/gdd/scene-flow.md | 数据配置, 输入 |
 | 4 | 存档 | Persistence | MVP | Designed | design/gdd/save-system.md | 数据配置 |
@@ -242,7 +242,7 @@ Vertical Slice tier, and the rest are Full Vision.
 | Total systems identified | 20 |
 | Design docs started | 18 |
 | Design docs reviewed | 4 |
-| Design docs approved | 1 |
+| Design docs approved | 2 |
 
 > 场景与流程管理于 2026-11-03 通过设计评审（Approved），随后补写了 Formulas 章节并在
 > 输入 GDD 中定名了上下文切换接口，两处都是评审后才出现的改动，因此状态回到 **In Review**
