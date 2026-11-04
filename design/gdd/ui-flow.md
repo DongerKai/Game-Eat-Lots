@@ -2,8 +2,8 @@
 
 > **Status**: Designed
 > **Author**: user + game-designer（自动设计模式；`systems-designer` 与 `qa-lead` 评审）
-> **Last Updated**: 2026-11-03
-> **Last Verified**: 2026-11-03
+> **Last Updated**: 2026-11-04
+> **Last Verified**: 2026-11-04
 > **Implements Pillar**: 支柱 4「数字看得见地涨」；约束来自支柱 3「时间在走，手不用快」
 
 ## Summary
@@ -40,7 +40,7 @@
    | `SettingsModal` | 任意有界面的状态 | 模态 | 界面流程 | 音频、无障碍、HUD 显示、删除生涯 |
    | `ConfirmModal` | 任意有界面的状态 | 模态 | 界面流程 | 退出、放弃、购买、删除生涯的确认 |
    | `ReadOnlyNotice` | `Menu` | 非模态提示 | 界面流程 | `LoadReport = ReadOnly`；只读说明、「以只读继续」「退出」 |
-   | `BlockedModal` | `Menu` | 强制模态 | 界面流程 | `LoadReport = Blocked`；按原因：退出/新建生涯 或 退出/重试 |
+   | `BlockedModal` | `Menu` | 强制模态 | 界面流程 | `LoadReport = Blocked`；按锁与原因：锁存活 → 退出/重试；否则按原因：退出/新建生涯 或 退出/重试 |
    | `NoticeLayer` | 任意有界面的状态 | 非模态提示 | 界面流程 | 保存指示、恢复说明、进入失败、完成横幅 |
    | 局内一屏 | `Run` | 全屏 | `局内 HUD` | 不归本系统绘制、不进入本系统的屏幕栈 |
 
@@ -141,7 +141,7 @@
 | 任意 | 顶层状态变化 | 按新状态重建 | 丢弃屏幕栈与模态栈；不得保留旧状态界面 |
 | `MenuRoot` | `init_failed` / `fault` / `abandoned` | `MenuRoot` | 显示非模态提示；不打开收据 |
 | `MenuRoot` | `Recovered` | `MenuRoot` | 一次非模态说明；可关闭、不重复 |
-| `MenuRoot` | `Blocked` | `Modal1` | 强制模态；按原因：退出/新建生涯 或 退出/重试 |
+| `MenuRoot` | `Blocked` | `Modal1` | 强制模态；按锁与原因：锁存活 → 退出/重试；否则按原因：退出/新建生涯 或 退出/重试 |
 | 任意 `Menu` 界面 | 存档写入成功 | 不变 | 显示 1.5 秒「已保存」；不改变状态 |
 
 **同帧冲突**：同一帧收到 `RunResult` 与 `ui_cancel` 时，先处理 `RunResult`（收据成为根屏），再在收据上下文解释 `ui_cancel`（跳过滚动或返回菜单），不得把 `ui_cancel` 泄漏给主菜单的退出确认。同一帧收到 `ui_accept` 与 `ui_cancel` 时，按 `输入` 规则 2 与当前上下文只消费一个动作。顶层切换与模态关闭同帧发生时，先由 `场景与流程管理` 完成切换，界面流程随后清空模态并重建，不尝试把模态恢复到新状态。
@@ -399,7 +399,7 @@ The `displayed_value` formula is defined as:
 **存档与设置**
 
 - **If `LoadReport.outcome = ReadOnly`**：显示一次非模态说明，提供「以只读继续」「退出」；隐藏购买/解锁入口，不提供「新建生涯」。
-- **If `LoadReport.outcome = Blocked`**：显示强制模态；更新版本 / 无法读取只给「退出」「新建生涯（旧档保留）」，迁移失败 / 持锁不可读只给「退出」「重试」；`ui_cancel` 无效；默认焦点「退出」；任何其他主菜单控件不可操作。选择「新建生涯」后刷新钱包、升级、纪录与主菜单，「重试」调用 `存档.retry_load()`，选择「退出」则请求 `Quit`。
+- **If `LoadReport.outcome = Blocked`**：显示强制模态；**锁优先**：`lock_live = true` 时无论原因为何只给「退出」「重试」；否则更新版本 / 无法读取只给「退出」「新建生涯（旧档保留）」，迁移失败只给「退出」「重试」；`ui_cancel` 无效；默认焦点「退出」；任何其他主菜单控件不可操作。选择「新建生涯」后刷新钱包、升级、纪录与主菜单，「重试」调用 `存档.retry_load()`，选择「退出」则请求 `Quit`。
 - **If `LoadReport.outcome = Recovered`**：显示一次非模态说明（来源为备份、可能丢失最近一次事务）；玩家可关闭，不重复弹出；主菜单照常可用。
 - **If `LoadReport.outcome = Migrated`**：不弹提示；迁移写回由 1.5 秒「已保存」指示体现；若写回失败，按保存失败提示处理。
 - **If 生涯在设置屏被删除**：关闭两层模态，刷新主菜单为新生涯（钱包 0、纪录空、升级归零）；设置保持原值；不重新载入设置文件。
@@ -416,7 +416,7 @@ The `displayed_value` formula is defined as:
 - **If 模态关闭**：焦点回到打开它的控件；若该控件已被禁用或移除，焦点落到当前屏幕顺序表中第一个可用控件，并记 WARNING。
 - **If 一个屏幕没有任何可用焦点控件**：视为屏幕缺陷；界面流程记 ERROR，保留上一个焦点或聚焦屏幕根节点，不得让 `ui_accept` 无处可去。
 - **If 模态深度已满（2）仍有新模态请求**：拒绝并记 WARNING，不排队、不替换当前模态；调用方必须等当前模态关闭后再请求。
-- **If 强制模态（`Blocked`）收到 `ui_cancel`**：忽略，不关闭；只接受其两个出口。
+- **If 强制模态（`Blocked`）收到 `ui_cancel`**：忽略，不关闭；只接受其锁/原因对应的两个出口（`lock_live = true` 时恒为「退出」「重试」）。
 
 ## Dependencies
 
