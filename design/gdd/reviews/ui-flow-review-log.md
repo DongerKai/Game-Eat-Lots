@@ -425,3 +425,197 @@ Reviewed-Content-Hash: design/gdd/input.md 9432d857ed18dc216dc5a038f81608ae9e10d
 Reviewed-Content-Hash: design/gdd/audio-feedback.md f6ac7fbd915341f63761529b664028eec6b216c0
 Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 5aafb0674e6a0bc5bd6a370c275e95a2f01ebfa9
 Reviewed-Content-Hash: design/gdd/systems-index.md 15e0bd3d307ed09738b74dd3c099816b497b69e8
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 1 | Recommended: 13
+Summary: All three prior blockers are resolved — `apply_run` is gone and the settlement API is uniform, the notice now sits after the modal rules in both rule 7 and `back_target`, and the milestone catalogue is owned by 纪录与里程碑 at every site this document controls. One new blocker surfaced, and it is the same shape as the last wave: a fix applied to this document while its hard dependency moved underneath it. `存档` UI Requirements 4 was revised to split `Blocked` into four causes with two distinct exit sets, one of which offers 「重试」 and forbids 「新建生涯」; this GDD still fixes `BlockedModal` at exactly two buttons and AC 26 asserts that. The navigation core itself is unchanged and still implementable.
+Prior verdict resolved: Partial — 3/3 prior blockers resolved; a new blocker appeared in `存档`'s revised UI requirements.
+
+### Prior blockers
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Settlement interface named two ways | **Resolved** — `apply_run` / `apply_run_result` no longer appear anywhere in the file; rule 10 (`:61`), rule 13 (`:67`), Interactions (`:157-158`), Dependencies (`:431-432`), Cross-References (`:526-527`), AC 11/18 (`:565,572`), fixtures (`:541`) and OQ1 (`:623`) all read `prepare_run` / `prepare_run_result`. `records-and-milestones.md:111` publishes `prepare_run(result)` and `meta-upgrades.md:122` publishes `prepare_run_result(result)`. See Recommended 5 for the residual OQ1 recording gap. |
+| 2 | Notice priority precedes modality | **Resolved** — `back_target` (`:218-228`) now orders 1 modal-cancel → 2 forced-modal `NONE` → 3 `DISMISS_NOTICE` → 4 `SKIP_ROLL` → 5–8 screens; rule 7 (`:55`) carries the same order in prose (①–⑨), so the modal always captures `ui_cancel` first and rule 5 is no longer contradicted. See Recommended 1 for missing test coverage of the new priority. |
+| 3 | Milestone catalogue owner split | **Resolved** — rule 23 (`:87`), Interactions (`:158`), Cross-References (`:531`) all read `纪录与里程碑.get_milestone_catalog()`; `records-and-milestones.md:298` publishes it. See Recommended 4 for two sites that still omit it from their interface lists. |
+
+### Completeness: 6/6 sections present, where 6 is the count required at `standard`
+
+Required at `standard` and present: Overview, Detailed Rules (`## Detailed
+Design`), Formulas (the system defines numeric rules — stack depth, modal depth,
+a return-decision function, focus selection, latency, roll timing), Edge Cases,
+Dependencies, Acceptance Criteria.
+
+Advisory at `standard`:
+- **Player Fantasy** — absent as a heading; `## Game Feel` (`:477`) carries it.
+- **Tuning Knobs** — absent. The four tunables (`RECEIPT_ROLL_SECONDS`,
+  `SAVE_INDICATOR_SECONDS`, `MAX_UI_STACK_DEPTH`, `MAX_MODAL_DEPTH`) are each
+  defined inside the formula that uses them, so nothing is unspecified — the
+  section is a findability gap, not a hole.
+
+### Dependency Graph
+
+All twelve declared system dependencies have a GDD on disk (`场景与流程管理`,
+`输入`, `餐局流程`, `结算与入场费`, `局外升级`, `纪录与里程碑`, `存档`,
+`音效反馈`, `数据配置`, `首局引导`, `解锁与档口`, `局内 HUD`). No broken
+references.
+
+### Registry Values
+
+Registry names searched across the whole document: `net_profit`, `total_value`,
+`broke_even`, `return_ratio`, `station_canteen_entry_fee`, `first_run_entry_fee`,
+`first_run_pool_size`, `capacity_total`, `running_net`, `load_outcome`,
+`wasted_capacity`, `cloy_extra_total`, `unit_value`, `effective_unit_value`, plus
+the three back-reference names `station_available`, `unlock_decision`,
+`unlock_progress`. Ten lines matched. **No value conflicts**: the GDD restates no
+registry number. `entry_fee = 0` (`:63,378,569`) and `net_profit > 0`
+(`:63,378-380,570`) are predicate conditions, not restatements of
+`station_canteen_entry_fee = 85` or `first_run_entry_fee = 40`. The only registry
+defects are back-reference errors, listed under Recommended 11.
+
+### Required Before Implementation
+
+1. **`Blocked` modal's exits contradict `存档` UI Requirements 4.** `[main review]`
+   This document fixes `BlockedModal` as exactly two buttons —
+   「退出」+「新建生涯（旧档保留）」 — at rule 2's inventory (`:43`), rule 20
+   (`:81`), Edge Cases (`:402`), UI Requirements (`:504`, "两种原因之一") and
+   AC 26 (`:586`), all citing `存档` UI Requirements 4. That requirement has since
+   been rewritten (`save-system.md:320-325`) to split `Blocked` into **four**
+   causes with **two different exit sets**:
+   - 「存档属于更新版本」→ 退出 / 新建生涯
+   - 「存档与备份都无法读取」→ 退出 / 新建生涯
+   - 「迁移失败」→ 退出 / **重试**; 不提供新建生涯
+   - 「另一实例正在使用这份存档且文件暂不可读」→ 退出 / **重试**; 不提供新建生涯
+
+   `save-system.md` rule 21 (`:47`) states the same for the held-lock case:
+   "该情形的出口只有「退出」与「重试」…不提供「新建生涯」". `Rule 2` makes the
+   inventory fixed and forbids implementation-added controls, so an implementer
+   has nowhere to put 「重试」: two of the four causes cannot be served, and
+   AC 26 would fail against the requirement it cites. `Blocked` 的「重试」出口在
+   全文档中不存在，其默认焦点也未定义（规则 20 只给「退出」定焦点）。
+   → Split `BlockedModal` by cause: exit set as a function of the
+   `LoadReport` reason code, add 「重试」 (re-run `load()`), default focus 「退出」
+   for every cause, and state that 「新建生涯」 appears only for the two causes
+   `存档` permits. Update `:43`, `:81`, `:402`, `:504`, AC 26 and OQ8 (`:630`,
+   which still says "三种原因" with a third partition — 更新版本 / 无法读取 /
+   另一实例 — and omits 迁移失败 entirely).
+   **Note for the orchestrator:** `save-system.md:66` still says every `Blocked`
+   outcome offers 新建生涯 or 退出, contradicting its own rule 21 and UI
+   Requirements 4. That is a defect in `存档`, not in this document, and this
+   GDD must be aligned to whichever of the two `存档` states is authoritative.
+
+### Recommended Revisions
+
+1. **AC 38 overclaims coverage of `back_target`.** `[main review]` It says the
+   result must match "`back_target` 表逐项一致" but enumerates 7 scenarios for a
+   9-row table. Missing: priority 3 `DISMISS_NOTICE` — the behaviour this fix wave
+   added — and priority 4 `SKIP_ROLL` in the `back_target` context (AC 19 covers
+   skip on the receipt, but not a notice-versus-roll ordering). Add
+   `GIVEN` a dismissible notice at `MenuRoot`, `WHEN ui_cancel`, `THEN`
+   `DISMISS_NOTICE` and no quit confirm opens; and the same with
+   `roll_active = true` and `modal_depth > 0` to pin the ordering.
+2. **No acceptance criterion for `LoadReport = ReadOnly`.** `[main review]` Rule
+   20 (`:81`), Edge Cases (`:401`) and UI Requirements (`:503`) define a
+   non-modal notice with exactly 「以只读继续」/「退出」, purchase entries hidden,
+   and no 「新建生涯」 — but AC 25 covers only Fresh / Loaded / Migrated /
+   Recovered and AC 26 only `Blocked`. AC 45's retained-evidence list
+   (`:617`) has no `ReadOnly` screenshot either.
+3. **`get_milestone_catalog()` is missing from two interface lists.** `[main review]`
+   Dependencies (`:432`) and Cross-References (`:527`) enumerate 纪录与里程碑's
+   surface without it, while Interactions (`:158`), the new Cross-References row
+   (`:531`) and rule 23 (`:87`) all have it.
+4. **`record_broken` timing is now stated — good.** Rule 11 (`:63`) pins it to
+   `prepare_run` and stashes `previous_best` for the receipt; this closes the
+   round-2 question. No action.
+5. **`records` still reports the orchestrator as unnamed.** `[main review]` Rule
+   10 (`:61`) and OQ1 (`:623`) say this document answers `纪录与里程碑` Open
+   Question 1, and `meta-upgrades.md:37` now records 界面流程 as the orchestrator —
+   but `records-and-milestones.md:120` still says "编排者身份尚未指定" and its OQ1
+   (`:450`) is still open. Records-side edit; the dependency requires the answer be
+   recorded on both sides.
+6. **`get_first_run_preset()` is named only here.** `[main review]` Rule 8 (`:57`)
+   and Interactions (`:163`) call `首局引导.get_first_run_preset()`;
+   `first-run-onboarding.md:129` publishes the preset values but no method name.
+   Either onboarding adopts the name or this document names the two fields it
+   reads.
+7. **`receipt_closed(reason)` has no counterpart in `音效反馈`.** `[main review]`
+   `audio-feedback.md:115,366,373` describe "收据关闭通知 / 取消待播结果" without
+   the event name this document owns (`:91,168`, AC 44).
+8. **#13's dependency is declared hard on one side only.** `[main review]`
+   `unlocks-and-stations.md:92,366` declare 界面流程 硬（UI）and `:386` requires
+   `/ux-design` to cover a station-selection page with lock states, price, unlock
+   confirmation, `COMMIT_FAILED` and progress; Dependencies (`:443`) and
+   Interactions (`:164`) here still say 软 / "将来". Blocks Vertical Slice
+   planning, not MVP.
+9. **`SettingsModal`'s scope reads wider than its entry points.** `[main review]`
+   "任意有界面的状态" (`:40`, `:111`, `:501`) includes `Error`, whose rule 18
+   (`:77`) allows only 退出, and `Boot`, whose context is `Blocked` (`:75`).
+   Restrict to `Menu` / `Paused`.
+10. **The 「返回」 fallback control is not in two screens' 必须包含.** `[main review]`
+    Rule 6 and AC 29/31 make `UpgradeScreen` / `RecordsScreen` fall back to
+    「返回」 when nothing is purchasable / no record exists, but `:498` and `:499`
+    do not list it.
+11. **Registry back-references (orchestration edit).** `[main review]`
+    `ui-flow.md` is missing from `referenced_by` of `net_profit`, `total_value`,
+    `return_ratio`, `broke_even`, `station_canteen_entry_fee` and
+    `first_run_entry_fee`, all of which this document reads from `RunResult` or
+    the preset; it is falsely listed under `station_available`,
+    `unlock_decision` and `unlock_progress`, terms it never mentions.
+12. **Stale Cross-References note.** `[main review]` `:537`
+    ("双向回指（待编排会话处理）… 需改为已写") contradicts `:452`
+    ("双向一致（已完成，2026-11-03）") and the current sibling GDDs, which all
+    already carry the 界面流程 row. Delete `:537`.
+13. **Open Question 14 is answered; close it.** `[main review]` `:636` asks
+    whether a same-value `push_context(Modal)` pushes or no-ops;
+    `input.md:56` states `push_context` always increases stack depth and emits
+    `context_changed(Modal, Modal)`, and `input.md:230` gives the two-modal AC.
+    The question is resolved and only its row needs updating.
+
+### Nice-to-Have
+
+- `meta-upgrades.md:37` lists `prepare_run_result` before `prepare_run` while rule
+  10 (`:61`) fixes records-first order — the short-circuit rule (records fatal →
+  no wallet call) is only correct under rule 10's order. Align the wording so both
+  read the same way.
+- Rule 7's ⑤/⑥ (sub-screen then receipt) and `back_target`'s rows 5/6 (receipt
+  then sub-screen) list the same two mutually exclusive cases in opposite order.
+  Harmless, but a reader comparing the two tables will pause.
+
+### Specialist Disagreements
+
+None — `lean` mode runs no specialist agents.
+
+### Senior Verdict
+
+Not applicable — `lean` mode runs no `creative-director` synthesis.
+
+### Verdict: NEEDS REVISION
+
+The three prior blockers are genuinely closed: the rename sweep is complete
+(no `apply_run` remains), the notice now sits behind the modal rules in both the
+prose rule and the formula table, and the milestone catalogue has one owner
+everywhere this document can reach. The new blocker is the same class of defect
+the last wave fixed — a site that was correct against an older `存档` and is now
+stale — and it is one screen contract, not a redesign: `BlockedModal` must take
+its exit set from the `LoadReport` reason code instead of fixing two buttons. The
+remaining thirteen items are coverage and naming gaps; none changes the screen
+model.
+
+Reviewed-Content-Hash: design/gdd/ui-flow.md 9c709252b4c631e8fb50d8a2f35a8fb394f230d7
+Reviewed-Content-Hash: design/registry/entities.yaml 9915429b2bba990a0ae53a735bc2b21b24789d9a
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 84e5c38fc40fb2a75d8ee608c911bdebf369c5a1
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md b9b9235e9a4ad7d8739ad778e98dd147b1c72f94
+Reviewed-Content-Hash: design/gdd/save-system.md f22c2228d60be43669125831bccea834e94d6026
+Reviewed-Content-Hash: design/gdd/data-config.md 0be338a35d8e5fa9ded4c219b29801021835938a
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 1cafff5e7ad8aab8912e716d98b69cea02cbbc43
+Reviewed-Content-Hash: design/gdd/input.md 9432d857ed18dc216dc5a038f81608ae9e10d975
+Reviewed-Content-Hash: design/gdd/audio-feedback.md ffb1c54a84af1da89b0228395ee86e89b3e87e30
+Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 5aafb0674e6a0bc5bd6a370c275e95a2f01ebfa9
+Reviewed-Content-Hash: design/gdd/scene-flow.md 4efc24d198112aa612551f5b3e5bdeeac28cd52e
+Reviewed-Content-Hash: design/gdd/run-flow.md ea6e49d52b2a08d72dc75c2b295cf54ba5b88279
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md b033f0acd34e58fa436fd583230335ee143196ae
+Reviewed-Content-Hash: design/gdd/systems-index.md 56e9869c70371816e88ed49f24735f67ab3d199d
