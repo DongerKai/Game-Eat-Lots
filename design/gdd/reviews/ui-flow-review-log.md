@@ -960,3 +960,190 @@ Reviewed-Content-Hash: design/gdd/run-flow.md ea6e49d52b2a08d72dc75c2b295cf54ba5
 Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md b033f0acd34e58fa436fd583230335ee143196ae
 Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 5aafb0674e6a0bc5bd6a370c275e95a2f01ebfa9
 Reviewed-Content-Hash: design/gdd/in-game-hud.md 654e48d14dbf85fdbab3b923e590a4f356dd0218
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 1 | Recommended: 18
+Summary: `LoadReport.lock_live` is now modelled and the lock-first exit rule landed at four normative sites (rule 20, Interactions, UI Requirements, AC 26), so round 5's implementability half is closed. It did not land everywhere: Edge Cases `:402` still maps 更新版本 / 无法读取 to 「新建生涯」 unconditionally, contradicting rule 20's lock-priority branch, and the fixed inventory (`:43`) and transition table (`:144`) still say only 「按原因」. Dependencies (`:433`) and Cross-References (`:528`) also still omit `lock_live` / `retry_load()`. On the save side, `retry_load()`'s precondition (`save-system.md:103`) still covers only 迁移失败 / 持锁不可读, so the new live-lock retry path is outside its published contract. The navigation core is unchanged and still implementable.
+Prior verdict resolved: Partial — `lock_live` is modelled and 4 of 6 `Blocked` sites branch on it; Edge Cases, the two summary rows and the Dependencies interface list did not follow.
+
+### Prior blocker
+
+| # | Item | Status |
+|---|---|---|
+| 1 | `Blocked` exits ignored `L = live` and `LoadReport` exposed no lock field | **Partially resolved** — `save-system.md:36` now lists `lock_live`; ui-flow rule 20 (`:81`), Interactions (`:159`), UI Requirements (`:504`) and AC 26 (`:586`) all branch lock-first. **Edge Cases (`:402`) still gives 更新版本 / 无法读取 → 「退出」「新建生涯」 unconditionally**, and the inventory (`:43`) / transition table (`:144`) still summarise as 「按原因：退出/新建生涯 或 退出/重试」. Dependencies (`:433`) and Cross-References (`:528`) still enumerate `LoadReport` as `outcome` / `writable` / `warnings` only. |
+
+### Completeness: 6/6 sections present, where 6 is the count required at `standard`
+
+Required at `standard` and present: Overview, Detailed Rules (`## Detailed Design`),
+Formulas (the system defines numeric rules — stack depth, modal depth, a
+return-decision function, focus selection, latency, roll timing), Edge Cases,
+Dependencies, Acceptance Criteria.
+
+Advisory at `standard`:
+- **Player Fantasy** — absent as a heading; `## Game Feel` (`:477`) carries it.
+- **Tuning Knobs** — absent. `RECEIPT_ROLL_SECONDS`, `SAVE_INDICATOR_SECONDS`,
+  `MAX_UI_STACK_DEPTH` and `MAX_MODAL_DEPTH` remain defined inside their
+  formulas; findability gap only.
+
+### Dependency Graph
+
+All twelve declared system dependencies have a GDD on disk. No broken references.
+`save-system.md` changed in `74bad1a` (the `lock_live` addition); its
+`retry_load()` precondition is the source of the cross-document half of the
+blocking item below.
+
+### Registry Values
+
+Whole-document search over the registry names this GDD reads or is indexed under:
+**no value conflicts**. `entry_fee = 0` (`:63,378,569`) and `net_profit > 0`
+(`:63,378-380,570`) are predicate conditions; `122.3%` (`:63`) matches
+`settlement-and-entry-fee.md:185` (`1223 / 1000`); `entry_fee_override = 40`
+matches `first_run_entry_fee = 40`. Only back-reference defects remain
+(Recommended 15).
+
+### Required Before Implementation
+
+1. **The lock-first `Blocked` contract is still incomplete on both sides.**
+   `[main review]` (a) ui-flow: Edge Cases `:402` reads "更新版本 / 无法读取只给
+   「退出」「新建生涯（旧档保留）」" with no `lock_live` branch, directly
+   contradicting rule 20 (`:81`), UI Requirements (`:504`) and AC 26 (`:586`).
+   Under a live lock with a newer save this instructs the implementer to offer
+   「新建生涯」, which `save-system.md:47,331` forbids because isolating the file
+   can destroy the other instance's in-flight atomic write. The fixed inventory
+   (`:43`) and the transition table (`:144`) also still summarise the exits as
+   「按原因」 without naming the lock. → Rewrite `:402` as "锁优先：`lock_live` →
+   退出 / 重试；否则 更新版本 / 无法读取 → 退出 / 新建生涯，迁移失败 → 退出 /
+   重试"; change `:43` and `:144` to 「按锁与原因：锁存活 → 退出/重试；否则按原因」.
+   (b) save-system: `retry_load()` (`save-system.md:103`) says it is called
+   "仅在 `Blocked`（迁移失败 / 持锁不可读）", but rule 21 (`:47`), UI
+   Requirements 4 (`:331`) and AC 24b (`:403`) now require 「重试」 for **any**
+   live-lock `Blocked`, including 版本过高. The published precondition excludes
+   the case ui-flow now offers. → Orchestrator edit in `save-system.md:103`.
+
+### Recommended Revisions
+
+1. **Retry outcome is unstated.** `[main review]` Rule 20 (`:81`) and AC 26
+   (`:586`) say retry calls `存档.retry_load()` and "停留在 `Menu`", but not what
+   happens to the modal or the screen after the retry returns. State: a
+   non-`Blocked` result closes the modal and applies that outcome's rule-20
+   behavior; a repeated `Blocked` re-renders the modal from the new cause.
+2. **`LoadReport`'s reason code has no field name.** `[main review]`
+   `save-system.md:36` mentions a "原因码" in prose only; the interface lists
+   (`:159`, `:433`) name `outcome` / `writable` / `warnings` / `lock_live` but no
+   reason field. Name it on both sides so the cause branch is implementable
+   without guessing.
+3. **`retry_load()` is still missing from two interface lists.** `[main review]`
+   Interactions (`:159`) now has it, but Dependencies (`:433`) and
+   Cross-References (`:528`) still enumerate 存档's surface without it — and
+   without `lock_live`. Add both at the two sites.
+4. **AC 38 overclaims `back_target` coverage.** `[main review]` It says the
+   result must match "`back_target` 表逐项一致" but enumerates 7 scenarios for a
+   9-row table. Missing: priority 3 `DISMISS_NOTICE` and a notice-versus-roll /
+   notice-versus-modal ordering case.
+5. **No acceptance criterion for `LoadReport = ReadOnly`.** `[main review]` Rule
+   20 (`:81`), Edge Cases (`:401`) and UI Requirements (`:503`) define the
+   notice, the hidden purchase entries and the absence of 「新建生涯」; AC 25
+   (`:585`) covers only Fresh / Loaded / Migrated / Recovered and AC 26 only
+   `Blocked`. AC 45 (`:617`) also has no `ReadOnly` screenshot.
+6. **`SettingsModal`'s scope reads wider than its entry points.** `[main review]`
+   "任意有界面的状态" (`:40`, `:111`, `:501`) includes `Error` (only 退出, rule
+   18) and `Boot` (Blocked). Restrict to `Menu` / `Paused`.
+7. **「返回」 is absent from two 必须包含 lists.** `[main review]` Rule 6 and
+   AC 29/31 make `UpgradeScreen` / `RecordsScreen` fall back to 「返回」, but
+   `:498` and `:499` do not list it.
+8. **Stale Cross-References note.** `[main review]` `:537` ("双向回指（待编排会话
+   处理）… 状态需改为已写") contradicts `:452` ("双向一致（已完成，2026-11-03)")
+   and the sibling GDDs. Delete it.
+9. **`get_milestone_catalog()` missing from two interface lists.** `[main review]`
+   Dependencies (`:432`) and Cross-References (`:527`) omit it; rule 23 (`:87`),
+   Interactions (`:158`) and the dedicated row (`:531`) have it.
+10. **Open Question 14 is answered; close it.** `[main review]` `:636` asks
+    whether a same-value `push_context(Modal)` pushes or no-ops; `input.md:56`
+    states `push_context` always increases stack depth and emits
+    `context_changed(Modal, Modal)`, including same-value pushes; `input.md:222`
+    exposes the two-modal path in the API AC. The question is resolved.
+11. **#13's dependency is declared hard on one side only.** `[main review]`
+    `unlocks-and-stations.md:92,366` declare 界面流程 硬（UI）with a station
+    catalogue, `can_unlock` / `unlock(id)`, unlock progress and station
+    selection; Dependencies (`:443`) and Interactions (`:164`) here still say
+    软 / "将来", and the fixed inventory has no station-selection surface.
+    Blocks Vertical Slice planning, not MVP.
+12. **`get_first_run_preset()` is named only here.** `[main review]` Rule 8
+    (`:57`) and Interactions (`:163`) call it; `first-run-onboarding.md:33,129`
+    publish the preset values with no method name. Fix the name on one side.
+13. **`receipt_closed(reason)` has no counterpart in `音效反馈`.** `[main review]`
+    `audio-feedback.md:115,366,373` still describe "收据关闭通知 / 通知本系统"
+    without the event name this document owns (`:91,168`, AC 44); `:115` also
+    still calls #16 "未设计".
+14. **`records` still reports the orchestrator as unnamed.** `[main review]`
+    `records-and-milestones.md:120` says "编排者身份尚未指定" and OQ1 (`:443`)
+    is still open, while rule 10 (`:61`) and OQ1 (`:623`) here answer it and
+    `meta-upgrades.md:37` records 界面流程. Records-side edit.
+15. **Registry back-references (orchestration edit).** `[main review]`
+    `design/registry/entities.yaml` still lists `ui-flow.md` only under three
+    entities it never mentions (`:1010,1041,1086` — `station_available`,
+    `unlock_decision`, `unlock_progress`) and omits it from `referenced_by` of
+    `net_profit`, `total_value`, `return_ratio`, `broke_even`,
+    `station_canteen_entry_fee` and `first_run_entry_fee`.
+16. **The `ReadOnly` contract is incomplete.** `[main review]` (a) Whether
+    「开始营业」 is allowed under `ReadOnly` is undefined; if it is, the run's
+    settlement cannot be written and there is no "本次会话不保存" warning
+    (`save-system` r5 Recommended 10). (b) Rule 20 (`:81`) says "隐藏购买/解锁
+    入口" while its own last sentence and AC 28 (`:588`) say "禁用并显示原因" —
+    pick hide or disable and state it once.
+17. **`PauseOverlay`'s Ending/Settling/Handoff content contradicts itself.**
+    `[main review]` Rule 15 (`:71`) keeps only 「继续」「退出游戏」, but UI
+    Requirements (`:500`) and AC 4 (`:552`) hide only 「放弃本局」 and keep
+    「设置」. `run-flow.md:358,431` say only 「继续」「退出」. Align all four.
+18. **HUD opacity setting range differs.** `[main review]` Rule 24 (`:89`) defines
+    `hud_opacity_percent` as 60–100; `in-game-hud.md:348` defines the
+    player-adjustable 面板不透明度 range as 0.70–0.95 (70–95%). State whether
+    the slider is absolute opacity or a percentage of the cap, and reconcile.
+
+### Nice-to-Have
+
+- `meta-upgrades.md:37` lists `prepare_run_result` before `prepare_run`; rule 10
+  fixes records-first order. Wording-only, carried from round 3.
+- Rule 7's ⑤/⑥ and `back_target`'s rows 5/6 list the same two mutually exclusive
+  cases in opposite order. Harmless.
+- Edge Cases `:419` still says 「两个出口」 without saying they are
+  lock/cause-dependent; it becomes accurate once the blocking item is fixed.
+
+### Specialist Disagreements
+
+None — `lean` mode runs no specialist agents.
+
+### Senior Verdict
+
+Not applicable — `lean` mode runs no `creative-director` synthesis.
+
+### Verdict: NEEDS REVISION
+
+The round-5 data-safety blocker is half closed: `lock_live` now exists on the
+save side and the main rule, UI table and AC branch on it. The document is still
+internally unsafe on the one screen the wave targeted — Edge Cases `:402` keeps
+the pre-lock mapping and would have an implementer offer 「新建生涯」 under a live
+lock — and the save-side `retry_load()` precondition has not caught up with the
+new 版本过高 + 存活锁 retry path. Both are one-pass wording edits to a contract
+that is otherwise settled; the eighteen recommended items are carried coverage
+and naming debt and do not touch the screen model.
+
+Reviewed-Content-Hash: design/gdd/ui-flow.md 22c40c147277af09d1d3c9e3c8be149bfe0126f8
+Reviewed-Content-Hash: design/registry/entities.yaml 66d713b708546a4f5beb044b8abe9f93d7fd04e1
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/save-system.md 16b4a4a8fc45095392100202545509c7305a244f
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md b033f0acd34e58fa436fd583230335ee143196ae
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md b9b9235e9a4ad7d8739ad778e98dd147b1c72f94
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 84e5c38fc40fb2a75d8ee608c911bdebf369c5a1
+Reviewed-Content-Hash: design/gdd/scene-flow.md 4efc24d198112aa612551f5b3e5bdeeac28cd52e
+Reviewed-Content-Hash: design/gdd/run-flow.md ea6e49d52b2a08d72dc75c2b295cf54ba5b88279
+Reviewed-Content-Hash: design/gdd/input.md 9432d857ed18dc216dc5a038f81608ae9e10d975
+Reviewed-Content-Hash: design/gdd/audio-feedback.md 33484ec0141607caa44f2fc3c82774245db5fb82
+Reviewed-Content-Hash: design/gdd/data-config.md 0be338a35d8e5fa9ded4c219b29801021835938a
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 654e48d14dbf85fdbab3b923e590a4f356dd0218
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 1cafff5e7ad8aab8912e716d98b69cea02cbbc43
+Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 5aafb0674e6a0bc5bd6a370c275e95a2f01ebfa9
+Reviewed-Content-Hash: design/gdd/systems-index.md b59ef2478102399659f8ae8b533c98a63a1c90b0
