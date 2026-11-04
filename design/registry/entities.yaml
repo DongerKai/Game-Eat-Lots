@@ -324,10 +324,11 @@ formulas:
       - D_dish
       - D_upg
       - D_sta
+      - D_bal
       - TAGSET
     output_range: [0, 1]
-    expression: "uniqueIds(D_dish) and uniqueIds(D_upg) and uniqueIds(D_sta) and all R_dish and all R_upg and all R_sta"
-    notes: "Boolean validity predicate over the three record sets. 1 = valid (game starts); 0 = blocked. Per-record predicates R_dish / R_upg / R_sta are defined in the source GDD."
+    expression: "uniqueIds(D_dish) and uniqueIds(D_upg) and uniqueIds(D_sta) and all R_dish and all R_upg and all R_sta and all R_bal"
+    notes: "Boolean validity predicate over the four record sets. 1 = valid (game starts); 0 = blocked. Per-record predicates R_dish / R_upg / R_sta / R_bal are defined in the source GDD; R_bal validates the singleton BalanceData.base_capacity."
     added: "2026-11-03"
     revised: ""
 

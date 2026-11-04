@@ -470,7 +470,7 @@ uv_gap      = unit_value(best_menu) − worst_eaten.effective_unit_value
 
 **约束与降级**
 
-13. **GIVEN** 任一模态 beat 打开，**WHEN** 玩家按导航键（B0）或 `ui_accept`（B1），**THEN** 除了白名单内的推进外，`ui_accept` / `game_skip_dish` 不到达餐局流程，无回合被消耗。
+13. **GIVEN** 任一模态 beat 打开，**WHEN** 玩家按导航键（B0）或 `ui_accept`（B1），**THEN** 除了白名单内的推进外，`ui_accept` / `game_skip_wave` 不到达餐局流程，无回合被消耗。
 14. **GIVEN** 局内任意时刻，**WHEN** 检查全部气泡文本，**THEN** 不存在「元/格」「每格 N 元」或任何 `unit_value` 数值；单位价值只在收据中出现。
 15. **GIVEN** HUD 不返回 `bar:capacity` 的锚点矩形，**WHEN** B2 展示，**THEN** 气泡停靠底部、仍不与三个受保护区域相交、不报错中断。**截图留存**。
 16. **GIVEN** `pool_override` 被上游忽略，**WHEN** 首局开局，**THEN** 本局用档口原菜池照常进行，B2 不含「六道菜 / 20 格」的定量句，无错误弹窗。

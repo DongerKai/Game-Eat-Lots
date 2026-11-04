@@ -30,9 +30,9 @@
 2. **一局恰好一次**：每一局分配唯一的 `run_id`，经历恰好一次开始、一次结束、至多一次结算、一次交接。同一 `run_id` 不得出现第二份 `RunLog` 或 `RunResult`；重复结算由结算系统拒绝，本系统不依赖该拒绝来保证正确性。
 3. **进入即初始化**：顶层 `Menu → Run` 生效时，本系统取得 `RunConfig`，校验后在同一帧内完成：分配 `run_id`、确定 `run_seed`、依次初始化时间与回合、胃容量、菜单波次，然后广播 `run_started`（腻度与口味以此重置计数）并进入 `Active`。初始化不消耗回合与容量。
 4. **初始化失败不是一局**：`RunConfig` 无法解析、`station_id` 不存在、升级快照字段非法或任一子系统初始化失败时，本系统立即请求 `Run → Menu`，携带 `init_failed = true`；不产生 `RunLog`、不产生 `RunResult`、不广播 `run_started`、不写纪录。**若该返回请求因同一帧内 `Menu → Run` 已先生效而被拒绝**（场景与流程管理按帧初状态校验），本系统留在 `Failed` 并在下一帧重发，不重复初始化。不得停在半初始化的 `Run`。
-5. **一次输入只提交一个动作**：`Active` 中每个输入事件至多提交一个动作，动作集只有三种——吃一道菜（`ui_accept` 作用于当前焦点菜品）、主动跳波（`game_skip_dish`，非最后一波）、最后一波「结束取餐」（同一动作，0 回合）。焦点菜品由局内 HUD 按当前键盘/手柄焦点或鼠标悬停解析后随动作传入；本系统只校验它仍在当前可见集，不自行猜测焦点。动作先完整校验再原子提交；被拒绝的尝试不改变任何状态。
+5. **一次输入只提交一个动作**：`Active` 中每个输入事件至多提交一个动作，动作集只有三种——吃一道菜（`ui_accept` 作用于当前焦点菜品）、主动跳波（`game_skip_wave`，非最后一波）、最后一波「结束取餐」（同一动作，0 回合）。焦点菜品由局内 HUD 按当前键盘/手柄焦点或鼠标悬停解析后随动作传入；本系统只校验它仍在当前可见集，不自行猜测焦点。动作先完整校验再原子提交；被拒绝的尝试不改变任何状态。
 6. **吃菜的提交顺序固定**：校验顺序为“菜仍在当前可见集 → 向腻度取得 `effective_satiety(d)` → 胃容量 `can_fit(effective_satiety)` → 回合仍可用”；通过后原子提交：按吃下顺序追加 `EatenEntry(dish_id, extra_satiety, effective_satiety)`、更新腻度计数、把该菜从当前波移除、消耗 1 回合，然后执行一次结束判定。任何一步之前失败都整体回滚，不扣回合、不写日志。
-7. **跳波由菜单波次拥有，回合由时间与回合拥有**：非最后一波的 `game_skip_dish` 丢弃当前波剩余菜、推进一波、消耗 1 回合；最后一波该动作为「结束取餐」，不消耗回合、丢弃剩余菜并向本系统发出“无可吃菜”信号。本系统只负责路由输入、确认代价、执行结束判定，不自行计算跳过代价。跳波校验顺序固定为“波次是否允许推进 → 回合是否可用 → 提交”。
+7. **跳波由菜单波次拥有，回合由时间与回合拥有**：非最后一波的 `game_skip_wave` 丢弃当前波剩余菜、推进一波、消耗 1 回合；最后一波该动作为「结束取餐」，不消耗回合、丢弃剩余菜并向本系统发出“无可吃菜”信号。本系统只负责路由输入、确认代价、执行结束判定，不自行计算跳过代价。跳波校验顺序固定为“波次是否允许推进 → 回合是否可用 → 提交”。
 8. **只有两个结束原因**：`TIME_EXHAUSTED` 与 `NO_EATABLE_DISH`。**没有“吃撑”结束原因**：胃容量只决定一道菜能不能吃，不直接结束本局；玩家可能仍有回合却暂时放不下任何可见菜，此时可以付费跳波或等下一波。菜单波次的 `no_eatable` 信号只覆盖“最后一波被吃完 / 玩家结束取餐 / 本局已无剩余菜”，**不覆盖“可见菜都放不进剩余容量”**；后者不结束本局。MVP 不提供主动提前结账（回答结算与入场费 Open Question 2）；最后一波「结束取餐」记为 `NO_EATABLE_DISH`，不新增第三枚举。
 9. **结束判定时机固定**：每次成功提交动作之后判定一次；初始化完成后判定一次。被拒绝的动作、暂停中的帧、以及纯展示帧都不判定。判定命中后同一帧进入 `Ending`，此后不再接受任何动作。
 10. **结束原因优先级固定**：若同一帧同时满足回合耗尽与无可吃菜，取 `TIME_EXHAUSTED`。顺序写死在判定函数里，不依赖事件到达顺序，也不随机。
@@ -113,7 +113,7 @@
 |---|---|---|---|
 | 场景与流程管理 | 上游 | `Menu → Run` 时取得 `RunConfig`；接收冻结/恢复通知；调用 `request_transition(Run → Menu, RunResult \| init_failed)`；观察当前顶层状态以识别放弃/退出 | 硬 |
 | 数据配置 | 上游 | 前提 `Ready`；`get_station(station_id)` 必须存在；不读取菜品数值 | 硬 |
-| 输入 | 上游 | 每次动作读取 `ui_accept`、`game_skip_dish`；**不读取 `ui_pause`**（由场景与流程管理消费） | 硬 |
+| 输入 | 上游 | 每次动作读取 `ui_accept`、`game_skip_wave`；**不读取 `ui_pause`**（由场景与流程管理消费） | 硬 |
 | 时间与回合 | 协调（下游） | `initialize(...) → turns_total`、`spend_turn()`、`turns_remaining`、`turns_used`；提供 `TIME_EXHAUSTED` 判据 | 硬 |
 | 胃容量 | 协调（下游） | `initialize(upgrade_snapshot) → capacity_total`、`capacity_used`、`can_fit(effective_satiety)`、`consume(e)` | 硬 |
 | 菜单波次 | 协调（下游） | `initialize(station_id, seed, turns_total, menu_vision[, pool_override])`；`visible_dishes`；`advance()`；无菜可吃信号 | 硬 |
@@ -281,7 +281,7 @@ The `transition_cost` rule is defined as:
 |---|---|---|---|
 | 场景与流程管理 | 硬 | `Menu → Run` 取得 `RunConfig`；冻结/恢复通知；`request_transition(Run → Menu, RunResult \| init_failed)`；观察顶层状态识别放弃/退出 | GDD 已写（In Review） |
 | 数据配置 | 硬 | 前提 `Ready`；`get_station(station_id)` 必须存在 | GDD 已写（In Design） |
-| 输入 | 硬 | `ui_accept`、`game_skip_dish`；`ui_pause` 不由本系统读取 | GDD 已写（In Design） |
+| 输入 | 硬 | `ui_accept`、`game_skip_wave`；`ui_pause` 不由本系统读取 | GDD 已写（In Design） |
 
 **下游依赖方（本系统在运行时协调它们；依赖方向上它们依赖本系统）：**
 
@@ -360,7 +360,7 @@ The `transition_cost` rule is defined as:
 |---|---|---|
 | 场景与流程管理 | design/gdd/scene-flow.md | 上游：取得 `RunConfig`、冻结/恢复通知、`request_transition`；本 GDD 回答其 `RunConfig` / `RunResult` schema 归属 Open Question |
 | 数据配置 | design/gdd/data-config.md | 上游：`Ready` 前提与 `station_id` 解析 |
-| 输入 | design/gdd/input.md | 上游：`ui_accept`、`game_skip_dish`；`ui_pause` 归场景与流程管理 |
+| 输入 | design/gdd/input.md | 上游：`ui_accept`、`game_skip_wave`；`ui_pause` 归场景与流程管理 |
 | 时间与回合 | 未写 | 下游：回合预算、消耗与耗尽判据 |
 | 胃容量 | 未写 | 下游：容量、可吃性判定 |
 | 菜品数值 | design/gdd/dish-values.md | 间接：由菜单波次、腻度与结算消费，本系统不直接读取 |
@@ -392,8 +392,8 @@ The `transition_cost` rule is defined as:
 7. **GIVEN** 一道菜放不进剩余容量，**WHEN** 按 `ui_accept`，**THEN** 拒绝；`turns_used`、`capacity_used`、`eaten` 与状态均不变。
 8. **GIVEN** 焦点菜已不在可见集（波次已推进或已被吃），**WHEN** 按 `ui_accept`，**THEN** 作为过期输入拒绝，不扣回合、不写日志。
 9. **GIVEN** 同一帧收到两个动作输入，**WHEN** 处理该帧，**THEN** 只有第一个通过完整校验的动作提交，第二个无任何效果；不得双扣回合或双写 `eaten`。
-10. **GIVEN** 非最后一波，**WHEN** 按 `game_skip_dish`，**THEN** 当前波剩余菜作废、推进一波、`turns_used` 加 1。
-11. **GIVEN** 最后一波，**WHEN** 按 `game_skip_dish`（结束取餐），**THEN** 不扣回合、剩余菜作废、`no_eatable` 信号恰好一次、`end_reason = NO_EATABLE_DISH` 并进入 `Ending`。
+10. **GIVEN** 非最后一波，**WHEN** 按 `game_skip_wave`，**THEN** 当前波剩余菜作废、推进一波、`turns_used` 加 1。
+11. **GIVEN** 最后一波，**WHEN** 按 `game_skip_wave`（结束取餐），**THEN** 不扣回合、剩余菜作废、`no_eatable` 信号恰好一次、`end_reason = NO_EATABLE_DISH` 并进入 `Ending`。
 12. **GIVEN** 一次成功动作后 `turns_remaining = 0`，**WHEN** 结束判定，**THEN** `end_reason = TIME_EXHAUSTED`，此后所有动作被拒绝；**GIVEN** 同时 `no_eatable = true`，**THEN** 仍取 `TIME_EXHAUSTED`。
 13. **GIVEN** 初始化完成且 `turns_total = 0`，**WHEN** 初始判定，**THEN** 立即 `TIME_EXHAUSTED`，生成零行 `RunLog` 并正常结算。
 14. **GIVEN** `Ending` 中组装 `RunLog`，**WHEN** 检查字段，**THEN** `run_id`、`station_id`、`end_reason`、`eaten` 顺序、`capacity_total`、`capacity_used`、`turns_total`、`turns_used`、`upgrade_snapshot` 全部来自动作发生时刻的记录；`capacity_used` 等于各行 `effective_satiety` 之和。**WHEN** 组装后修改数据配置与腻度状态再读取日志，**THEN** 日志仍是旧值（证明不重算）。
@@ -442,7 +442,7 @@ The `transition_cost` rule is defined as:
 |---|---|---|---|
 | 1 | **结算失败的返回通道**：场景与流程管理只有 `init_failed`，没有 `run_faulted`。本 GDD 暂定复用 `init_failed = true` 并附 `fault` 明细。是否给 #3 增加独立 payload（或允许无 payload 返回）？ | systems-designer + game-designer | 场景与流程管理复审时 |
 | 2 | **输入 GDD 把 `ui_pause` 列为本系统的读取项**，但顶层暂停由场景与流程管理消费；本系统不应重复读取。是否修正输入 GDD 的下游行？ | game-designer（输入） | `/consistency-check` 时 |
-| 3 | **`game_skip_dish` 的语义与命名**：输入 GDD 描述为“跳过悬停的菜品卡”，菜单波次实现为“跳过当前波 / 最后一波结束取餐”。是否改名为 `game_skip_wave` 或拆成两个动作？ | game-designer（输入 + 菜单波次） | 写 `/ux-design` 局内 HUD 前 |
+| 3 | **`game_skip_wave` 的语义与命名**：输入 GDD 描述为“跳过悬停的菜品卡”，菜单波次实现为“跳过当前波 / 最后一波结束取餐”。是否改名为 `game_skip_wave` 或拆成两个动作？ | game-designer（输入 + 菜单波次） | 写 `/ux-design` 局内 HUD 前 |
 | 4 | **放弃/退出的清理通知**：场景与流程管理从 `Paused → Menu (abandoned)` 或 `Quit` 时没有显式通知本系统；本 GDD 暂定由本系统观察顶层状态来丢弃。是否增加 `run_discarded` 通知？ | systems-designer | 场景与流程管理复审时 |
 | 5 | **首局 6 道菜的菜池注入**：本 GDD 预留 `RunConfig.pool_override`，但菜单波次当前只读 `StationData.dish_pool`。是用专用档口、数据覆盖还是让菜单波次接受覆盖？ | game-designer（首局引导 + 菜单波次） | 首局引导 GDD 编写时 |
 | 6 | **`run_id` 是否跨会话持久化**：MVP 每会话从 1 开始；若纪录需要全局唯一或跨会话比较，需要持久化计数器。 | systems-designer（存档 + 纪录） | 存档 GDD 编写时 |

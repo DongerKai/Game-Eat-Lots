@@ -30,17 +30,17 @@ Godot 4.6 起鼠标焦点与键盘/手柄焦点分离，因此输入层负责分
    |---|---|---|---|
    | `ui_up` / `ui_down` / `ui_left` / `ui_right` | 方向键、WASD | 左摇杆、十字键 | — |
    | `ui_accept` | Enter、Space | A | 左键（悬停的控件） |
-   | `ui_cancel` | Backspace | B | — |
-   | `ui_pause` | Esc（Run 上下文）、P | Start | — |
-   | `game_skip_dish` | S | X | 右键（悬停的菜品卡） |
+   | `ui_cancel` | Backspace、Esc | B | — |
+   | `ui_pause` | Esc、P | Start | — |
+   | `game_skip_wave` | S | X | 右键（任意位置） |
 
-2. **上下文决定语义**：Esc 同时绑定 `ui_cancel` 与 `ui_pause`；Run 上下文读 `ui_pause`，Menu / Modal 上下文读 `ui_cancel`。
+2. **上下文决定语义**：Esc 在 InputMap 中同时绑定 `ui_cancel` 与 `ui_pause`（映射层不能按上下文区分）；消费时按上下文取一个：Run / Paused 取 `ui_pause`（暂停 / 恢复），Menu / Modal 取 `ui_cancel`（返回 / 关闭），Blocked 只取 `allow` 白名单内的动作（默认仅 `ui_pause`）。Paused 中 `ui_cancel` 由 Backspace 触发（打开退出确认）；Esc 不打开退出确认。
 3. **初始焦点**：每个界面打开时把键盘/手柄焦点放在主操作上（第一道菜、第一项升级、主按钮）。
 4. **完整可玩**：每个界面与局内操作都必须能只用键盘或手柄完成；鼠标是可选加速器。
-5. **触发时机**：动作在按下瞬间触发一次。忽略操作系统按键回显（`event.echo`）；长按不重复触发 `ui_accept` 或 `game_skip_dish`。
+5. **触发时机**：动作在按下瞬间触发一次。忽略操作系统按键回显（`event.echo`）；长按不重复触发 `ui_accept` 或 `game_skip_wave`。
 6. **导航重复**：按住方向超过延迟后开始重复（公式见 Formulas）。
 7. **摇杆回滞**：摇杆导航进入阈值为 0.60、释放阈值为 0.40，防止漂移造成连续导航。
-8. **双焦点**：鼠标悬停与键盘/手柄焦点分开记录、分开绘制。鼠标移动不抢键盘焦点，键盘导航不清除悬停。
+8. **双焦点**：鼠标悬停与键盘/手柄焦点分开记录、分开绘制。鼠标移动不抢键盘焦点，键盘导航不清除悬停。对外查询：`get_focus_owner() -> NodePath` 与 `get_hover_owner() -> NodePath`。
 9. **设备识别**：按事件类型判断，绝不比较 `device == 0`（Godot 4.7 起鼠标/键盘使用 `DEVICE_ID_MOUSE` / `DEVICE_ID_KEYBOARD`）。
 10. **无重绑（MVP）**：绑定集中在一张映射表里；重绑是以后替换这张表，不改变动作集。
 11. **输入只读**：局内系统只查询"某动作是否刚触发"，不持有设备或原始事件对象。
@@ -48,20 +48,20 @@ Godot 4.6 起鼠标焦点与键盘/手柄焦点分离，因此输入层负责分
 
     | 接口 | 语义 | 唯一调用方 |
     |---|---|---|
-    | `request_context(context, clear_stack := true) -> bool` | 设置权威上下文；`clear_stack` 为真时清空临时栈 | 场景与流程管理 |
-    | `push_context(context) -> bool` | 把上下文压入临时栈，保留栈下内容 | 界面流程（`Modal`）、首局引导（`Blocked`） |
+    | `request_context(context, clear_stack := true, allow := []) -> bool` | 设置权威上下文；`clear_stack` 为真时清空临时栈 | 场景与流程管理 |
+    | `push_context(context, allow := []) -> bool` | 把上下文压入临时栈，保留栈下内容；`allow` 仅在 `Blocked` 上生效 | 界面流程（`Modal`）、首局引导（`Blocked`） |
     | `pop_context() -> bool` | 弹出临时栈顶，回到压栈前的上下文 | 界面流程、首局引导 |
 
-    输入**不判断请求是否合理**（例如"Menu 能不能进 Run"），只校验 `context` 是否为五个已知上下文之一；未知值返回 `false`，栈与当前上下文都不变。合法性由请求方负责——这与「场景与流程管理」的"不做规则校验"是同一条边界。任何一次实际改变都发出 `context_changed(from, to)`，参数为栈顶变化前后的值；空操作（同值覆盖）不发信号。场景与流程管理在顶层切换时用 `clear_stack = true`，因此界面流程与首局引导遗留的临时上下文不会跨状态存活。
+    输入**不判断请求是否合理**（例如"Menu 能不能进 Run"），只校验 `context` 是否为五个已知上下文之一；未知值返回 `false`，栈与当前上下文都不变。合法性由请求方负责——这与「场景与流程管理」的"不做规则校验"是同一条边界。`push_context` 总是增加栈深并发出 `context_changed(from, to)`，包括同值压栈 `context_changed(Modal, Modal)`；`pop_context` 同样发出。只有 `request_context` 在目标上下文与当前栈顶相同且 `clear_stack = false` 时才是无信号空操作。`allow` 只对 `Blocked` 生效：为空时保持「只允许 `ui_pause`」的默认语义；非空时只放行列出的动作。场景与流程管理在顶层切换时用 `clear_stack = true`，因此界面流程与首局引导遗留的临时上下文不会跨状态存活。
 
 ### States and Transitions
 
 | 上下文 | 何时进入 | 响应动作 | 屏蔽 |
 |---|---|---|---|
-| Blocked | 加载、首局引导、结算动画 | `ui_pause`（若该界面允许） | 其余全部 |
-| Menu | 主菜单、结算、升级、设置 | 导航、`ui_accept`、`ui_cancel` | `game_skip_dish`、`ui_pause` |
-| Run | 一局进行中且无弹窗 | 导航、`ui_accept`、`game_skip_dish`、`ui_pause` | — |
-| Paused | Run 中按 `ui_pause` | `ui_pause`（恢复）、`ui_accept`（激活焦点控件，默认「继续」）、`ui_cancel`（打开退出确认） | `game_skip_dish` |
+| Blocked | 加载、首局引导、结算动画 | `allow` 白名单内的动作（默认仅 `ui_pause`） | 其余全部 |
+| Menu | 主菜单、结算、升级、设置 | 导航、`ui_accept`、`ui_cancel` | `game_skip_wave`、`ui_pause` |
+| Run | 一局进行中且无弹窗 | 导航、`ui_accept`、`game_skip_wave`、`ui_pause` | — |
+| Paused | Run 中按 `ui_pause` | `ui_pause`（恢复）、`ui_accept`（激活焦点控件，默认「继续」）、`ui_cancel`（打开退出确认） | `game_skip_wave` |
 | Modal | 任意弹窗（设置、确认框） | 导航、`ui_accept`、`ui_cancel` | 其余全部 |
 
 **转换**：Run → Paused（`ui_pause`）；Paused → Run（`ui_pause`，或界面流程消费 `ui_accept` 后请求）；任意 → Modal（界面请求）；Modal → 来源上下文（`ui_accept` 确认或 `ui_cancel` 关闭）；Run → Menu（结算完成）；Menu → Run（开始一局）。
@@ -72,7 +72,7 @@ Godot 4.6 起鼠标焦点与键盘/手柄焦点分离，因此输入层负责分
 |---|---|---|---|
 | 场景与流程管理 | 下游读取 + 请求上下文 | `request_context(ctx, clear_stack := true)`；`context_changed(from, to)` | 硬 |
 | 界面流程 | 下游读取 + 请求上下文 | 焦点、导航、`ui_accept`、`ui_cancel`；`push_context(Modal)` / `pop_context()` | 硬 |
-| 餐局流程 | 下游读取 | 每回合的 `ui_accept`、`game_skip_dish`、`ui_pause` | 硬 |
+| 餐局流程 | 下游读取 | 每回合的 `ui_accept`、`game_skip_wave`、`ui_pause` | 硬 |
 | 局内 HUD | 下游读取 | 菜品卡的悬停、点击、右键 | 硬 |
 | 首局引导 | 下游读取 + 请求上下文 | `push_context(Blocked)` / `pop_context()`，只放行引导需要的动作 | 软 |
 | 音效反馈 | 下游读取 | 动作触发事件（用于 UI 音效） | 软 |
@@ -143,15 +143,15 @@ The `stick_engaged` formula is defined as:
 - **If 手柄在局中拔出**：输入层停止接受该设备的事件，按下中的动作按释放处理，上下文保持不变。是否暂停由场景与流程管理决定（当前设计：**不自动暂停**）；重连后继续，键盘仍可操作。
 - **If 手柄在局中接入**：不改变当前状态，新设备立即开始工作。
 - **If 鼠标与键盘/手柄同时操作**：双焦点各自记录；以最近一次输入的方式决定当前绘制哪种焦点样式，任何动作都不会丢失。
-- **If 长按 `ui_accept` 或 `game_skip_dish`**：只触发一次，不重复。
+- **If 长按 `ui_accept` 或 `game_skip_wave`**：只触发一次，不重复。
 - **If 操作系统发出按键回显**（`event.echo == true`）：忽略，不产生第二次动作。
 - **If 弹窗打开时按 Esc**：按 `ui_cancel` 关闭弹窗，不触发暂停。
 - **If 当前没有任何控件获得焦点时按 `ui_accept`**：无操作，不报错。
 - **If 点击落在任何菜品卡之外**：无操作，不消耗时间格。
-- **If 鼠标未悬停在菜品卡上时按跳过**（右键 / X / S）：无操作。
+- **If 鼠标未悬停在菜品卡上时按跳过**（右键 / X / S）：仍然触发 `game_skip_wave`（跳过当前波 / 最后一波结束取餐），不要求悬停。
 - **If 摇杆幅度停在 0.40–0.60 之间**：保持上一次的进入/释放状态（回滞），不来回抖动。
 - **If 两个设备同时触发同一动作**：只产生一次动作。
-- **If 输入发生在 Blocked 上下文**：除该界面允许的暂停外一律丢弃。
+- **If 输入发生在 Blocked 上下文**：除 `allow` 白名单（默认仅 `ui_pause`）外一律丢弃。
 - **If 上下文切换时方向键正被按住**：旧按键不会延续到新上下文，必须重新按下才产生导航。
 - **If 输入事件的 `device` 为 0**：不得据此判断设备类型——4.7 起鼠标/键盘使用专用常量，一律按事件类型识别。
 
@@ -164,7 +164,7 @@ The `stick_engaged` formula is defined as:
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
 | 界面流程 | 硬 | 导航、`ui_accept`、`ui_cancel`、初始焦点、双焦点状态 | GDD 已写（`design/gdd/ui-flow.md`） |
-| 餐局流程 | 硬 | 每回合的 `ui_accept`、`game_skip_dish`、`ui_pause` | GDD 已写（`design/gdd/run-flow.md`） |
+| 餐局流程 | 硬 | 每回合的 `ui_accept`、`game_skip_wave`、`ui_pause` | GDD 已写（`design/gdd/run-flow.md`） |
 | 局内 HUD | 硬 | 菜品卡的悬停、点击、右键 | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 首局引导 | 软 | 请求 Blocked 上下文，只放行指定动作 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 | 音效反馈 | 软 | 动作触发事件 | GDD 已写（`design/gdd/audio-feedback.md`） |
@@ -208,18 +208,18 @@ The `stick_engaged` formula is defined as:
 
 **测试夹具**（一次定义，下文引用）：F1 输入探针（记录动作名、原始事件、时间戳）；F2 InputMap 导出；F3 回显注入器；F4 重复时钟；F5 摇杆合成器；F6 双焦点测试界面；F7 设备事件合成器；F8 上下文 harness；F9 全界面清单（逐屏记录主节点路径）。
 
-1. **GIVEN** F1 + F2，**WHEN** 启动，**THEN** InputMap 恰有 8 个动作（`ui_up` / `ui_down` / `ui_left` / `ui_right` / `ui_accept` / `ui_cancel` / `ui_pause` / `game_skip_dish`），没有其他游戏动作。
-2. **GIVEN** F8 处于 Run，**WHEN** 按 Esc，**THEN** 只触发 `ui_pause`，`ui_cancel` 计数为 0；**WHEN** 打开 Modal 后按 Esc，**THEN** 只触发 `ui_cancel`，不进入 Paused。
+1. **GIVEN** F1 + F2，**WHEN** 启动，**THEN** InputMap 恰有 8 个动作（`ui_up` / `ui_down` / `ui_left` / `ui_right` / `ui_accept` / `ui_cancel` / `ui_pause` / `game_skip_wave`），没有其他游戏动作。
+2. **GIVEN** F8 处于 Run，**WHEN** 按 Esc，**THEN** 只触发 `ui_pause`，`ui_cancel` 计数为 0；**WHEN** 打开 Modal 后按 Esc，**THEN** 只触发 `ui_cancel`，不进入 Paused；**WHEN** 处于 Paused 按 Esc，**THEN** 只触发 `ui_pause`（恢复），`ui_cancel` 计数为 0；**WHEN** 处于 Paused 按 Backspace，**THEN** 只触发 `ui_cancel`（打开退出确认），不恢复。
 3. **GIVEN** F9，**WHEN** 每个界面首次显示，**THEN** `focus_owner` 等于该屏清单里写死的主节点路径，手柄按 A 立即生效。
 4. **GIVEN** F9 且鼠标已拔出，**WHEN** 只用键盘或只用柄走完一局，**THEN** 能到达结算，全程不需要鼠标。
-5. **GIVEN** F3，**WHEN** 按住 `ui_accept` 0.5 秒并注入 `event.echo=true` 五次，**THEN** 动作计数为 1；`game_skip_dish` 同理。
+5. **GIVEN** F3，**WHEN** 按住 `ui_accept` 0.5 秒并注入 `event.echo=true` 五次，**THEN** 动作计数为 1；`game_skip_wave` 同理。
 6. **GIVEN** F4，`D=0.35`、`I=0.12`，**WHEN** `T=1.00`，**THEN** `nav_steps=7`，触发点为 0.35 / 0.47 / 0.59 / 0.71 / 0.83 / 0.95 秒；`T=0.35` 时 **THEN** 为 2（边界取 `≤`）；`T=0.34` 时 **THEN** 为 1。
 7. **GIVEN** F5，**WHEN** `(prev=false, m=0.55)` **THEN** false；`(prev=true, m=0.55)` **THEN** true；`(prev=true, m=0.35)` **THEN** false；`(prev=true, m=0.40)` **THEN** true；`(prev=false, m=0.60)` **THEN** true。
 8. **GIVEN** F6，**WHEN** 鼠标悬停在卡片 B 后按方向下，**THEN** 悬停仍在 B、键盘焦点已移动，两套样式同时绘制；**WHEN** 移动鼠标，**THEN** 键盘焦点不变。
 9. **GIVEN** F7，**WHEN** 合成 `device=0` 的 `InputEventKey` 与 `InputEventMouseMotion`，**THEN** 按事件类型判为键盘/鼠标；**GIVEN** `device=0` 的手柄事件，**THEN** 不误判。源码搜索 `device ==` 命中 0 次。
 10. **GIVEN** F2，**WHEN** 扫描 InputMap 的写入点，**THEN** 只有中央表 1 处、8 个动作，重绑入口为 0。
-11. **GIVEN** 下游探针场景，**WHEN** 调用输入 API，**THEN** 只暴露 `is_action_just_pressed(action) -> bool`；静态扫描中 `InputEvent` 引用只出现在输入层。
-12. **GIVEN** F8，**WHEN** Run → Paused → Run、Run → Modal → 来源上下文，**THEN** 动作白名单与状态表一致，Blocked 上下文全部丢弃；**WHEN** 窗口失焦或手柄拔出，**THEN** 上下文不变、不产生任何动作；手柄拔出后键盘仍能完成 `ui_accept`。
+11. **GIVEN** 下游探针场景，**WHEN** 调用输入 API，**THEN** 暴露的接口恰好是：`is_action_just_pressed(action) -> bool`、`get_focus_owner() -> NodePath`、`get_hover_owner() -> NodePath`、`request_context(...)`、`push_context(...)`、`pop_context()`；静态扫描中 `InputEvent` 引用只出现在输入层。
+12. **GIVEN** F8，**WHEN** Run → Paused → Run、Run → Modal → 来源上下文，**THEN** 动作白名单与状态表一致，Blocked 上下文除 `allow` 白名单外全部丢弃；**WHEN** 窗口失焦或手柄拔出，**THEN** 上下文不变、不产生任何动作；手柄拔出后键盘仍能完成 `ui_accept`。
 13. **GIVEN** 方向键保持按住，**WHEN** 切换上下文再切回，**THEN** 不产生导航，必须释放后重按。
 14. **GIVEN** 同一帧按下手柄 A 与 Enter，**WHEN** 两者映射到同一动作，**THEN** 动作计数为 1。
 15. **GIVEN** 60 FPS 目标与同帧轮询，**WHEN** 从 F1 时间戳到消费者查询，**THEN** 延迟 ≤ 1 帧（16.7 ms）。该预算依赖 `project.yaml` 的目标帧率与输入轮询方式，不测主观手感。

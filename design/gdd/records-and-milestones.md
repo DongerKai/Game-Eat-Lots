@@ -440,7 +440,7 @@ The `career_complete` formula is defined as:
 | # | 问题 | 负责人 | 目标解决时间 |
 |---|---|---|---|
 | 1 | **谁拥有「结算提交编排者」？** 本系统返回新的 `records` 值，但把 `progression`、`records`、`unlocks` 合并为同一事务的调用者尚未指定。由界面流程、局外升级还是场景流程承担？该决定同时决定混合事务的失败策略（见 Dependencies 的存档契约澄清）。 | lead-programmer + technical-director | 架构阶段 |
-| 2 | **`MilestoneData` 放进数据配置，还是纪录系统自带资源加载器？** 本 GDD 假定数据配置新增第四类记录，但数据配置的「三类记录、唯一数值来源」表述需要同步修订。两条路只能选一条。 | technical-director（数据配置 + 纪录） | 架构阶段 |
+| 2 | **`MilestoneData` 放进数据配置，还是纪录系统自带资源加载器？** 数据配置现有四类记录（Dish / Upgrade / Station / Balance）；若选择放进数据配置，`MilestoneData` 将成为第五类记录，否则由纪录系统自带只读加载器。两条路只能选一条。 | technical-director（数据配置 + 纪录） | 架构阶段 |
 | 3 | **里程碑阈值如何校准？** 当前基线的 1100 / 1200 依据食堂静态最优 1223；多档口、升级生效后可达上限会变化。需要 economy-designer 在 `/prototype` 后按每档口的 `calibration_ratio` 重算，并保证每条必需里程碑可达。 | economy-designer + prototyper | Vertical Slice 设计前 |
 | 4 | **完成条件是否应该解锁内容？** **已回答（2026-11-03）**：MVP/VS 完成条件不发放解锁；若未来发放，必须并入结算事务——见 `design/gdd/unlocks-and-stations.md`。 | game-designer（解锁与档口 + 纪录） | 解锁与档口 GDD 完成时 |
 | 5 | **是否需要跨档口的生涯最佳（而非每档口最佳）？** 当前只存每档口最佳，纪录页可派生「所有档口里的最高净利」。若界面要单独展示「生涯最高一局」，需明确跨档口比较是否公平（不同入场费下的绝对净利不可比）。 | ux-designer（界面流程 + 纪录） | 纪录页 UX 规格时 |

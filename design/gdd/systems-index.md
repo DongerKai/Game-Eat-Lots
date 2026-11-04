@@ -54,9 +54,9 @@ were found.
 
 | # | System Name | Category | Priority | Status | Design Doc | Depends On |
 |---|-------------|----------|----------|--------|------------|------------|
-| 1 | 数据配置 | Core | MVP | Needs Revision | design/gdd/data-config.md | — |
-| 2 | 输入 | Core | MVP | Needs Revision | design/gdd/input.md | — |
-| 3 | 场景与流程管理 | Core | MVP | Needs Revision | design/gdd/scene-flow.md | 数据配置, 输入 |
+| 1 | 数据配置 | Core | MVP | In Review | design/gdd/data-config.md | — |
+| 2 | 输入 | Core | MVP | In Review | design/gdd/input.md | — |
+| 3 | 场景与流程管理 | Core | MVP | In Review | design/gdd/scene-flow.md | 数据配置, 输入 |
 | 4 | 存档 | Persistence | MVP | Designed | design/gdd/save-system.md | 数据配置 |
 | 5 | 餐局流程 | Core | MVP | Designed | design/gdd/run-flow.md | 场景与流程管理, 数据配置, 输入 |
 | 6 | 时间与回合 | Core | MVP | Designed | design/gdd/time-and-turns.md | 餐局流程 |

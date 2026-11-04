@@ -168,7 +168,7 @@ HUD 的状态是 `run_state` 的投影，加上一个独立的 `frozen` 维度�
 | 腻度与口味 | 上游 | `effective_satiety(d)`、`extra_satiety(d)`、`taste_tags(d)`、`cloying_group(d)`、`cleanse_target(d)`、各组件计数 | 硬 |
 | 菜单波次 | 上游 | `wave_index` / 总波数、`visible_dishes`、`preview_dishes`、`?` 槽数量；跳过/结束取餐的可用性与代价 | 硬 |
 | 结算与入场费 | 上游 | `running_net` / `shortfall`；不自行求和、不读 `entry_fee` 自行计算 | 硬 |
-| 输入 | 上游 | 焦点导航（`ui_up/down/left/right`）、`ui_accept`、`ui_cancel`、`game_skip_dish`；只查询，不监听原始事件、不改映射 | 硬 |
+| 输入 | 上游 | 焦点导航（`ui_up/down/left/right`）、`ui_accept`、`ui_cancel`、`game_skip_wave`；只查询，不监听原始事件、不改映射 | 硬 |
 | 场景与流程管理 | 间接上游 | `frozen` 经餐局流程快照到达；HUD 不直接读取顶层状态 | 软（间接） |
 | 数据配置 | 间接上游 | 菜品与档口记录由菜品数值/菜单波次解析后传入；HUD 不直接查询数据目录 | 软（间接） |
 | 界面流程 | 同级协调 | 屏幕归属：HUD 画局内一屏，界面流程画暂停菜单、收据、菜单、升级、设置；`frozen` 时暂停菜单在上层，`Settling` 时收据覆盖 HUD。无数据依赖 | 协调 |
@@ -387,7 +387,7 @@ HUD 的状态是 `run_state` 的投影，加上一个独立的 `frozen` 维度�
 | 腻度与口味 | 上游 | `effective_satiety` / `extra_satiety` / `taste_tags` / `cloying_group` / `cleanse_target`；组计数 | 硬 | GDD 已写 |
 | 菜单波次 | 上游 | 波次索引与总数、`visible_dishes`、`preview_dishes`、`?` 数量、跳过/结束取餐可用性与代价 | 硬 | GDD 已写 |
 | 结算与入场费 | 上游 | `running_net` / `shortfall` | 硬 | GDD 已写 |
-| 输入 | 上游 | 导航、`ui_accept`、`ui_cancel`、`game_skip_dish`；焦点状态查询 | 硬 | GDD 已写 |
+| 输入 | 上游 | 导航、`ui_accept`、`ui_cancel`、`game_skip_wave`；焦点状态查询 | 硬 | GDD 已写 |
 | 数据配置 | 间接上游 | 菜品/档口记录经菜品数值与菜单波次解析后到达；HUD 不直接查询 | 软 | GDD 已写 |
 | 场景与流程管理 | 间接上游 | `frozen` 经餐局流程快照到达 | 软 | GDD 已写（In Review） |
 | 界面流程 | 同级协调 | 屏幕归属与 z 序：暂停菜单、收据、菜单、升级、设置不在 HUD 内绘制 | 协调 | GDD 已写（`design/gdd/ui-flow.md`） |
@@ -531,7 +531,7 @@ UX 规格必须覆盖以下内容，并以本 GDD 的 Formulas 作为数值下�
 
 | # | 问题 | 归属 | 何时解决 |
 |---|---|---|---|
-| 1 | `game_skip_dish` 的语义在输入 GDD 是“跳过悬停的菜品卡”，在菜单波次实现为“跳过当前波 / 最后一波结束取餐”。HUD 按钮文案已按后者写「跳过本波」，但动作名仍是 `skip_dish`；是否改名为 `game_skip_wave` 或拆成两个动作？ | game-designer（输入 + 菜单波次） | 写 `design/ux/hud.md` 之前（与 `run-flow.md` Open Question 3 同一问题） |
+| 1 | `game_skip_wave` 的语义在输入 GDD 是“跳过悬停的菜品卡”，在菜单波次实现为“跳过当前波 / 最后一波结束取餐”。HUD 按钮文案已按后者写「跳过本波」，但动作名仍是 `skip_dish`；是否改名为 `game_skip_wave` 或拆成两个动作？ | game-designer（输入 + 菜单波次） | 写 `design/ux/hud.md` 之前（与 `run-flow.md` Open Question 3 同一问题） |
 | 2 | 非最后一波的「跳过本波」目前按菜单波次的规定“不弹确认”。一次误触代价是 1 回合 + 整波菜；是否需要为它加一次轻确认（或长按/二次按键）？ | game-designer + ux-designer | 首次可玩原型后 |
 | 3 | 结束取餐确认面板的默认焦点定为「取消」（安全优先）。若试玩显示玩家觉得繁琐，是否改为默认「确认」？ | ux-designer | 写 `design/ux/hud.md` 时 |
 | 4 | 当前布局把「下一波预览」放在右栏、把波次条放在顶栏。`menu-waves.md` 的 UI Requirements 把“当前波菜品卡”也列在波次条里；UX 规格需要决定波次条是否显示每波的剩余菜点（pips），还是只显示索引与 `?` 数量。 | ux-designer | 写 `design/ux/hud.md` 时 |

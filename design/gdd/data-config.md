@@ -25,7 +25,7 @@
 ### Core Rules
 
 1. **唯一数值来源**：菜品、升级、档口的每一处可调数值都来自数据记录；GDScript 中不得出现平衡数字字面量（0、1 等结构性常量除外）。
-2. **三类记录，三类 Resource**：`DishData`、`UpgradeData`、`StationData`，字段固定，在 Godot 编辑器里可视化编辑。
+2. **四类记录，四类 Resource**：`DishData`、`UpgradeData`、`StationData`、`BalanceData`，字段固定，在 Godot 编辑器里可视化编辑。`MilestoneData` 是否成为第五类由纪录与里程碑 Open Question 2 决定，当前不在 schema 内。
 3. **`DishData` 字段**：
    - `id: StringName` — 稳定唯一，格式 `^[a-z][a-z0-9_]*$`
    - `display_name: String`
@@ -54,7 +54,9 @@
 6. **id 是契约**：按类型命名空间隔离（`dish_*` / `upgrade_*` / `station_*`）。发布后不得改名——改名等于删除旧记录并新增，会让存档失效。
 7. **启动即校验**：加载全部记录 → 校验 → 建立目录 → Ready。任一规则失败就停在这里，不进入游戏。建议增加一条：至少存在一个 `unlock_cost = 0` 的档口；当前由「解锁与档口」在运行期兜底（`NoPlayableStation`）。
 8. **运行时只读**：局内状态（当前饱腹、净利、剩余时间格）属于餐局流程，任何系统都不得写回数据记录。
-9. **查询走目录**：下游系统通过 `get_dish(id)` / `get_upgrade(id)` / `get_station(id)` 取记录；不得自行扫描资源目录或按文件名猜测。
+9. **查询走目录**：下游系统通过 `get_dish(id)` / `get_upgrade(id)` / `get_station(id)` / `get_balance()` 取记录；不得自行扫描资源目录或按文件名猜测。
+10. **`BalanceData` 字段（单例）**：
+   - `base_capacity: int` — 1–999，默认 20（基础胃容量 C0，由「胃容量」消费；回答其 Open Question 1）
 
 ### States and Transitions
 
@@ -87,19 +89,20 @@
 
 The `valid_record_set` formula is defined as:
 
-`valid(D) = uniqueIds(D_dish) ∧ uniqueIds(D_upg) ∧ uniqueIds(D_sta) ∧ (∀d ∈ D_dish: R_dish(d)) ∧ (∀u ∈ D_upg: R_upg(u)) ∧ (∀s ∈ D_sta: R_sta(s))`
+`valid(D) = uniqueIds(D_dish) ∧ uniqueIds(D_upg) ∧ uniqueIds(D_sta) ∧ (∀d ∈ D_dish: R_dish(d)) ∧ (∀u ∈ D_upg: R_upg(u)) ∧ (∀s ∈ D_sta: R_sta(s)) ∧ (∀b ∈ D_bal: R_bal(b))`
 
 其中：
 
-- `R_dish(d) = d.price ≥ 0 ∧ d.satiety ≥ 1 ∧ d.taste_tags ⊆ TAGSET ∧ d.station_id ∈ S_ids ∧ d.id ∈ dish_pool(d.station_id)`
-- `R_upg(u) = u.cost ≥ 0 ∧ u.max_level ≥ 1 ∧ u.effect_value > 0 ∧ (u.effect_type ∈ {STOMACH_CAPACITY, MENU_VISION} → u.effect_value ∈ ℤ⁺) ∧ (u.prerequisite_id = "" ∨ (u.prerequisite_id ∈ U_ids ∧ ¬cyclic(u)))`
-- `R_sta(s) = s.entry_fee ≥ 0 ∧ s.unlock_cost ≥ 0 ∧ s.cloy_cap ≥ 1 ∧ |s.dish_pool| ≥ 1 ∧ (∀p ∈ s.dish_pool: p ∈ D_ids ∧ dish(p).station_id = s.id)`
+- `R_dish(d) = d.price ≥ 0 ∧ d.satiety ≥ 1 ∧ d.taste_tags ⊆ TAGSET ∧ d.station_id ∈ S_ids ∧ d.id ∈ dish_pool(d.station_id) ∧ hasPrefix(d.id, "dish_")`
+- `R_upg(u) = u.cost ≥ 0 ∧ u.cost_growth ≥ 1.0 ∧ u.max_level ≥ 1 ∧ u.effect_value > 0 ∧ (u.effect_type ∈ {STOMACH_CAPACITY, MENU_VISION} → u.effect_value ∈ ℤ⁺) ∧ (u.prerequisite_id = "" ∨ (u.prerequisite_id ∈ U_ids ∧ ¬cyclic(u))) ∧ hasPrefix(u.id, "upgrade_")`
+- `R_sta(s) = s.entry_fee ≥ 0 ∧ s.unlock_cost ≥ 0 ∧ s.cloy_cap ≥ 1 ∧ s.turn_budget ≥ 1 ∧ s.wave_size ≥ 1 ∧ |s.dish_pool| ≥ 1 ∧ ¬hasDuplicates(s.dish_pool) ∧ (∀p ∈ s.dish_pool: p ∈ D_ids ∧ dish(p).station_id = s.id) ∧ hasPrefix(s.id, "station_")`
+- `R_bal(b) = b.base_capacity ≥ 1 ∧ b.base_capacity ≤ 999`
 
 **Variables:**
 
 | Variable | Type | Range | Source | Description |
 |---|---|---|---|---|
-| `D_dish` / `D_upg` / `D_sta` | Resource[] | ≥ 0 项 | data file | 三类记录加载后的集合 |
+| `D_dish` / `D_upg` / `D_sta` / `D_bal` | Resource[] | ≥ 0 项 | data file | 四类记录加载后的集合 |
 | `price` | int | 0–INT32_MAX | data file | 单点价（元） |
 | `satiety` | int | 1–INT32_MAX | data file | 占用的饱腹格 |
 | `cost` / `entry_fee` / `unlock_cost` | int | 0–INT32_MAX | data file | 元 |
@@ -108,6 +111,11 @@ The `valid_record_set` formula is defined as:
 | `taste_tags` | StringName[] | TAGSET 子集，可为空 | data file | 口味标签 |
 | `dish_pool` | StringName[] | ≥ 1 项 | data file | 档口菜池 |
 | `cloy_cap` | int | 1–INT32_MAX | data file | 腻度重复惩罚的单道上限（格）；默认 3 |
+| `cost_growth` | float | 1.0–INT32_MAX（设计带 1.2–1.6） | data file | 每级价格增长率 |
+| `turn_budget` | int | 1–INT32_MAX | data file | 每局回合预算 |
+| `wave_size` | int | 1–8 | data file | 每波菜数 |
+| `base_capacity` | int | 1–999 | data file | 基础胃容量 C0 |
+| `hasPrefix(id, p)` / `hasDuplicates(xs)` | bool | {true, false} | calculated | id 命名空间与池唯一性谓词 |
 | `TAGSET` | StringName[7] | 固定 | constant | 酸 / 甜 / 苦 / 辣 / 鲜 / 冰 / 油 |
 | `valid(D)` | bool | {true, false} | calculated | 是否允许启动 |
 
@@ -173,8 +181,8 @@ The `valid_record_set` formula is defined as:
 | 餐局流程 | 硬 | `get_station(id)` 解析 `station_id`；`entry_fee` 由结算读取 | GDD 已写（`design/gdd/run-flow.md`） |
 | 存档 | 硬 | 持久化 id 与等级/数值；读取时不信任存档里的数值快照 | GDD 已写（`design/gdd/save-system.md`） |
 | 时间与回合 | 硬 | `StationData.turn_budget`（新增字段，int ≥ 1）；本系统不在运行时被查询 | GDD 已写（`design/gdd/time-and-turns.md`） |
-| 胃容量 | 硬 | `BalanceData.base_capacity`（C0 = 20，字段归属见胃容量 Open Question 1）；`UpgradeData.STOMACH_CAPACITY` | GDD 已写（`design/gdd/stomach-capacity.md`） |
-| 纪录与里程碑 | 硬 | `MilestoneData` 目录（第四类记录，归属见纪录 Open Question 2）；`get_station(id)` → `display_name` | GDD 已写（`design/gdd/records-and-milestones.md`） |
+| 胃容量 | 硬 | `get_balance()` → `base_capacity`（C0 = 20；已定义第四类记录，回答胃容量 Open Question 1）；`UpgradeData.STOMACH_CAPACITY` | GDD 已写（`design/gdd/stomach-capacity.md`） |
+| 纪录与里程碑 | 条件 | `MilestoneData` 目录（若纪录 Open Question 2 选择放入数据配置，则成为第五类记录）；`get_station(id)` → `display_name` | 待 Open Question 2 决定（GDD 已写：`design/gdd/records-and-milestones.md`） |
 | 解锁与档口 | 硬 | `get_station(id)` → `unlock_cost`、`dish_pool`；`get_dish(id)` 存在性；建议启动校验「至少一个 `unlock_cost = 0` 的档口」 | GDD 已写（`design/gdd/unlocks-and-stations.md`） |
 | 界面流程 | 硬（显示只读） | `StationData.display_name` / `entry_fee`、里程碑目录；只用于显示，不参与玩法判定 | GDD 已写（`design/gdd/ui-flow.md`） |
 | 局内 HUD | 软（间接） | 通过菜品数值/时间与回合取得数字，不直接读 catalog | GDD 已写（`design/gdd/in-game-hud.md`） |
@@ -230,6 +238,11 @@ The `valid_record_set` formula is defined as:
 23. **GIVEN** 档口 `cloy_cap=0`（或 `-1`），**WHEN** 校验，**THEN** Failed，报出档口 id 与字段名；**GIVEN** `cloy_cap=1`，**WHEN** 校验，**THEN** Ready。
 23. **GIVEN** 把某道菜的 `price` 从 8 改成 12（只改 `.tres`，不改代码），**WHEN** 启动并进入该档口，**THEN** 读取到的价格与结算都使用 12——证明数值确实来自数据层。
 24. **GIVEN** 仓库中已发布的 id 清单（首个发布版时生成并纳入版本管理），**WHEN** 对比当前数据，**THEN** 没有任何已发布 id 被删除或改名；新增 id 不受限制。
+25. **GIVEN** `cost_growth=0.9`，**WHEN** 校验，**THEN** Failed；`cost_growth=1.0` 时 **THEN** Ready。
+26. **GIVEN** `turn_budget=0` 或 `wave_size=0`（各一夹具），**WHEN** 校验，**THEN** Failed；两者都为 1 时 **THEN** Ready。
+27. **GIVEN** `dish_pool=[dish_a, dish_a]`，**WHEN** 校验，**THEN** Failed（重复 id）；**GIVEN** `dish_pool=[dish_a]` 且 `dishes_per_station(station)=1`，**THEN** Ready。
+28. **GIVEN** `DishData.id=station_canteen`（前缀错误）或 `StationData.id=dish_a`（前缀错误），**WHEN** 校验，**THEN** Failed；各用正确前缀时 **THEN** Ready。
+29. **GIVEN** `BalanceData.base_capacity=0`，**WHEN** 校验，**THEN** Failed；`=1`、`=999` 时 **THEN** Ready；`=1000` 时 **THEN** Failed（三个独立夹具）。
 
 **无法直接断言、已改写或转为开放问题的规则**：
 - 「不得硬编码平衡数字」：静态扫描需要先定义"平衡字面量"的白名单，转为第 23 条的行为验证；静态规则列为 Open Question。
