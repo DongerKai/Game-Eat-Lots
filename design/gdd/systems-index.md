@@ -1,6 +1,6 @@
 # Systems Index: 回本 (Break Even)
 
-> **Status**: Needs Revision
+> **Status**: Approved
 > **Created**: 2026-11-03
 > **Last Updated**: 2026-11-04
 > **Source Concept**: design/gdd/game-concept.md
@@ -63,15 +63,15 @@ event/settings loop (see Circular Dependencies).
 | 6 | 时间与回合 | Core | MVP | Approved | design/gdd/time-and-turns.md | 餐局流程 |
 | 7 | 胃容量 | Gameplay | MVP | Approved | design/gdd/stomach-capacity.md | 餐局流程, 数据配置 |
 | 8 | 菜品数值 | Gameplay | MVP | Approved | design/gdd/dish-values.md | 数据配置 |
-| 9 | 腻度与口味 | Gameplay | MVP | In Review | design/gdd/cloying-and-taste.md | 菜品数值, 餐局流程, 数据配置（`cloy_cap`）, 菜单波次（软） |
-| 10 | 菜单波次 | Gameplay | Vertical Slice | In Review | design/gdd/menu-waves.md | 菜品数值, 数据配置, 餐局流程 |
+| 9 | 腻度与口味 | Gameplay | MVP | Approved | design/gdd/cloying-and-taste.md | 菜品数值, 餐局流程, 数据配置（`cloy_cap`）, 菜单波次（软）, 局外升级（快照） |
+| 10 | 菜单波次 | Gameplay | Vertical Slice | Approved | design/gdd/menu-waves.md | 菜品数值, 数据配置, 餐局流程 |
 | 11 | 结算与入场费 | Economy | MVP | Approved | design/gdd/settlement-and-entry-fee.md | 菜品数值, 腻度与口味, 胃容量, 时间与回合, 餐局流程 |
-| 12 | 局外升级 | Progression | MVP | In Review | design/gdd/meta-upgrades.md | 结算与入场费, 存档, 数据配置, 胃容量（快照） |
+| 12 | 局外升级 | Progression | MVP | Approved | design/gdd/meta-upgrades.md | 结算与入场费, 存档, 数据配置, 胃容量（快照） |
 | 13 | 解锁与档口 | Progression | Vertical Slice | Approved | design/gdd/unlocks-and-stations.md | 局外升级, 存档, 数据配置 |
 | 14 | 纪录与里程碑 | Progression | Vertical Slice | Approved | design/gdd/records-and-milestones.md | 结算与入场费, 存档, 数据配置 |
 | 15 | 局内 HUD | UI | MVP | Approved | design/gdd/in-game-hud.md | 餐局流程, 时间与回合, 胃容量, 菜品数值, 输入, 结算与入场费, 腻度与口味, 菜单波次 |
 | 16 | 界面流程 | UI | MVP | Approved | design/gdd/ui-flow.md | 餐局流程, 结算与入场费, 局外升级, 场景与流程管理, 输入, 存档, 纪录与里程碑, 音效反馈, 数据配置 |
-| 17 | 音效反馈 | Audio | Vertical Slice | In Review | design/gdd/audio-feedback.md | 餐局流程, 结算与入场费, 场景与流程管理, 纪录与里程碑（事件契约）, 数据配置（cue 目录） |
+| 17 | 音效反馈 | Audio | Vertical Slice | Approved | design/gdd/audio-feedback.md | 餐局流程, 结算与入场费, 场景与流程管理, 纪录与里程碑（事件契约）, 数据配置（cue 目录） |
 | 18 | 首局引导 | Meta | Vertical Slice | Approved | design/gdd/first-run-onboarding.md | 餐局流程, 局内 HUD, 输入, 场景与流程管理, 菜品数值, 结算与入场费, 腻度与口味 |
 | 19 | 在线挑战 | Meta | Full Vision | Not Started | — | 结算与入场费, 存档 |
 | 20 | 同屏合作 | Meta | Full Vision | Not Started | — | 几乎全部系统（延后） |
@@ -253,7 +253,7 @@ Vertical Slice tier, and the rest are Full Vision.
 | Total systems identified | 20 |
 | Design docs started | 18 |
 | Design docs reviewed | 18 |
-| Design docs approved | 15 |
+| Design docs approved | 18 |
 | MVP systems designed | 13/13 |
 | Vertical Slice systems designed | 5/5 |
 
