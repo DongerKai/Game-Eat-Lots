@@ -442,3 +442,233 @@ Reviewed-Content-Hash: design/gdd/input.md 776c41de0eb3edd497ae2ace8c78ba80192fc
 Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 2ef73066ae97ea1591a4ebaaeba6d4a97dcf4955
 Reviewed-Content-Hash: design/gdd/systems-index.md 63d73495be76b5b37ed9bac50452c07ef281d41a
 ```
+
+## Review — 2026-11-04 — Verdict: APPROVED
+
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean mode — Phase 3b skipped)
+Blocking items: 0 | Recommended: 12 (+2 advisory at this tier)
+Prior verdict resolved: NEEDS REVISION (2026-11-04) — both blockers fixed
+
+Summary: Round 3 confirms both round-2 blockers were fixed exactly as
+prescribed. `valid(D)` now carries `|D_bal| = 1`, the missing/duplicate
+`BalanceData` case has an Edge Case and AC 30, AC 1's happy path includes the
+singleton, and the three fixture ids that contradicted the prefix rule are now
+fully qualified. No new blocking issue was introduced. The remaining findings
+are the documentation-level recommendations carried since round 1; none of them
+prevents a programmer from implementing the validator or a QA tester from
+executing the criteria, so the design is approved for implementation with those
+items tracked as follow-up polish.
+
+### Prior Blocking Items — Resolved
+
+1. **`D_bal` cardinality** — `valid(D)` (line 92) now ends `∧ |D_bal| = 1`;
+   the Edge Case (line 149) covers zero and multiple; AC 30 (line 247) tests
+   zero / two / exactly one; AC 1 (line 217) includes the `BalanceData`
+   singleton. ✓
+2. **Prefix-inconsistent fixtures** — AC 2 uses `dish_rice` (line 218), AC 3
+   uses `dish_Rice_01` / `dish-1abc` / positive `dish_a_b1` (line 219), AC 19
+   uses `get_dish("dish_rice")` (line 235). Every one satisfies
+   `hasPrefix(…, "dish_")`, and each violates or satisfies the regex exactly as
+   the criterion intends. ✓
+
+### Required Before Implementation
+
+None. Every normative constraint in Detailed Rules is represented in `valid(D)`
+and has at least one acceptance criterion, and no edge case contradicts a core
+rule.
+
+### Recommended Revisions
+
+1. **[RECOMMENDED] Acceptance Criteria — duplicate number 23 (carried over, third round).**
+   Lines 239 and 240 are both numbered 23. "Acceptance Criteria 第 23 条"
+   (line 203) and "转为第 23 条的行为验证" (line 250) therefore each resolve to
+   two criteria. There are 31 entries under 30 labels; renumber from 24 onward.
+2. **[RECOMMENDED] Formulas — undefined symbols.**
+   `hasPrefix` and `hasDuplicates` are defined (line 118), but `D_ids`, `S_ids`,
+   `U_ids`, `uniqueIds(·)`, `cyclic(·)`, `dish(·)` and `upgrade_count`
+   (lines 96–98, 130–132) still appear without a definition.
+3. **[RECOMMENDED] Formulas — `prereq_depth` range contradicts its semantics.**
+   Line 132 keeps `1–upgrade_count`, but AC 20 gives depth 2 for a three-node
+   chain and a prerequisite-free upgrade has depth 0. Range should be
+   `0–(upgrade_count − 1)`.
+4. **[RECOMMENDED] Formulas — `R_upg` still does not validate `effect_type` membership.**
+   The implication over `{STOMACH_CAPACITY, MENU_VISION}` is vacuously true for
+   an out-of-enum value, and Godot stores enums as plain ints in a `.tres`, so
+   `effect_type = 7` validates. Add an explicit membership clause and one AC.
+5. **[RECOMMENDED] Detailed Rules — Core Rule 7's extra check is still a suggestion.**
+   "建议增加一条：至少存在一个 `unlock_cost = 0` 的档口" (line 55) sits inside a
+   normative list and is absent from `valid(D)`. Relatedly, `dish_count ≥ 1`
+   (line 130) is claimed to be implied by `R_sta`, but a set with one
+   `BalanceData` and zero dishes/stations passes `valid(D)` and yields
+   `dish_count = 0`. Decide: a set-level predicate plus AC, or keep
+   `NoPlayableStation` as the single guarantee and soften the range claim.
+6. **[RECOMMENDED] Formulas — the worked example still contradicts the registry.**
+   Line 124 gives `station_canteen.entry_fee=30`; the registry says 85
+   (`station_canteen_entry_fee`), and `dish-values.md` Open Question 2 already
+   records that 30 is illustrative only. It also invents `upgrade_capacity`
+   (cost 40 / max 3) where the catalogue has `upgrade_stomach_capacity`
+   (cost 12 / max 5, `meta-upgrades.md:277`). Use the real numbers or label the
+   block as synthetic fixture data so it cannot be copied into a `.tres`.
+7. **[RECOMMENDED] Acceptance Criteria — AC 22 is not independently executable.**
+   "p95 ≤ 100 ms（最小规格 PC）" (line 238) — no minimum-spec machine is defined
+   anywhere in the project. Name the reference machine or restate as a relative
+   budget on the same harness.
+8. **[RECOMMENDED] Acceptance Criteria — AC 24 cannot run before the first release.**
+   Its baseline id list does not exist yet (line 241). The document already
+   concedes this; mark it release-gated so QA does not report it as a standing
+   failure.
+9. **[RECOMMENDED] Acceptance Criteria — AC 19 accepts two different behaviours.**
+   "操作被拒绝或抛错" (line 235) passes either way. Pick one and name the
+   mechanism — a `DishData` is a mutable exported Resource by default.
+10. **[RECOMMENDED] Cross-system — state the structural-vs-balance split explicitly.**
+    This GDD validates structure only, while consumers carry narrower bands
+    (`wave_size` 1–8 in menu-waves, `turn_budget` 10 ± 1, `cloy_cap` consumer
+    rules). The variables table mixes the two: `cost_growth` annotates
+    "（设计带 1.2–1.6）" (line 114) while `wave_size` says "1–8" (line 116) but
+    `R_sta` enforces only ≥ 1. One sentence plus matching annotations closes
+    the apparent conflict.
+11. **[RECOMMENDED] Detailed Rules — `CLOYING_RESISTANCE`'s `effect_value` is still ambiguous.**
+    Line 44 reads as both a constant ("每级减免 1 点") and a tunable, and
+    "小数部分在解析时取整" does not say whether 2.5 becomes 2 or 3. Either make
+    it an integer like the other two types, or state the rounding rule and that
+    the value, not the constant 1, applies.
+12. **[RECOMMENDED] Formulas — the id regex applies only to `DishData`.**
+    `^[a-z][a-z0-9_]*$` is stated under Rule 3 only; `R_upg` and `R_sta` check
+    `hasPrefix` alone, so `upgrade_BAD` validates. Make the regex a shared
+    predicate in all three `R_*`.
+13. **[ADVISORY at `standard`] Tuning Knobs section is absent.**
+    `cost_growth`, `cloy_cap`, `wave_size`, `turn_budget`, `base_capacity` and
+    `effect_value` are tunables scattered in Detailed Rules; a table with safe
+    ranges and the aspect each moves would satisfy `.claude/rules/design-docs.md`
+    if the tier rises.
+14. **[ADVISORY at `standard`] Player Fantasy section is absent.**
+    Defensible for an invisible system; required if `modes.workflow` rises to
+    `full`.
+
+### Specialist Disagreements
+
+None — lean mode, no specialist agents spawned.
+
+### Nice-to-Have
+
+- `hasPrefix(id, "dish_")` accepts a bare `dish_`; the regex allows a trailing
+  underscore, so an id with no suffix validates.
+- `display_name` / `description` still have no non-empty constraint; an empty
+  string validates and renders as a blank HUD row.
+- The example writes `effect_value=1` (an int literal) for a `float` field.
+- Line 190's 场景与流程管理 row still says only "GDD 已写" with no path, unlike
+  every other row.
+- `meta-upgrades.md:96` consumes `get_station(id) → wave_size`, but this GDD's
+  局外升级 row (line 181) lists only `get_upgrade`; the interface list is
+  slightly incomplete.
+- `∧ |D_bal| = 1` is unparenthesized in `valid(D)` (line 92); wrap it
+  `(|D_bal| = 1)` so it cannot be read as `(… ∧ |D_bal|) = 1`.
+
+### Completeness
+
+6/6 sections present that are REQUIRED at `workflow: standard` (Overview,
+Detailed Rules, Formulas, Edge Cases, Dependencies, Acceptance Criteria).
+Formulas is required here because the system defines numeric rules. Advisory
+gaps at this tier: Player Fantasy, Tuning Knobs.
+
+### Dependency Graph
+
+All 13 declared downstream dependencies resolve to an existing GDD.
+
+- ✓ `design/gdd/dish-values.md`
+- ✓ `design/gdd/cloying-and-taste.md`
+- ✓ `design/gdd/menu-waves.md`
+- ✓ `design/gdd/meta-upgrades.md`
+- ✓ `design/gdd/run-flow.md` and `design/gdd/settlement-and-entry-fee.md` (one row)
+- ✓ `design/gdd/save-system.md`
+- ✓ `design/gdd/time-and-turns.md`
+- ✓ `design/gdd/stomach-capacity.md`
+- ✓ `design/gdd/records-and-milestones.md`
+- ✓ `design/gdd/unlocks-and-stations.md`
+- ✓ `design/gdd/ui-flow.md`
+- ✓ `design/gdd/in-game-hud.md`
+- ✓ `design/gdd/scene-flow.md` — row cites no path (nice-to-have above)
+- Upstream: none declared, correct for a Foundation system.
+
+Bidirectional check: all 16 sibling GDDs that name 数据配置 still reference it.
+The one asymmetry is wording: this GDD marks the 纪录与里程碑 edge 条件
+(line 186), `records-and-milestones.md:100/291` still marks it 硬 and calls
+`MilestoneData` the "第四类记录".
+
+### Registry Values
+
+Searched the whole document for every registered name it could restate —
+`station_canteen`, `entry_fee`, `cloy_cap`, `wave_size`, `cost_growth`,
+`base_capacity`, `valid_record_set`, `upgrade_capacity` — 25 lines matched.
+
+- ✓ `cloy_cap` = 3 (lines 51, 113, 239) — matches `cloy_cap`.
+- ✓ `wave_size` default = 4 (lines 53, 116) — matches `wave_size_default`.
+- ✓ `cost_growth` = 1.35, band 1.2–1.6, floor ≥ 1.0 (lines 41, 114) — matches
+  `meta-upgrades.md` exactly.
+- ✓ `base_capacity` = 20, range 1–999 (lines 59, 117, 185, 246) — matches the
+  registry value.
+- ✓ `valid_record_set` formula (line 92) matches every registry variable and the
+  registry's `output_range`; it is now **stronger** than the registry expression
+  (see the mirror drift below).
+- ✓ `station_canteen_turn_budget` = 10 is not restated (only `≥ 1`), so no
+  conflict.
+- ✗ Line 124: `station_canteen.entry_fee = 30` vs registry 85 — Recommended 6;
+  `dish-values.md` Open Question 2 already records 30 as illustrative.
+- `upgrade_capacity` is not a registered name — Recommended 6.
+
+Registry mirror drift (the registry is not editable in this review):
+`entities.yaml:330`'s `valid_record_set` expression still reads
+"`all R_bal`" without the new `|D_bal| = 1` clause; `base_capacity`
+(`entities.yaml:1263`) still calls data ownership an open stomach question and
+omits `design/gdd/data-config.md` from `referenced_by`; `wave_size_default`
+(`entities.yaml:1166`) also omits it.
+
+### Cross-Document Signals (out of scope — not changed here)
+
+- `records-and-milestones.md:100/291` still says 硬 and "需扩展第四类记录",
+  while its own Open Question 2 (line 443) now says the type would be the
+  fifth. That document is internally inconsistent; this GDD's 条件 wording is
+  the newer one.
+- `stomach-capacity.md` Open Question 1 (line 316) is still listed as open
+  although this GDD answers it (line 59).
+- `systems-index.md:57` still shows 数据配置 as `In Review` — this review's
+  recommended status is **Approved**.
+- `systems-index.md:65` (结算与入场费) omits 数据配置 from Depends On although
+  `settlement-and-entry-fee.md` lists it as 硬.
+- `systems-index.md:197` rates the design scope `S`; this review still signals
+  **L** (13 downstream systems, 4 formula blocks, 2 ADR-stage open questions).
+
+### Verdict Rationale
+
+Both blockers from round 2 are fixed precisely, and the fix did not introduce a
+new contradiction: AC 1, AC 30 and the new Edge Case agree with the cardinality
+clause, and AC 2/3/19 are now constructible under the prefix rule. Every
+required field constraint is backed by both a formula term and an acceptance
+criterion. The twelve remaining recommendations are documentation precision
+(undefined symbols, one wrong range, an illustrative example), not design or
+implementability defects; they are carried forward unchanged from round 1 and
+do not block a programmer or a QA tester. Approved.
+
+---
+
+Receipt (files this review read for cross-document facts):
+```
+Reviewed-Content-Hash: design/gdd/data-config.md 7dc918c23ab271495049b5fd33bddd08a5dc6c55
+Reviewed-Content-Hash: design/registry/entities.yaml d726500e94755343517565ffa65e786a7629c167
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/dish-values.md 60a580b19c4b2f980cd0a33df73e8c3aa32f6d3e
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md 38ebc87b9b529f9d32ce4fba2202411ce7891876
+Reviewed-Content-Hash: design/gdd/menu-waves.md 3c802aab667b644e6c8118e8f63b33a1cbdd87f4
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md 7dc02ff087d4ac059d4a81caa1b0c375483113ed
+Reviewed-Content-Hash: design/gdd/time-and-turns.md 7f55a619613d6c2ff9f99b9458e39d0f5f48895c
+Reviewed-Content-Hash: design/gdd/stomach-capacity.md bb97f41a121c6c18d15f7d10c23387ff25688b11
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md ca1ecf5a176da065f59c2b3b8261174fb1479571
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 0f58ea62a2e8fa9ace2effe652cc644acab89d5b
+Reviewed-Content-Hash: design/gdd/scene-flow.md a2c3cc81155d51d9fae36ecc8ef27bfc1d689a59
+Reviewed-Content-Hash: design/gdd/input.md ee9ea6022f8e289d9e00ef8f9eabb181b0c5349f
+Reviewed-Content-Hash: design/gdd/audio-feedback.md 8ad91f894b044ae735d9c55d13606f8e17453900
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 2ef73066ae97ea1591a4ebaaeba6d4a97dcf4955
+Reviewed-Content-Hash: design/gdd/systems-index.md 63d73495be76b5b37ed9bac50452c07ef281d41a
+```
