@@ -89,7 +89,7 @@
 
 The `valid_record_set` formula is defined as:
 
-`valid(D) = uniqueIds(D_dish) ∧ uniqueIds(D_upg) ∧ uniqueIds(D_sta) ∧ (∀d ∈ D_dish: R_dish(d)) ∧ (∀u ∈ D_upg: R_upg(u)) ∧ (∀s ∈ D_sta: R_sta(s)) ∧ (∀b ∈ D_bal: R_bal(b))`
+`valid(D) = uniqueIds(D_dish) ∧ uniqueIds(D_upg) ∧ uniqueIds(D_sta) ∧ (∀d ∈ D_dish: R_dish(d)) ∧ (∀u ∈ D_upg: R_upg(u)) ∧ (∀s ∈ D_sta: R_sta(s)) ∧ (∀b ∈ D_bal: R_bal(b)) ∧ |D_bal| = 1`
 
 其中：
 
@@ -146,6 +146,7 @@ The `valid_record_set` formula is defined as:
 ## Edge Cases
 
 - **If 同类型两条记录共用同一个 id**：加载失败，报出两条记录的文件路径与 id；不加载任何记录。
+- **If `BalanceData` 缺失或不止一个**：校验失败。`BalanceData` 是单例：零个会让 `get_balance()` 返回 null、胃容量没有 C0；多个则取哪个未定义。
 - **If `satiety` 为 0**：校验失败。下游的单位价值计算以饱腹为分母，0 会让局面无法定义；不钳制。
 - **If `price` 为 0**：合法（例如免费白水）。下游单位价值为 0，照常参与结算。
 - **If `price` 或 `satiety` 为负**：校验失败。
@@ -213,9 +214,9 @@ The `valid_record_set` formula is defined as:
 
 每条都能由 QA 在不读本 GDD 的情况下独立执行。测试夹具放在 `tests/fixtures/data/`，每条用例使用独立夹具。
 
-1. **GIVEN** 夹具含 1 条 `DishData`、1 条 `UpgradeData`、1 条 `StationData`，互相引用完整，**WHEN** 启动，**THEN** 状态依次为 Unloaded → Loading → Validating → Ready，`get_dish` / `get_upgrade` / `get_station` 都能取到对应记录。
-2. **GIVEN** 两个 dish 夹具 id 同为 `rice`，**WHEN** 校验，**THEN** 状态为 Failed，日志含重复 id `rice`，主场景未被实例化。
-3. **GIVEN** id 为 `Rice_01` 或 `1abc`，**WHEN** 校验，**THEN** Failed；id 为 `a_b1` 时 **THEN** Ready。
+1. **GIVEN** 夹具含 1 条 `DishData`、1 条 `UpgradeData`、1 条 `StationData`、1 个 `BalanceData` 单例，互相引用完整，**WHEN** 启动，**THEN** 状态依次为 Unloaded → Loading → Validating → Ready，`get_dish` / `get_upgrade` / `get_station` / `get_balance` 都能取到对应记录。
+2. **GIVEN** 两个 dish 夹具 id 同为 `dish_rice`，**WHEN** 校验，**THEN** 状态为 Failed，日志含重复 id `dish_rice`，主场景未被实例化。
+3. **GIVEN** id 为 `dish_Rice_01`（含大写）或 `dish-1abc`（缺 `dish_` 前缀），**WHEN** 校验，**THEN** Failed；id 为 `dish_a_b1` 时 **THEN** Ready。
 4. **GIVEN** `price=-1`，**WHEN** 校验，**THEN** Failed；`price=0` 时 **THEN** Ready。
 5. **GIVEN** `satiety=0`，**WHEN** 校验，**THEN** Failed；`satiety=1` 时 **THEN** Ready。
 6. **GIVEN** `taste_tags=["咸"]`，**WHEN** 校验，**THEN** Failed；`taste_tags=[]` 时 **THEN** Ready。
@@ -231,7 +232,7 @@ The `valid_record_set` formula is defined as:
 16. **GIVEN** 档口 `dish_pool=[]`，**WHEN** 校验，**THEN** Failed；**GIVEN** 池中含不存在的 id，**THEN** Failed；**GIVEN** 池中菜的 `station_id` 指向别的档口，**THEN** Failed。
 17. **GIVEN** 1 条坏记录 + 99 条好记录，**WHEN** 校验，**THEN** 整体 Failed，且 99 条好记录也取不到——证明不跳过、不裁剪。
 18. **GIVEN** 坏数据使状态进入 Failed，**WHEN** 再次调用加载，**THEN** 仍为 Failed，主场景从未实例化。
-19. **GIVEN** 已 Ready，**WHEN** 对 `get_dish("rice").price` 赋新值，**THEN** 操作被拒绝或抛错，再次读取仍为原值；两次 `get_dish("rice")` 返回同一实例（`is_same()` 为 true）。
+19. **GIVEN** 已 Ready，**WHEN** 对 `get_dish("dish_rice").price` 赋新值，**THEN** 操作被拒绝或抛错，再次读取仍为原值；两次 `get_dish("dish_rice")` 返回同一实例（`is_same()` 为 true）。
 20. **GIVEN** 夹具含 12 条 dish、2 个档口（池分别 5 / 7 条），**WHEN** 查询派生量，**THEN** `dish_count=12`，每个 `dishes_per_station(s)` 等于该档口 `dish_pool.size()`，前置链 A→B→C 的 `prereq_depth=2`。
 21. **GIVEN** `price` 写成 `"abc"` 或 `1e30`（超出 int 范围），**WHEN** 解析，**THEN** Failed，日志含文件路径与字段名。
 22. **GIVEN** 300 条记录的夹具，**WHEN** 冷启动校验，**THEN** Validating 阶段 p95 ≤ 100 ms（最小规格 PC、非调试构建）。该预算依赖记录条数、磁盘 I/O 与构建类型，超预算时用同一夹具重测确认。
@@ -243,6 +244,7 @@ The `valid_record_set` formula is defined as:
 27. **GIVEN** `dish_pool=[dish_a, dish_a]`，**WHEN** 校验，**THEN** Failed（重复 id）；**GIVEN** `dish_pool=[dish_a]` 且 `dishes_per_station(station)=1`，**THEN** Ready。
 28. **GIVEN** `DishData.id=station_canteen`（前缀错误）或 `StationData.id=dish_a`（前缀错误），**WHEN** 校验，**THEN** Failed；各用正确前缀时 **THEN** Ready。
 29. **GIVEN** `BalanceData.base_capacity=0`，**WHEN** 校验，**THEN** Failed；`=1`、`=999` 时 **THEN** Ready；`=1000` 时 **THEN** Failed（三个独立夹具）。
+30. **GIVEN** 缺少 `BalanceData`（零个）或有两个 `BalanceData`，**WHEN** 校验，**THEN** Failed；恰好一个时 **THEN** Ready（三个独立夹具）。
 
 **无法直接断言、已改写或转为开放问题的规则**：
 - 「不得硬编码平衡数字」：静态扫描需要先定义"平衡字面量"的白名单，转为第 23 条的行为验证；静态规则列为 Open Question。
