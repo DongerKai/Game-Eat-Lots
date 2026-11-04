@@ -122,3 +122,95 @@ Reviewed-Content-Hash: design/gdd/menu-waves.md a9ed433be48d155399168a5519ae0f3c
 Reviewed-Content-Hash: design/gdd/save-system.md 5d80a9bdcd8ffc603a0fa7d635fc736b40a4fe04
 Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 2ef73066ae97ea1591a4ebaaeba6d4a97dcf4955
 Reviewed-Content-Hash: design/gdd/systems-index.md 01259cc27663f7a47234e09c674e143fa3e2ba5c
+
+---
+
+## Review — 2026-11-04 — Verdict: APPROVED
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none（lean 模式，未派发专员 agent）
+Blocking items: 0 | Recommended: 11（上轮遗留 9 + 本次新发现 2）
+Summary: `427409f` 把上轮 2 项 blocking 全部补齐，且每项都落到了两侧契约。空串 `cloying_group` 现在只有一个语义：「不建组、不计数、额外饱腹恒 0」，规则 15 / 边角案例 `:203` / 变量表 `:84` / AC 20（`:326`）四处一致，并与 `data-config.md:35,154`、`dish-values.md:34,249` 的「无腻度惩罚」吻合。`cloying_resistance` 现在有命名交付路径：本 GDD 规则 16（`:40`）定义 `initialize(cloying_resistance: float)` 在 `run_started` 前调用，变量表（`:85`）补行，rule 4（`:28`）改引用 `extra_satiety`；`run-flow.md:31` 的初始化序列与 `:122` 的交互行已同步。设计规则本身未改动，20 条 AC 的数值除 AC 20 按新语义改为 0 外全部照旧成立。剩余 11 条均为同步与措辞问题，不阻塞实现。
+Prior verdict resolved: Yes — 上轮 2 项 blocking 全部已解决。
+
+### 复审背景
+
+- 触发：`427409f`（Batch 2/3 修复）改动 `design/gdd/cloying-and-taste.md`（哈希 `38ebc87` → `15f6974`），同时改动 `data-config.md`、`run-flow.md`。
+- 复审范围：**全文重读**（343 行，按标题分段），不只读 diff。
+- 与上轮提交的 6 个 hunk 全部为契约补行：rule 4 改引用、rule 15 改语义、新增 rule 16、Interactions 行补 `initialize`、Variables 补 `cloying_resistance` 行、edge `:203`、AC 20。未重写任何公式、边界或验收判据。
+
+### 上轮 blocking 复核
+
+| # | 上轮 blocking | 结论 | 证据 |
+|---|---|---|---|
+| B1 | 空 `cloying_group` 三份 GDD 三种行为 | **已解决** | 规则 15（`:39`）改为「不建组、不计数、额外饱腹恒 0」；edge `:203` 同文；变量表 `group(d)`（`:84`）改「空串表示不参与腻度」；AC 20（`:326`）断言第二道额外饱腹为 0。与 `data-config.md:35`（「为空表示不参与腻度」）、`:154`（「不参与腻度递减」）、`dish-values.md:34,249`（两个空组「都没有腻度惩罚」）现在行为一致。`dish-values` 的「视为同组」只作用于支配审查（相同惩罚 0），与「不建组」不冲突。 |
+| B2 | `cloying_resistance` 无交付路径 | **已解决** | 本 GDD 规则 16（`:40`）定义 `initialize(cloying_resistance: float)` 在 `run_started` 之前调用一次、清零计数；Variables 表（`:85`）补 `cloying_resistance`（float64，设计带 0–(`cloy_cap`−1)，来源 `initialize(...)`）；rule 4（`:28`）改为 `satiety(d) + extra_satiety(d)` 并给出含 `floor(cloying_resistance)` 的表达式。`run-flow.md:31` 规则 3 的初始化序列已列「腻度与口味（调用 `initialize(cloying_resistance)` 并清零组计数）」，`:122` 交互行已列 `initialize(cloying_resistance)`；`upgrade_snapshot`（`run-flow.md:66`）携带该字段，`meta-upgrades.md:358` 的契约与之一致。 |
+
+### Required Before Implementation
+
+- none
+
+### Recommended Revisions
+
+**上轮遗留（9）**
+
+1. **[RECOMMENDED] 生命周期仍写「三个事件」**：Interactions（`:60`）与 Dependencies（`:219`）仍称「餐局开始 / 结束 / 重开三个生命周期事件」，而 `run-flow.md:45` 明写「重开不是独立生命周期事件」，信号只有 `run_started` / `run_ended` / `run_discarded`（`:132`）。改为两个信号 + 一句「重开 = 新的 `run_started`」，并补 `run_discarded`（放弃/退出）作为丢弃路径。状态表（`:51`）已按「重开 = 餐局开始」写，实现无歧义，但措辞仍会误导。
+2. **[RECOMMENDED] Dependencies 上游表缺「局外升级」**（`:214-220`）：Interactions（`:61`）已把它列为上游（经快照），`meta-upgrades.md:370` 的改动清单要求补这一行，但上游表仍只有 菜品数值、餐局流程、数据配置。
+3. **[RECOMMENDED] `menu_cloy_pressure ≥ 1` 没有执行者**（`:177`）：`menu-waves.md:34` 的生成校验只查波次非空、覆盖与 `wave_reachable_opt`，从不查 pressure。指定闸门拥有者（CI / 平衡审查），或降级为设计期信号——edge `:210` 已把压力 0 当作不阻断开局。
+4. **[RECOMMENDED] OQ1 与 OQ7 应标记已回答**：`menu-waves.md:233` 明确回答 OQ1（可见集默认一波、跳过有回合代价），`:338` 把重复抽取推到第二个档口；本 GDD `:334`、`:340` 仍以未决形式列出。
+5. **[RECOMMENDED，advisory 缺口] 补 Tuning Knobs 一节**：`cloy_cap`（设计带 1–5，默认 3，schema 只要求 ≥ 1）、规范组序（冻结值，不随表序重算）、`cloying_resistance`（设计带 0–`cloy_cap`−1）是本系统全部可调值，值得写明安全范围与影响。
+6. **[RECOMMENDED，advisory 缺口] 补 Player Fantasy 指针**：`standard` 下不阻塞；`## Game Feel`（`:255-261`）已覆盖「顺序有意义、必须能复盘、解腻有节拍」，加一段或交叉引用即可。
+7. **[RECOMMENDED] Interactions（`:62`）仍写「吃撑」**：`stomach-capacity.md:32` 明确没有「吃撑」结果、不存在 `STUFFED`，可吃性判定叫 `can_fit`。改为「`can_fit(effective_satiety)`」。（胃容量评审已把该项路由到本文件。）
+8. **[RECOMMENDED] Registry（`design/registry/entities.yaml`）回指不全**：`effective_satiety`（`:496`）的 `referenced_by` 仍只有本文件与 settlement，缺 `stomach-capacity.md`、`in-game-hud.md`、`run-flow.md`；`cleanse_target`（`:511`）缺 `in-game-hud.md`；`cloy_cap`（`:1155`）缺 `settlement-and-entry-fee.md`（`:222` 用作上界）；`group_cloy` / `is_cleansing` 仍无条目。注册表修改归编排会话。
+9. **[RECOMMENDED] `satiety_max` 仍未定义**（`:108`、`:110`）：范围写作 `satiety_max + cloy_cap`，但全文没有定义 `satiety_max`（菜品数值规则 7 给的是 6）。同一未定义变量也出现在 `settlement-and-entry-fee.md:203,238`，建议在两处之一显式写出 `satiety_max = 6`。
+
+**本次新发现（2）**
+
+10. **[RECOMMENDED] `cloy_cap` 也没有交付路径**：公式消费 `StationData.cloy_cap`（每档口不同，`data-config.md:51,113`），上游表写 `get_station(id) → cloy_cap`，但规则 16 的 `initialize(cloying_resistance)` 不接收 `station_id` 或 `cloy_cap`，本系统无从得知本局是哪个档口。MVP 只有 `station_canteen`、`cloy_cap = 3`，所以今天不会出错；第二个档口（`station_banquet`，Vertical Slice）落地前，建议把签名扩为 `initialize(cloying_resistance, station_id)` 或 `initialize(cloying_resistance, cloy_cap)`，并在 `run-flow.md:122` 同步。
+11. **[RECOMMENDED，跨文档] `meta-upgrades.md:348` 状态列已过时**：仍写「`design/gdd/cloying-and-taste.md`，公式尚未含抗性项」，而本 GDD 的公式（`:77`）现在已含 `floor(cloying_resistance)`。改状态列为已接入。
+
+### Nice-to-Have
+
+- `run-flow.md:95`（状态表）与 AC 1（`:390`）仍写「`run_started` 时重置腻度计数」，而规则 3（`:31`）与两 GDD 的口径是 `initialize(...)` 在广播前完成重置。同帧内行为等价，建议统一为「初始化时」。
+- AC 2（`:290`）、AC 17/18（`:323-324`）的算术隐式假设 `cloying_resistance = 0`；建议在夹具说明里加一句，避免读者拿已购升级的局去复算时对不上。
+- 规则 16 只说「第二次调用是契约违例」，未写违例后的行为（报错？忽略？）。`run-flow.md:245` 已挡住负值快照，防御分支可只写「断言并报错」。
+- `first-run-onboarding.md:185` 把 `group_count` 范围写成 0–`cloy_cap`，实际计数可达组内菜数（AC 17/18 到 4），偏紧；MVP 组 ≤ 2 故无害。
+- Cross-References（`:274-279`）只列 4 份文档，读起来像全集，建议注明是节选或补全下游。
+- `cleanse_target` 注册表以 0–9 组索引建模、本 GDD 以组名 ∪ {⊥} 建模；等价，但实现者不要返回 int。
+
+### Specialist Disagreements
+
+无。lean 模式未派发 specialist，Phase 3b 未运行。
+
+### Senior Verdict
+
+lean 模式不派发 `creative-director`。主评审意见即最终意见：**上轮 2 项 blocking 全部解决且两侧契约自洽**，本次未发现新的设计缺陷。11 条 recommended 中 9 条是上轮遗留的同步/措辞问题，1 条是新暴露的 `cloy_cap` 交付路径（MVP 单档口下无害），1 条是修复带来的跨文档状态列陈旧；均不影响程序员按现行文本实现。
+
+### Scope Signal
+
+**Rough scope signal: L（producer 应在 sprint planning 前复核）** — Feature 层，5 组公式（`extra_satiety`、`effective_satiety`、`is_cleansing`/`cleanse_target`、`meal_step`、`menu_cloy_pressure`），3 个硬上游 + 4 个硬下游 + 3 个软/条件下游，跨 10 份 GDD 的契约面。索引 (`systems-index.md:65`) 当前记 **M**，建议上调为 **L**。
+
+### Verdict: APPROVED
+
+---
+
+## 建议索引状态（复审）
+
+**Approved**（`systems-index.md:65` 当前为 `In Review`；按并行约束未改索引，由编排会话统一更新）。同时建议：
+- `Depends On` 补「数据配置」与「局外升级（经快照）」——上游表与 Interactions 已列出，索引行仍只有「菜品数值, 餐局流程」。
+- Scope 由 **M** 上调为 **L**。
+
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md 15f6974735363b5e887d2f0d6ba8cebd2c09f301
+Reviewed-Content-Hash: design/registry/entities.yaml 4da234d16d67534d37a0f74accab64ad99d5e563
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md ca6c33c2357f78b7eb5b08de1b204e88627fe3dd
+Reviewed-Content-Hash: design/gdd/dish-values.md a56f44bdea6570323315873e62a99e695811e02d
+Reviewed-Content-Hash: design/gdd/data-config.md c75fa0fd1bc994c73ff4aceca826f590bf16e48a
+Reviewed-Content-Hash: design/gdd/run-flow.md c60c99952eacc9a0953924e6b688aa39c249cb67
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md bb8c17b5b09a6e175ba903f71b717649cf7fb09a
+Reviewed-Content-Hash: design/gdd/stomach-capacity.md 19946b80bb596a2b141ccb1bdad0a4a392d46e38
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md a6ecb6a3895beee387a30bc08cf6351193831317
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 0571ac91ad0fc074aeac26f56453cfcd3ef43ade
+Reviewed-Content-Hash: design/gdd/menu-waves.md 2e7946416e44f6c2c56a96c646398bb40928368c
+Reviewed-Content-Hash: design/gdd/save-system.md 23321fb466a5f9e11832039b9cb4bf051479f51e
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 5f341d288604293ed86ab887df1030bb0dce426d
+Reviewed-Content-Hash: design/gdd/systems-index.md ea20fa596407ffb4808db61eb2b106f565a4c821
