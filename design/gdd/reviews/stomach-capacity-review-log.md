@@ -188,3 +188,54 @@ Reviewed-Content-Hash: design/gdd/in-game-hud.md 1c51b6fff07c5d8eae58559e50e3107
 Reviewed-Content-Hash: design/gdd/records-and-milestones.md ca1ecf5a176da065f59c2b3b8261174fb1479571
 Reviewed-Content-Hash: design/gdd/audio-feedback.md 8ad91f894b044ae735d9c55d13606f8e17453900
 Reviewed-Content-Hash: design/gdd/systems-index.md 01259cc27663f7a47234e09c674e143fa3e2ba5c
+
+---
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: S
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 1 | Recommended: 12
+Summary: 本轮的修复（`427409f`）只覆盖了三条终止路径中的一条。`initialize` 自身失败后账本保持 `未初始化`，这条已修好；但新加的 `run_faulted` 订阅在本项目里永远不会触发——run-flow 声明了该信号（`run-flow.md:132,330`）、HUD 与音效也订阅它，可是状态转移表的“副作用”列是穷举的，进入 `Faulted` 的两条转移（`run-flow.md:88,106`）都不广播它。于是另外两条路径仍把账本留在 `就绪`：初始化成功但后续子系统初始化失败（`Initializing → Failed`，run-flow 不发任何信号），以及提交期 `CAPACITY_OVERFLOW` 进入 `Faulted`（同样不广播）。两种情况下下一局 `initialize` 都被判成“同局第二次” → `CAPACITY_INIT_INVALID` → run-flow 进入 `Faulted`，此后每局必败，只能重启应用——这正是上一轮 blocking 的原样复现。上一轮的 12 项 recommended 也全部复现（OQ1、Dependencies“尚未撰写”、`consume(e)` 待回改、重复提交归因、`e` 的类型、腻度行方向、注册表缺口、Tuning Knobs 等），另有两处由本次修复引入的内部矛盾。
+Prior verdict resolved: No — partial（本系统自身 `initialize` 失败已修；`Failed` / `Faulted` 两条终止路径仍未覆盖，且 `run_faulted` 上游从未广播）
+Findings:
+- [BLOCKING] Detailed Design rule 2 (`:28`) / States (`:48-52`) / Edge `:187`: 局边界订阅 `run_ended` / `run_discarded` / `run_faulted`，但后两者不足以覆盖所有终止路径。(a) `run_faulted` 从不广播：run-flow 的状态转移表 `:96-108` 每一行的“副作用”列是穷举的，进入 `Faulted` 的两行（`:88` 不变式/结算失败、`:106` `run_id` 溢出）都没有“广播 `run_faulted`”；信号只在 `:132`、`:330` 被声明与列为音效事件。(b) 初始化成功、但后续子系统（如菜单波次）初始化失败时，run-flow 走 `Initializing → Failed`（`run-flow.md:96`），既不发 `run_faulted`（那是 `Faulted` 的信号），也不发 `run_discarded`（从未开始的局不发，`run-flow.md:132`），更不发 `run_ended`——账本仍停在 `就绪`。(c) 提交期 `CAPACITY_OVERFLOW`（本文件 `:185`、AC 14）使 run-flow 进入 `Faulted`（`run-flow.md:46`），同样无广播。三条路径的后果一致：下一局 `initialize` 被规则 2 判为同局第二次 → `CAPACITY_INIT_INVALID` → run-flow `Faulted`，此后每局必败，只有重启应用可恢复。规则 2 的“因此下一次 `initialize` 必然是新局”由此仍不成立。修法（三选一）：1) run-flow 在**每一条**进入 `Faulted` 的转移上广播 `run_faulted`，并为 `Failed` 增加等价通知（或显式调用 `end_run("failed")`），本文件改为引用那两个转移；2) 给本系统加显式 `end_run(reason)`，由 run-flow 在**所有**终止路径（含 `Failed` / `Faulted` 清理）调用——这是唯一能覆盖“从未开始”路径的办法；3) 给 `initialize` 加 run identity（`run_id`），无需改上游，但要改已锁定的签名。选定后补一条 AC 同时覆盖 (b) 与 (c)——现有 AC 26 只覆盖本系统自身 `initialize` 失败。
+- [RECOMMENDED] 边界描述不一致: 规则 2 与两张 Interactions 表 (`:62`、`:201`) 都写了 `run_faulted`，但 Edge `:187` 仍只说“收到 `run_discarded`（或正常结束的 `run_ended`）”，漏掉第三条。按最终选定的机制改写该条。
+- [RECOMMENDED] States `:51` 与 AC 5 冲突: `初始化失败` 行的进入条件包含“同局重复初始化”，离开写“立即回到 `未初始化`”；但 AC 5 (`:275`) 要求该次调用后 `capacity_used` 仍为 `17`，而 `未初始化` 下读取返回 `0` + ERROR（AC 25）。`已丢弃` 行 (`:52`) 同理——它与 `:48` 的“收到信号即回到 `未初始化`”是同一件事，两行都不可达。删除这两行，或把“保持 `used` 直到信号到达”的顺序写清楚。
+- [RECOMMENDED] AC 17 (`:293`): 枚举“能改变 `capacity_used` 的方法”时只列 `initialize` 与 `consume`，但边界重置是第三条清零路径（`:28`、AC 24）。把 AC 17 限定为“一局内”，并把边界重置补进枚举或单列一条 AC。
+- [RECOMMENDED] 验收缺口: 上一轮要求“增加一条通过信号驱动边界的 AC”，仍只加了 AC 26（失败的 `initialize`）。缺 GIVEN 送达 `run_ended` / `run_discarded` / `run_faulted` WHEN 读取 THEN `未初始化` / `0` + ERROR，以及与“同局第二次”成对的用例，用来证明两条路径确实可区分。
+- [RECOMMENDED] Open Question 1 (`:313`)、`:63`、`:253`: 仍称 `C0` 没有数据归属；`data-config.md:59,117,185,246` 已定义并校验 `BalanceData.base_capacity`（1–999，默认 20）。关闭 OQ1，把两处改为 `get_balance() → base_capacity`。OQ4 亦可关闭：`entities.yaml:700-702` 已把本 GDD 列入 `capacity_used.referenced_by`。
+- [RECOMMENDED] Dependencies `:214`: 仍说 局外升级 / 局内 HUD / 纪录与里程碑 / 存档 的 GDD “尚未撰写”；四份都存在，且本文件 `:64`、`:66`、`:70` 自己就引用了它们。`records-and-milestones.md` 至今没有提到胃容量，因此 `:70` / `:209` 的软下游行仍是单边。
+- [RECOMMENDED] Cross-References `:263`: “待回改：run-flow.md 漏了 `consume(e)`”已过期——`run-flow.md:120,295` 都已列出 `consume(e)`。删除该注。
+- [RECOMMENDED] Edge Cases `:186`: 把重复提交的防御归于 `capacity_used = Σ effective_satiety` 不变式；第二次提交若被接受同样会累加，和仍然相等。真正的防御是 run-flow 的第一道校验“菜仍在当前可见集”（`run-flow.md:34`）。改引该条，或把不变式的作用域限定为“只记了一行却调用两次 `consume`”。
+- [RECOMMENDED] `e` 的类型: Formulas `:147` 把 `e` 标为 `int`，但 AC 10 (`:283`) / AC 15 (`:291`) 传入 `2.5`。GDScript 的 `e: int` 会在进入守卫前拒绝该参数。声明 `e: Variant`，或写明测试从无类型边界进入。
+- [RECOMMENDED] 腻度行方向: `cloying-and-taste.md:62` 仍把本系统记为 `双向` 并称容量决定“吃撑”，与规则 6（无 `STUFFED`）及本文件 `:75`、`:212` 的无调用边方向矛盾。修在对方 GDD（本次范围外）。
+- [RECOMMENDED] 注册表 (`entities.yaml`，由编排会话维护): `capacity_remaining` 与 `capacity_bonus` 仍无条目；`capacity_used.referenced_by` (`:700-702`) 仍漏了 `run-flow.md`（其 `:120,295` 读取该值）；`capacity_total` 注 (`:893`) 与 `base_capacity` 注 (`:1272`) 仍称数据归属是胃容量的 Open Question，而 `data-config.md:59` 已拥有该字段。
+- [RECOMMENDED] AC 26 (`:305`) 措辞混淆终止状态: “因非法 `capacity_bonus` 失败”只可能让 run-flow 进入 `Failed`（`run-flow.md:96`）；`Faulted` 只由同局第二次 `initialize` 产生。改为只断言 `Failed`，或把两种情形拆成两条。
+Advisory (not counted): Tuning Knobs 仍缺失（`standard` 下 advisory）——`C0`（1–999，MVP 20）与 999 结构上限是本系统的两个可调值。上一轮的“`run_ended` 立即重置 vs HUD 读值”冲突已由上游解决：`in-game-hud.md:166` 现在规定 `Ending` 期间读最后一帧快照、不实时查询，本文件无需再改。公式声明 `capacity_total ∈ [1, 999]` 但 `initialize` 前读取返回 `0`（`:192`）——注明区间描述的是已初始化实例。本文件的 `capacity_bonus` 上界 `0–(999 − C0)` 与 `meta-upgrades.md:202` 的 `0–99` 兼容，写出上游上限能让规则 10 的购买时校验具体化。OQ7 可关闭：`audio-feedback.md:167,408` 有“容量变化” cue 而无容量事件，确认由 `action_committed` 派生。`systems-index.md:26-27` 仍说容量 “decides when the player is stuffed”，与 OQ5 / 规则 6 矛盾（索引编辑归编排会话）。
+
+### Completeness: 6/6 required sections present
+`modes.workflow: standard` → Overview, Detailed Rules (`## Detailed Design`), Formulas, Edge Cases, Dependencies, Acceptance Criteria all present. Advisory at `standard`: Player Fantasy and Tuning Knobs absent (Game Feel `:229-235` covers the fantasy informally).
+
+### Dependency Graph
+All declared dependencies have a GDD on disk: run-flow, data-config, meta-upgrades, cloying-and-taste, in-game-hud, settlement-and-entry-fee, menu-waves, dish-values, records-and-milestones, save-system.
+
+### Registry Values
+Whole-document search for the registry's capacity terms (`capacity_total`, `capacity_used`, `capacity_remaining`, `capacity_bonus`, `base_capacity`, `can_fit`, `effective_satiety`) returned 116 lines; no value conflicts. `base_capacity = 20`, `capacity_total ∈ [1, 999]`, `capacity_used ∈ [0, 999]` and the inclusive `can_fit` predicate all match; the 20-cell / 104-yuan calibration still reproduces (ten ratio-optimal dishes sum to 20 cells / 104 yuan, the ten highest-priced to 26). Entry gaps are listed under Recommended item 12.
+
+### Verdict: NEEDS REVISION
+
+Reviewed-Content-Hash: design/gdd/stomach-capacity.md 72584c8a3cc37bfd9c68d285c4223ae8425a63f0
+Reviewed-Content-Hash: design/registry/entities.yaml f8361d463dc6172ce3c22a462bccce6d2037d35c
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md ed8848ea7c41823db26e22fb7d5df5f998fc0234
+Reviewed-Content-Hash: design/gdd/data-config.md 0be338a35d8e5fa9ded4c219b29801021835938a
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md 1c8fd48bbdff0e8d24e5e436a8d801545df4da0b
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 5734623b4a60d9072657ef631c8ae61f05359f21
+Reviewed-Content-Hash: design/gdd/dish-values.md 60a580b19c4b2f980cd0a33df73e8c3aa32f6d3e
+Reviewed-Content-Hash: design/gdd/menu-waves.md ce532d3265df1ed7555ba5aa46383be35bbee4a1
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md b9b9235e9a4ad7d8739ad778e98dd147b1c72f94
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 654e48d14dbf85fdbab3b923e590a4f356dd0218
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 9fe5183795ca3d47798510a1d00a040dabe3ca61
+Reviewed-Content-Hash: design/gdd/audio-feedback.md f6ac7fbd915341f63761529b664028eec6b216c0
+Reviewed-Content-Hash: design/gdd/systems-index.md c0b526ff05088d426598f5dc34e3bd9e3153cf59
