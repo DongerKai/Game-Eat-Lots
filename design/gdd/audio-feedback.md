@@ -141,7 +141,7 @@
 | `volume_db` | float | 按 `cue_volume_db` 计算的结果 |
 | `pitch` | float | 仅数字 tick 有值 |
 
-**封闭原因词表**：`no_device`、`muted`、`paused`、`dedupe`、`cooldown`、`pool_full`、`no_stream`、`invalid`、`not_ready`、`priority`、`zero_duration`（`dropped`）；`duplicate_outcome`、`preempted`（`suppressed`）；`pending_outcome`（`deferred`）。任何新原因必须先改本表，不能临时加字符串——否则测试无法穷举。
+**封闭原因词表**：`no_device`、`muted`、`paused`、`dedupe`、`cooldown`、`pool_full`、`no_stream`、`invalid`、`not_ready`、`priority`、`zero_duration`（`dropped`）；`duplicate_outcome`、`preempted`、`outcome_priority`（`suppressed`）；`pending_outcome`（`deferred`）。任何新原因必须先改本表，不能临时加字符串——否则测试无法穷举。
 
 日志使用固定容量环形缓冲（10,000 条），永不无限增长；溢出时覆盖最旧条目并记一次 WARN。
 
