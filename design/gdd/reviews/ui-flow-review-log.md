@@ -326,3 +326,102 @@ implement; the blockers are seams with adjacent GDDs and three internal gaps
 requires redesigning the screen model. Findings 2, 3, 4 (partly) and 8 touch
 interfaces that are being revised in parallel — `meta-upgrades`, `settlement`,
 `save` — and should be re-checked against their fixed versions at re-review.
+
+---
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 3 | Recommended: 12
+Summary: Re-review of the fix wave that added the first-run preset, the `prepare_run` / `prepare_run_result` / single-`commit` orchestration, the dish-name lookup, the two missing screens, and the notice return path. Five of the eight prior blockers are fully cleared. Three remain, all at the same seams: the settlement interface is now named two different things across this document (and `records` still publishes the old one), the new notice priority sits ahead of the modal rules it is supposed to yield to, and milestone-catalogue ownership was corrected in the Interactions table but not in rule 23 or the cross-references.
+Prior verdict resolved: No — 5 of 8 prior blockers fully resolved, 3 partially resolved
+
+Findings:
+- [BLOCKING] rule 10 (`:61`) / rule 11 (`:63`) / rule 13 (`:67`) / Interactions (`:157`) / Dependencies (`:431-432`) / Cross-References (`:526-527`) / AC 12 (`:565`) / AC 18 (`:571`) / F3 (`:540`): the settlement interface is named inconsistently. This document now calls `纪录与里程碑.prepare_run(result)` and `局外升级.prepare_run_result(result)`, but six sites still say `apply_run` / `apply_run_result`, and `records-and-milestones.md:111` publishes only `apply_run(result)`. Prior Blocker 3 is half fixed: `meta-upgrades` landed `prepare_run_result` (`:122`), `records` did not.
+- [BLOCKING] `back_target` (`:220`) vs rule 5 (`:51`) / rule 7 (`:55`): `DISMISS_NOTICE` is priority 0, ahead of both modal rules, so with a dismissible notice up `ui_cancel` dismisses the notice instead of reaching an open modal — contradicting "模态期间的 `ui_cancel` 只作用于模态". Rule 7's prose priority list (①–⑧) omits `DISMISS_NOTICE` entirely, so the normative rule and the formula disagree. Prior Blocker 7 added the notice to the table but not to the rule text, and placed it above modality.
+- [BLOCKING] rule 23 (`:87`) / Cross-References (`:530`) vs Interactions (`:158`): rule 23 still reads the milestone catalogue from `数据配置`, while the Interactions table reads `纪录与里程碑.get_milestone_catalog()`. The owner is records: `records-and-milestones.md:292,314` keep `MilestoneData` out of the data-config schema and expose `get_milestone_catalog()` (`:298`); `data-config.md:186` agrees. Prior Blocker 8 fixed one of three sites.
+- [RECOMMENDED] Open Question 14 (`:635`): answered by `input.md:56` — `push_context` always pushes and emits `context_changed(Modal, Modal)` even for a same-value push. Close it.
+- [RECOMMENDED] Acceptance Criteria: still no criterion for `LoadReport = ReadOnly` (rule 20 `:81`, edge case `:401`, UI row `:503`); AC 45 (`:616`) lists a `Blocked` screenshot but no `ReadOnly` notice.
+- [RECOMMENDED] Interactions (`:164`) / Dependencies (`:443`) vs `unlocks-and-stations.md:92,366`: #13 now declares a **hard** UI dependency (station catalogue, `can_unlock` / `unlock(id)`, unlock progress, station selection in the menu). This GDD still says soft / "未设计", and the fixed screen inventory has no station-selection surface. MVP is single-station, so this blocks Vertical Slice planning, not MVP.
+- [RECOMMENDED] rule 8 (`:57`): this document names `首局引导.get_first_run_preset()`, but `first-run-onboarding.md` rule 3 publishes the preset's fields only, with no method name. Values and direction now agree; fix the name on one side.
+- [RECOMMENDED] rule 11 (`:63`): `record_broken` is said to arrive synchronously "during `apply_run`". With the pure-prepare split, state when the signal fires — during the prepare call or at `commit` — so the receipt's `previous_best` capture has a defined moment.
+- [RECOMMENDED] Open Question 8 (`:629`): lists three `Blocked` causes; `save-system.md:324` defines two `Blocked` causes (update version / unreadable-and-no-backup) and treats the third (another instance) as the `ReadOnly` path.
+- [RECOMMENDED] rule 2 (`:40`): `SettingsModal` is still "任意有界面的状态"; `Boot` and `Error` have no settings entry, so restrict to `Menu` / `Paused`.
+- [RECOMMENDED] UI Requirements (`:498-499`): `UpgradeScreen` / `RecordsScreen` initial focus falls back to a 「返回」 control their 必须包含 lists do not include.
+- [RECOMMENDED] Tuning Knobs: still absent (advisory at `standard`) — `RECEIPT_ROLL_SECONDS`, `SAVE_INDICATOR_SECONDS`, `MAX_UI_STACK_DEPTH`, `MAX_MODAL_DEPTH` remain scattered.
+- [RECOMMENDED] Registry (`design/registry/entities.yaml`): `ui-flow.md` is missing from `referenced_by` of `net_profit`, `total_value`, `return_ratio`, `broke_even`, `station_canteen_entry_fee`, `first_run_entry_fee`; it is still listed under `station_available`, `unlock_decision`, `unlock_progress`, which the GDD names only as a future soft dependency. Orchestration-session edit.
+- [RECOMMENDED] `audio-feedback.md`: still no `receipt_closed(reason)` event; this GDD emits it (`:91,168`). Fix the name on the audio side.
+- [RECOMMENDED] `input.md:246` Open Question 2 (gamepad glyphs) was due "界面流程 GDD 编写时"; route it to `/ux-design` explicitly.
+
+### Re-review Verification of Prior Blocking Items
+
+| # | Prior blocking item | Status | Evidence |
+|---|---|---|---|
+| 1 | First-run preset never fetched | **Resolved** | rule 8 (`:57`) takes `pool_override` six dishes + `entry_fee_override = 40` from `首局引导.get_first_run_preset()`; AC 6 (`:556`) asserts both; `first-run-onboarding.md:33-38` defines the same values |
+| 2 | `WALLET_OVERFLOW` abandons the record update | **Resolved** | edge case (`:384`) now updates records and labels only the wallet; `meta-upgrades.md:33,294` say the run still goes to records |
+| 3 | Single-commit criterion impossible | **Partially resolved** | `meta-upgrades.md:37,122` now expose `prepare_run_result` and commit nothing; `save-system.md:378` AC 13 unchanged. `records-and-milestones.md:111` still publishes `apply_run`, not `prepare_run` — see Blocker 1 |
+| 4 | Receipt dish name unsourced | **Resolved** | rule 11 (`:63`) resolves via `get_dish(dish_id).display_name`; `data-config.md:57` defines `get_dish`; Interactions (`:161`) and Dependencies (`:435`) declare it |
+| 5 | `存档` 规则 80 does not exist | **Resolved** | rule 10 (`:61`) now cites 规则 18 / AC 13; no `规则 80` remains |
+| 6 | Inventory omits `BlockedModal` / `ReadOnlyNotice` | **Resolved** | rule 2 (`:42-43`) lists both |
+| 7 | Notice has no `back_target` precedence | **Partially resolved** | priority 0 `DISMISS_NOTICE` added (`:220`), but rule 7's list omits it and the position precedes modality — see Blocker 2 |
+| 8 | Milestone catalogue ownerless | **Partially resolved** | Interactions (`:158`) now reads `get_milestone_catalog()`; rule 23 (`:87`) and Cross-References (`:530`) still say `数据配置` — see Blocker 3 |
+
+### Completeness: 6/6 sections present, where 6 is the count required at `standard`
+
+Required at `standard` and present: Overview, Detailed Rules (`## Detailed
+Design`), Formulas (the system defines numeric rules — stack depth, modal depth,
+a return-decision function, focus selection, latency, roll timing), Edge Cases,
+Dependencies, Acceptance Criteria.
+
+Advisory at `standard`:
+- **Player Fantasy** — absent as a heading; `## Game Feel` still carries it.
+- **Tuning Knobs** — absent.
+
+### Dependency Graph
+
+All twelve declared system dependencies have a GDD on disk.
+
+### Registry Values
+
+Registry names searched across the whole document (`net_profit`, `total_value`,
+`broke_even`, `return_ratio`, `station_canteen_entry_fee`, `first_run_entry_fee`,
+`first_run_pool_size`, `capacity_total`, `running_net`, `load_outcome`,
+`wasted_capacity`, `cloy_extra_total`). Nine lines matched. **No value
+conflicts**: this GDD restates none of these numbers — it reads them from
+`RunResult` or delegates to the preset (`first_run_entry_fee = 40` is cited only
+as a preset field, never as this system's own constant). The only registry
+defects are back-reference gaps, listed under Recommended.
+
+### Senior Verdict
+
+Not applicable — `lean` mode runs no `creative-director` synthesis.
+
+### Scope Signal
+
+Rough scope signal: **L** (producer should verify before sprint planning).
+
+### Verdict: NEEDS REVISION
+
+The navigation core remains implementable and the fix wave cleared the three
+findings that were purely this document's own (screen inventory, save-rule
+citation, dish-name source). The three remaining blockers are each a fix applied
+to one site out of several: the prepare/commit rename landed in `meta-upgrades`
+and in rule 10 but not in `records` or in this document's Dependencies and ACs;
+the notice priority landed in the formula table but not in rule 7 and out of
+order against rule 5; the milestone owner landed in the Interactions table but
+not in rule 23. None requires redesigning the screen model — each is a
+one-pass consistency sweep.
+
+Reviewed-Content-Hash: design/gdd/ui-flow.md 21482b6d00538b95af113995e613b8df29985a8a
+Reviewed-Content-Hash: design/registry/entities.yaml f8361d463dc6172ce3c22a462bccce6d2037d35c
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 9fe5183795ca3d47798510a1d00a040dabe3ca61
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md b9b9235e9a4ad7d8739ad778e98dd147b1c72f94
+Reviewed-Content-Hash: design/gdd/save-system.md 772ed596d68eb5cbae207b7bac9a170ec55c1524
+Reviewed-Content-Hash: design/gdd/data-config.md 0be338a35d8e5fa9ded4c219b29801021835938a
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 3f99e25a3d35bd4922c0717adc033569a50abafb
+Reviewed-Content-Hash: design/gdd/input.md 9432d857ed18dc216dc5a038f81608ae9e10d975
+Reviewed-Content-Hash: design/gdd/audio-feedback.md f6ac7fbd915341f63761529b664028eec6b216c0
+Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 5aafb0674e6a0bc5bd6a370c275e95a2f01ebfa9
+Reviewed-Content-Hash: design/gdd/systems-index.md 15e0bd3d307ed09738b74dd3c099816b497b69e8
