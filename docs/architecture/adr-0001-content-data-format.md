@@ -363,6 +363,8 @@ AppRoot（组合根）
 > `architecture.md` 的 `Result[T, E]` 是设计级记法；GDScript 4.7 没有用户自定义泛型，
 > 因此具体实现用 `DataResult` 承载同一语义，调用方在 `is_ok()` 后做一次静态类型赋值。
 > 这是记法的落地，不是接口语义的改变。
+>
+> 下面每个 `class_name` 各自位于一个 `.gd` 文件；此处合并展示只为阅读，不是单文件结构。
 
 ```gdscript
 # Foundation — src/foundation/data_config/
@@ -388,10 +390,10 @@ func get_balance() -> BalanceData                      # 前置条件：READY
 
 class_name DataResult extends RefCounted
 
-enum Error { OK, NOT_READY, UNKNOWN_ID }
+enum QueryError { OK, NOT_READY, UNKNOWN_ID }
 
 var value: Variant = null
-var error: Error = Error.OK
+var error: QueryError = QueryError.OK
 
 func is_ok() -> bool
 
