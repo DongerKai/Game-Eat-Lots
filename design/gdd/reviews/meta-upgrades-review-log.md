@@ -616,3 +616,14 @@ Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87
 Reviewed-Content-Hash: design/gdd/stomach-capacity.md 77622412130d27b404e93a2fe2cdf3a99a8718ab
 Reviewed-Content-Hash: docs/architecture/adr-0007-run-state-settlement-transaction.md 7cf5114d67eb4056b21faf41b77b6473c602fcb8
 Reviewed-Content-Hash: docs/architecture/architecture.md 1b3c1a1e83f4e21fc6b29fb075292c502be2bf6d
+
+---
+
+## Re-stamp — 2026-11-04
+
+Approval stands. Post-approval changes were registry and cross-doc only: `e1b4f22` added `meta-upgrades.md` to `cloy_cap`, `station_canteen_entry_fee` and `base_capacity` `referenced_by` (all three verified against this GDD's rules 6/7/8); `menu-waves.md` `effad23` → `4c2da74` restates `MENU_VISION` consumption as `Σ effect_value × level`, which matches rule 14 here. Target GDD byte-identical to the approved content.
+
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md 3fa3e55b62e80ebcb1ed150a57577416f639faf9
+Reviewed-Content-Hash: design/registry/entities.yaml 02f5c072fc535530c710fd71d77d31e2dce021ed
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/menu-waves.md 4c2da744c1c4b19bc861bd0c09509d6deecbd6b7

@@ -925,3 +925,13 @@ Reviewed-Content-Hash: design/gdd/input.md 27c9d885eb2ba1f8d4b3df72ff6640fed0a5d
 Reviewed-Content-Hash: design/gdd/data-config.md 89626e0d680a97b2887e2d2e76f07a4e3126ec2a
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
 Reviewed-Content-Hash: design/gdd/systems-index.md e0174253c2b36603edfef7b4d00d005380530feb
+
+---
+
+## Re-stamp — 2026-11-04
+
+Approval stands. Post-approval registry sync (`e1b4f22`) touched only menu-waves, cloying, meta-upgrades and capacity entities; no audio entity or cue-catalog fact changed. Target GDD byte-identical to the approved content.
+
+Reviewed-Content-Hash: design/gdd/audio-feedback.md 0d6aad0b163bffe972683c0b41db50c8ef468dd3
+Reviewed-Content-Hash: design/registry/entities.yaml 02f5c072fc535530c710fd71d77d31e2dce021ed
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43

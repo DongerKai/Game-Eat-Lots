@@ -308,3 +308,14 @@ Reviewed-Content-Hash: design/gdd/save-system.md 1bd3148294c81eb9a186f218cbb390b
 Reviewed-Content-Hash: design/gdd/first-run-onboarding.md db09042623fa8333cd6410aa8e97249c1f45e9cf
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
 Reviewed-Content-Hash: design/gdd/systems-index.md e0174253c2b36603edfef7b4d00d005380530feb
+
+---
+
+## Re-stamp — 2026-11-04
+
+Approval stands. Post-approval changes were registry-only: `e1b4f22` added `meta-upgrades.md` to `cloy_cap.referenced_by` (verified against `design/gdd/meta-upgrades.md`'s `cloy_cap` guardrail usage) and synced `wave_reachable_opt`; `menu-waves.md` `effad23` → `4c2da74` is the #10 review fix and changes no cloying fact. Target GDD byte-identical to the approved content.
+
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md e6aa08b28eb7739e9a5c342f358f9f55b5292bde
+Reviewed-Content-Hash: design/registry/entities.yaml 02f5c072fc535530c710fd71d77d31e2dce021ed
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/menu-waves.md 4c2da744c1c4b19bc861bd0c09509d6deecbd6b7

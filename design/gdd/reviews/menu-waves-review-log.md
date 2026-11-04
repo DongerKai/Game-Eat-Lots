@@ -1033,3 +1033,47 @@ Reviewed-Content-Hash: design/gdd/save-system.md 1bd3148294c81eb9a186f218cbb390b
 Reviewed-Content-Hash: design/gdd/systems-index.md e0174253c2b36603edfef7b4d00d005380530feb
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
 Reviewed-Content-Hash: docs/architecture/adr-0006-deterministic-rng.md f8bbbce1efbe2312fb8283ea8c73d61591e92f7a
+
+---
+
+## Review — 2026-11-04 — Verdict: APPROVED（复审：注册表 blocking 已关闭）
+
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none（lean — Phase 3b 未运行）
+Blocking items: 0 | Recommended: 5
+
+Summary: 按 Phase 1 的「目标文档 `UNCHANGED`、只有注册表 `CHANGED`」分支执行：`menu-waves.md` 与上轮收据 `4c2da74` 逐字节相同，正文未再改动；`entities.yaml` 由 `ac9dd64` 变为 `02f5c07`（`e1b4f22`）。逐项复核注册表 `wave_reachable_opt`：`notes` 现写 "104 with no skips, 101 with one, 97 with two"，与正文「跳过对上限的影响」表（`:146-148`）、`wave_reachable_opt` Example（`:181`，97）、`wave_healthy` Example（`:206`，97）、与结算的校准契约（`:253`，1 次约 101 / 2 次约 97）四处一致；`variables` 已补 `pool`，`output_range`（`[0, opt_value(pool, C0, T)]`）与 `expression`（每吃一道 1 回合、非末波跳过 +1、`eats + skips ≤ T`、回合耗尽免费结束）仍与逐波重置 DP 一致；`wave_healthy` 五参含 `pool`、三态 `output_range` 与 94 下界（`0.9 × 104`）一致；`wave_size_default.referenced_by` 已补 `data-config.md`。上轮唯一 blocking 关闭，注册表未引入其它数值改动，未发现新的跨文件冲突，签发 APPROVED。
+
+Prior verdict resolved: Yes — 上轮唯一 blocking（注册表 `notes` 的 100/95）已由 `e1b4f22` 改为 101/97；该提交共 4 处 hunk，其余三处仅为 `referenced_by` 补录（`cloy_cap`、`wave_size_default`、`station_canteen_entry_fee`、`base_capacity`），不涉及取值。
+
+Findings:
+- none（上轮 blocking 已由注册表 `e1b4f22` 关闭；GDD 正文自 `4c2da74` 起未改动，上轮已全文复核无缺陷）
+- [RECOMMENDED] Open Questions: OQ2/OQ4 的 "E[重掷] = 1.10" 标签（实为 E[尝试次数]），沿用上轮，未改数值与结论。
+- [RECOMMENDED] Cross-doc: `in-game-hud.md` 规则 16 / AC 24 的跳过按钮文案缺本 GDD 要求的「放弃剩余 N 道」。
+- [RECOMMENDED] Cross-doc: `dish-values.md` 仍写 `opt_value` "不进入游戏运行时"，与 ADR-0006 §4 声明的健康门例外不符。
+- [RECOMMENDED] Registry: `wave_healthy.notes` 写 "Reroll up to 20 seeds"，本 GDD 的口径是「最多 20 次候选种子（按 `(station_id, seed, attempt)` 派生）」——同为 20，仅措辞待下次同步。
+- [RECOMMENDED] 索引：`systems-index.md` 本系统仍为 `In Review`，通过后应由编排会话改为 `Approved`（本分支不改索引）。
+
+### 复审方式与收据口径
+
+本次工作树基线 `113a3e3` 早于 `d29023a` / `e1b4f22`，工作树内的 `menu-waves.md` 与注册表落后于编排分支。复审前已把 `menu-waves.md` 对齐到 `4c2da74`（与 `main` 逐字节相同，未做任何设计改动），并以 `main` 的 blob 生成以下收据哈希。`design/registry/entities.yaml` 未在本分支修改（约束禁止跨文件改动），收据中的 `02f5c07` 即 `e1b4f22` 之后的注册表内容；`meta-upgrades.md` 的 `3fa3e55` 为本轮复核 `MENU_VISION`（已解析额度 `Σ effect_value × level`、预览上限 `min(menu_vision, wave_size−1, |W_next|)`）所读的当前版本。
+
+Reviewed-Content-Hash: design/gdd/menu-waves.md 4c2da744c1c4b19bc861bd0c09509d6deecbd6b7
+Reviewed-Content-Hash: design/registry/entities.yaml 02f5c072fc535530c710fd71d77d31e2dce021ed
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md 56f6f4866e1b5ab7c8a5a8f04d22078e7d05e1cb
+Reviewed-Content-Hash: design/gdd/dish-values.md 8b48f38c7e01eb84a462bf847a8bbac3a7101997
+Reviewed-Content-Hash: design/gdd/data-config.md 89626e0d680a97b2887e2d2e76f07a4e3126ec2a
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md e6aa08b28eb7739e9a5c342f358f9f55b5292bde
+Reviewed-Content-Hash: design/gdd/stomach-capacity.md 77622412130d27b404e93a2fe2cdf3a99a8718ab
+Reviewed-Content-Hash: design/gdd/time-and-turns.md eb20c7ac3b422dbf3d5dcec1759061c55de41cd8
+Reviewed-Content-Hash: design/gdd/in-game-hud.md f81ce0c2348338cd8bd3858ed659e2b13c882a06
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md 3fa3e55b62e80ebcb1ed150a57577416f639faf9
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 9bf45c1ead7e161599186ca5724fa460b044e314
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md db09042623fa8333cd6410aa8e97249c1f45e9cf
+Reviewed-Content-Hash: design/gdd/ui-flow.md cf471d2d45476ff8e1db0a5fa4a7fae9a4e146ea
+Reviewed-Content-Hash: design/gdd/save-system.md 1bd3148294c81eb9a186f218cbb390b30b0e08ad
+Reviewed-Content-Hash: design/gdd/systems-index.md e0174253c2b36603edfef7b4d00d005380530feb
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+Reviewed-Content-Hash: docs/architecture/adr-0006-deterministic-rng.md f8bbbce1efbe2312fb8283ea8c73d61591e92f7a
