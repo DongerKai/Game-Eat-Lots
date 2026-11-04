@@ -769,3 +769,140 @@ Reviewed-Content-Hash: design/gdd/ui-flow.md 35a3291d40d49cf1b6f35190ed231112462
 Reviewed-Content-Hash: design/gdd/save-system.md 0d0edcdeed2612058390f2a0da75dab9cc15e1da
 Reviewed-Content-Hash: design/gdd/systems-index.md b59ef2478102399659f8ae8b533c98a63a1c90b0
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION（第 6 轮）
+
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none（lean — Phase 3b 未运行）
+Blocking items: 2 | Recommended: 22
+Summary: `f7ebe00` / `74bad1a` 把"健康校验不计腻度"写进了规则 9、`wave_reachable_opt` 公式、变量表与注册表，并把 DP 换成 `(菜序位置, 剩余容量, 剩余回合)`；三态枚举、Output Range、Example、签名、注册表**均已同步**（上一轮 blocking #2 的表面部分全部落地）。但两处仍未闭合：**(1)** `:61`、`:226`、`:240`、`:283` 仍断言"生成校验计入 `effective_satiety` / 重复惩罚"，与 `:34`、`:157` 直接对立；`:240` 更把腻度顺序后果的责任判给本系统，而新模型只给上界、无法承担该责任。**(2)** 三轴 DP 只给了状态轴、没给转移；照字面实现的两种自然读法都与穷举不符（随机实例：自由跨波读法 1147/5000 不符，full+skip 读法 937/4000 不符），正确写法需要"逐波重置"这一步，GDD 未写。12 × 21 × 11 ≈ 2.8×10³ 的算术本身正确，但 10⁴ 节点预算只在正确转移下成立。
+Prior verdict resolved: No —— 上一轮 blocking #1 的算法问题换了形式再次出现（三轴仍不足以保证定义值），blocking #2 的表面部分已改、实质口径仍分裂。
+
+### 复审背景
+
+对象 `2070cb32…`（349 行），来自 `f7ebe00` + `74bad1a`；与上一轮 `9075480…` 相比 11 行改动，全部落在规则 9、`wave_reachable_opt`、`wave_healthy`。`review-receipts.sh check` 对目标文件、注册表、`save-system.md`、`ui-flow.md` 报 `CHANGED`，其余（含 skill）`UNCHANGED`；按全文复审执行。注册表 `wave_healthy`（三态 `output_range`、`DEGRADED` 表达式、`notes`）与 `wave_reachable_opt`（`[0, opt_value(pool, C0, T)]`、上界说明）确已同步。
+
+### 上一轮 blocking 逐条复核
+
+| # | 原 finding | 状态 | 依据 |
+|---|---|---|---|
+| 1 | 三轴 DP 算不出定义值；预算不成立 | **部分** | 选 (ii) 不计腻度后，"算不出"的根因（跨波 cloy 计数）已消除，静态模型下三轴**存在**正确解；但转移从未写明，字面实现仍出错（本轮 Blocking #2）。态数算术正确。 |
+| 2 | 三态化只改一半 | **表面已闭合，实质未闭合** | `:193` 三态、`:195` `HEALTHY`、`:177` 五参、注册表 notes 均已改；但 `:61`/`:226`/`:240`/`:283` 仍保留"计入腻度"的旧契约（本轮 Blocking #1）。 |
+
+---
+
+## Required Before Implementation
+
+### 1. [BLOCKING] "不计腻度"只改了核心段，四处正文仍断言计入，`wave_healthy` 的责任边界自相矛盾
+
+**位置**：`:61`（Interactions 表）、`:226`（Dependencies 上游表）、`:240`（与腻度的交叉契约）、`:283`（Cross-References）。
+
+- `:34` 与 `:157` 现在明确："健康校验不计腻度……结果是真实可达值的**上界**"；`:165` 的 `satiety` 也改为静态饱腹。这是正确的方向。
+- 但 `:61` 仍写"生成校验**需要**把重复惩罚计入可达最优"，`:226` 仍写"生成校验时把 `effective_satiety` 计入可达最优"，`:283` 仍写"`effective_satiety` 计入可达最优"。
+- `:240` 更进一步："这个后果由波次的生成校验负责（`wave_reachable_opt` 已计入）"。在不计腻度的模型下，`wave_reachable_opt` 只是**上界**，无法对"解腻菜被切到无法插入的位置"这一腻度顺序后果负责——把它写成"已计入"是把一个上界冒充成精确判定。
+
+**后果**：实施者按 `:34`/`:157` 写静态 DP，按 `:61`/`:226`/`:240`/`:283` 写 `effective_satiety` 版本，会得到两套闸门；后者回到上一轮被否决的状态空间（跨波组计数），且与注册表 `wave_reachable_opt.notes` 的 "ignores cloying" 冲突。AC 15/16/22/23 在两套读法下都能通过，闸门行为却不同。
+
+**修复**：把四处统一为"不计腻度；`wave_reachable_opt` 是真实可达值的上界，只挡明显坏的划分"；`:240` 改写为"本系统只能保证不因波次划分把上界压到阈值以下；腻度顺序造成的额外损失由腻度系统与试玩校准承担，本系统不声称已计入"。
+
+### 2. [BLOCKING] 三轴 DP 只给了状态轴、没给转移；字面实现的两种自然读法都与定义值不符
+
+**位置**：`:168`（态数与节点预算）、`:157`（合法序列）、`:34`（规则 9）、`:211`（回合耗尽的 Edge）。
+
+**已验证的部分**：
+- `12 × 21 × 11 = 2772 ≈ 2.8×10³` 的算术正确（`T = 10` → 11 个回合态）。
+- 用穷举对照随机实例确认：**存在**一个三轴实现能精确匹配——按波重置的 DP，携带 `(已处理波数, 已用容量, 已用回合)`（`4 × 21 × 11 = 924` 个携带态），每波内部先做子集背包，再在波边界合并；5000/5000 随机实例与穷举一致，MVP 形状实例 98/98 一致。该实现的节点数在 `≤10⁴` 内。
+
+**未写明的部分**（因此字面实现会错）：
+- 非末波的推进代价是"吃完整波 = 0 回合；否则 +1 回合"；回合耗尽时，**未吃完的当前波可以免费结束**（Edge `:211`）。这两个条件要求"本波是否吃全"在转移里显式处理。
+- 若在菜序 DP 里直接"吃/跳过自由转移、到波尾再补 1 回合"，需要携带"本波是否已弃菜"位；三轴不够，态数翻倍到 ~5.5×10³。
+- 若用"整波吃 = 免费跳，否则先付 1 回合再走"的结构，则会漏掉"回合在非末波中途耗尽、免费结束"的合法路径。**反例**（参数在 GDD 允许范围内）：波 0 = `[(饱腹1, 价100), (饱腹9, 价1)]`（非末波），波 1 = `[(1,1)]`（末波），`C0 = 10`、`T = 1`。真实可达 = **100**（吃掉 100 那道，回合耗尽，本局结束）；该结构返回 **0**，阈值 `0.9 × 100 = 90` 会把一个好划分判成 `UNHEALTHY`。
+- 两个字面读法在随机实例上的偏差：自由跨越波界 1147/5000 不符（偏乐观）；full+skip 937/4000 不符（偏悲观）。
+
+**修复（择一，都是一句话）**：
+- (i) 写明"逐波重置"：每波独立做子集背包，全局只携带 `(波索引, 已用容量, 已用回合)`；非末波两种转移——整波吃（0 跳过）或付 1 回合后吃任意子集；回合耗尽可中途结束；末波永不计跳过。态数改为 `(wave_count + 1) × 21 × 11`（MVP 924），节点预算随之可推。
+- (ii) 若坚持菜序轴，补上"本波是否已弃菜"位与中途结束转移，并把态数改为 `2 × 12 × 21 × 11 ≈ 5.5×10³`、节点预算重算。
+
+> 这不是新口子：上一轮 blocking #1 要的是"性能模型与算法一致"；本轮换了状态轴，但转移仍未被钉死，定义值与预算依旧不能同时从文字推出。
+
+---
+
+## Recommended Revisions
+
+上一轮 22 条中 **#4（`menu_vision` 未使用）、#6（注册表 `wave_reachable_opt.output_range`）、#21（墙钟护栏）已解决**；#3、#15、#17 部分解决；其余未处理。按当前 `2070cb32` 重列，另加 3 条新的。
+
+| # | 级别 | Finding |
+|---|---|---|
+| 1 | HIGH | 上界口径跨文档仍不一致：本 GDD `:34`/`:189` 说上界是"防回归断言、由 `dish-values` 处理"，但 `dish-values.md:241`、`:255` 仍要求"单次刷新 `opt_value` 偏差 > ±10% 就重掷"。对齐成"只卡下界；上界只做回归告警"或反之。 |
+| 2 | HIGH | 构建期 `opt_value` 表的键集与"未命中"行为仍未定义（`:34`）：表按档口全池 + 首局六道池建？`pool_override` 用于挑战/调试时未命中怎么办？建议写明"未命中按 `DEGRADED` + warning"，与 AC 23 的降级路径一致。 |
+| 3 | HIGH | 设计期容量 25 与生成期 `C0 = 20` 的关系仍未写（上轮 #3 部分解决）：`meta-upgrades.md:67`、`:254` 要求改升级时重跑 `wave_reachable_opt` 到容量 25，而 `:168` 的 21 个容量态按 `C0 = 20` 推出。写明"生成校验只用 `C0`；设计期重算用可变 `C`，预算按 `C + 1` 个容量态"。 |
+| 4 | MED | `menu_vision` 仍被称作"整数等级"（`:64`、`:235`）：`meta-upgrades.md:49` 明确快照给的是**已解析额度** `Σ effect_value × level`。照 `:64` 实现会再乘一次。 |
+| 5 | MED | `get_run_menu()` 仍只在本 GDD 与首局引导出现（`:62`、`first-run-onboarding.md:127`、`:320`）；`run-flow.md` 全文没有该函数，返回值顺序（波序还是菜池序）未定义。 |
+| 6 | MED | 胃容量/`C0` 仍未进上游 Dependencies（`:221-225`）：`:163` 把 `C0` 的 Source 写成"数据配置 `BalanceData.base_capacity`"，但注册表 `base_capacity` 的 `source` 是 `stomach-capacity.md`（`entities.yaml:1265-1272`）。补一行上游或改 Source 归属。 |
+| 7 | MED | AC 1 的"任一 `station_id`"仍过宽（`:297`）：断言 3 波 × 4 道 × 12 道，而 Edge `:199-200` 允许非整除与小于 `wave_size` 的菜池（首局六道池 = 4+2）。限定为 `station_canteen` 或把 `\|M\| = 12` 写进 GIVEN。 |
+| 8 | MED | 四处"待回改"仍过时：`:223`「字段为新增，需回改」——`data-config.md:53` 已定义；`:238`「菜品数值的下游表中本系统仍是「GDD 未写」」——`dish-values.md:277` 已写；`:281`、`:290-291` 同理。 |
+| 9 | MED | `wave_size` 区间仍不一致：本 GDD `:87` `1–8`、`:223` `int ≥ 1`；`data-config.md:53` `≥ 1`、`:116` `1–8`。统一并说明池小于 `wave_size` 被钳制后预览上限的变化。 |
+| 10 | MED | 规则 6「代价不是回合」仍与规则 5/8 冲突（`:31` vs `:29`、`:33`）。改为「主代价是失去的菜，另付 1 回合跨波」。 |
+| 11 | MED | "跳过对上限的影响"表仍缺前提（`:141-149`）："1 次跳过 = 9 道"以"先吃掉该波 3 道、再跳过第 4 道"为前提；`:170` 的 Example 还隐含"去掉的两道正好是 `白米饭`/`拍黄瓜` 且位于末波"。写进表注/例注。 |
+| 12 | MED | 重掷的"下一个种子"仍未定义（`:34`、`:212`）：`seed+1`、`seed+k` 还是 RNG 下一输出？`:214` 要求存 `seed`，但存输入种子还是实际采用种子未写清。 |
+| 13 | LOW | 存档交互行仍未标"MVP 未启用"（`:67` 的"条件"行），而下游表 `:236` 已改。两处口径统一。 |
+| 14 | MED | Tuning Knobs 仍缺席（advisory at `standard`）：`wave_size`、健康带、重掷上限 20、预览上限、跳过代价、校验预算都直接决定单局上限（95–104），应集中列出安全范围与影响面。 |
+| 15 | LOW | 跨文档陈旧（上轮 #17 部分解决）：`run-flow.md:297` 仍写 `consume → {ADVANCED, NO_EATABLE}` 且无 `end_pickup()`（`:121-122` 已同步）；`first-run-onboarding.md:370` 仍说本系统"当前只读 `dish_pool`"，而同文件 `:502` 已把该 OQ 标为已回答。 |
+| 16 | LOW | `wave_size_default.referenced_by` 仍缺 `data-config.md`（`entities.yaml:1172-1173` 只列本 GDD）。 |
+| 17 | LOW | `advance_cost` 的两个 0 回合分支在"最后一次吃空"时重叠（`:123-124`），逻辑无害，可注明优先级。 |
+| 18 | LOW | 20 次重掷的总开销仍无上界（`:34`）：最坏 20 × 10⁴ 节点，未写总预算或"开局一次性可接受停顿"的口径。 |
+| 19 | LOW | `DEGRADED` 在 MVP 仍不可达（正确实现的节点数 ≤ 10⁴），只能由 AC 23 的注入夹具走到。建议注明"防御/测试路径，不参与运行期判定"。 |
+| 20 | **新** | `wave_healthy(M, seed, pool, C0, T)` 有两个池参数却未定义区别（`:177`）：`:69` 说 `pool_override` 非空时划分与校验都在覆盖池上跑，则 `M` 与 `pool` 恒相等，`pool` 冗余；若二者不同，`⊎ W_i ≠ M` 与 `opt_value(pool,…)` 会校验两个不同的池。合并或写明。 |
+| 21 | **新** | 注册表细节：`wave_reachable_opt.output_range` 引用了 `pool`，但 `variables` 只列 `M, seed, C0, T`（`entities.yaml:572-577`）；`wave_healthy`、`wave_advance_cost` 条目缺 `added`/`revised`。 |
+| 22 | **新** | 规则 9 的降级措辞与公式优先级不一致：`:34` 说"超节点预算时只检查每波非空与覆盖，返回 `DEGRADED`"，而 `:178-180` 的公式是"空波/覆盖不过 → `UNHEALTHY`，覆盖通过且跳过可达检查 → `DEGRADED`"。改为"只检查非空与覆盖：通过则 `DEGRADED`，不通过则 `UNHEALTHY`"。 |
+
+## Nice-to-Have
+
+- `end_pickup()` 在非最后一波被调用时没有定义行为（拒绝？等价于结束本局？）。`run-flow.md:33` 只在最后一波路由它。
+- `consume` 的 `NO_EATABLE` 现在只在最后一波吃空时出现；AC 19 覆盖了信号，但没有一条 AC 直接断言 `consume` 在该情形返回 `NO_EATABLE`。
+- GDD 头部 `Status: In Design` / `Last Updated: 2026-11-03` 与索引 `In Review`、文件实际修改日期不一致；全项目 GDD 都写 `In Design`，属既有约定。
+
+## Completeness
+
+`modes.workflow: standard` → 必需 6 节（Overview、Detailed Rules、Formulas、Edge Cases、Dependencies、Acceptance Criteria）**全部存在**；Formulas 为必需（本系统定义阈值、代价与波次参数）。Advisory 缺席：`## Player Fantasy`（`## Game Feel` `:257-263` 覆盖实质）、`## Tuning Knobs`（Recommended #14）。
+
+## Dependency Graph
+
+Dependencies `:217-244` 与 Interactions `:57-69` 声明的 GDD 全部存在。缺口：`胃容量`/`C0` 未进上游表（Recommended #6）。UX 文档 `design/ux/hud.md` 尚未产出，`:275` 已声明由 `/ux-design` 生成。
+
+## Registry Values
+
+`wave_healthy` 与 `wave_reachable_opt` 的两处同步**已完成**：三态 `output_range`、`DEGRADED` 表达式、`[0, opt_value(pool, C0, T)]`、上界说明、五参变量表均与 GDD 一致（`entities.yaml:567-596`）。剩余缺口：`wave_reachable_opt.variables` 缺 `pool`（Recommended #21）；`wave_size_default.referenced_by` 缺 `data-config.md`（#16）；`wave_advance_cost` 缺 `added`/`revised`（#21）。本次改动**未新增数值冲突**。
+
+## Scope Signal
+
+**Rough scope signal: L**（producer 应在 sprint planning 前复核；索引 `systems-index.md:210` 仍标 **S**）
+
+- 5 个公式；4 条上游（数据配置、菜品数值、餐局流程、腻度，另需 `BalanceData.base_capacity`）；5 条下游（HUD、结算、局外升级、首局引导、存档）。
+- 3 个 ADR 级 Open Question：随机洗牌 vs 策划编排（OQ6）、跳过的代价模型（OQ2）、多档口供给稀缺（OQ5）。
+- 5 条跨文档硬契约（`consume` / `advance` / `end_pickup` / `pool_override` / ±10%）。
+
+## Verdict: NEEDS REVISION
+
+`f7ebe00`/`74bad1a` 的方向是对的：把健康校验改成"静态饱腹 + 上界"，并同步了公式、变量表、Output Range、Example、签名与注册表——上一轮 blocking #2 的**表面部分**这次改齐了，三态枚举与注册表口径现在一致，值得肯定。但"不计腻度"只改了核心段：`:61`、`:226`、`:240`、`:283` 仍四处断言计入 `effective_satiety`/重复惩罚，`:240` 还把腻度顺序后果的责任判给本系统。同一条契约在文档内分裂成两套，实施者可以任选一套而 AC 全过。另一方面，三轴 DP 的**状态轴**这次可以承载静态模型（穷举验证：按波重置的写法 5000/5000 一致、924 个携带态、预算内），但 GDD 只写了轴、没写转移；字面实现的两种自然读法分别偏乐观（1147/5000 不符）与偏悲观（937/4000 不符），且"回合在非末波中途耗尽可免费结束"这条 Edge 会让 full+skip 写法把好划分误判 `UNHEALTHY`。两处都不需要重设计，各补一段契约即可，但必须先钉死唯一一套，否则闸门会以第三种形式再次静默失效。
+
+其余 22 条为文档同步与严格性缺口，其中 #1–#3 是 HIGH，且都落在规则 9 与 `wave_healthy` 附近，建议与 blocking 一起修。建议状态 **Needs Revision**（索引 `systems-index.md:66` 当前为 `In Review`；按并行约束未改索引、未改 GDD、未改 `entities.yaml`、未改其它 GDD）。
+
+Reviewed-Content-Hash: design/gdd/menu-waves.md 2070cb32e98733d3f873b792546fb6c7fd0083d0
+Reviewed-Content-Hash: design/registry/entities.yaml 66d713b708546a4f5beb044b8abe9f93d7fd04e1
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md ea6e49d52b2a08d72dc75c2b295cf54ba5b88279
+Reviewed-Content-Hash: design/gdd/dish-values.md 60a580b19c4b2f980cd0a33df73e8c3aa32f6d3e
+Reviewed-Content-Hash: design/gdd/data-config.md 0be338a35d8e5fa9ded4c219b29801021835938a
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md 1c8fd48bbdff0e8d24e5e436a8d801545df4da0b
+Reviewed-Content-Hash: design/gdd/stomach-capacity.md 280240fddb3258864af5f96550cc7cbfd49d42eb
+Reviewed-Content-Hash: design/gdd/time-and-turns.md 090c7e7fcd313a7c38092e9bf07cdd12b77dd34f
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 654e48d14dbf85fdbab3b923e590a4f356dd0218
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md b9b9235e9a4ad7d8739ad778e98dd147b1c72f94
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md b033f0acd34e58fa436fd583230335ee143196ae
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 1cafff5e7ad8aab8912e716d98b69cea02cbbc43
+Reviewed-Content-Hash: design/gdd/ui-flow.md 22c40c147277af09d1d3c9e3c8be149bfe0126f8
+Reviewed-Content-Hash: design/gdd/save-system.md 16b4a4a8fc45095392100202545509c7305a244f
+Reviewed-Content-Hash: design/gdd/systems-index.md b59ef2478102399659f8ae8b533c98a63a1c90b0
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
