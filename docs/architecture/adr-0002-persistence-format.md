@@ -66,7 +66,7 @@ user + agents（technical-director 授权；godot-specialist 引擎校验；编�
 - 序列化格式在「逐字节可复现」与「int64 无损」两条约束下同时成立。
 - 磁盘布局固定，且隔离文件（corrupt / deleted）的命名在 Windows 上合法。
 - 锁的获取必须是真正的原子 test-and-set，不能是「先查再写」。
-- 锁的回收有确定的判定表，覆盖「进程探测不可用」的情况。
+- 锁的回收有确定的判定表，覆盖「存活信号不可用」的每一种情况。
 - 迁移链是纯函数序列，可从版本 0 夹具测试。
 - 存档子系统拥有信封、结构校验、原子性、锁与迁移骨架；各命名空间的语义归其所有者。
 
@@ -376,7 +376,7 @@ enum FlushResult:   OK | SAVE_DEFERRED | NOT_WRITABLE | IO_ERROR
 | save-system.md（TR-save-system-007） | 确定性序列化：map 键排序、int64 无损、排除 `last_saved_at` 的逐字节复现 | 决策 §1：`sort_keys = true`、无 JSON number（故无浮点）、int64 走十进制字符串；`last_saved_at` 是唯一被排除的字段 |
 | save-system.md（规则 16 / AC 19） | `wallet` 有符号 int64，`9007199254740993` 与 `-9223372036854775808` 逐位往返 | 决策 §1：整数以十进制字符串传输，完全绕开 Godot JSON 的 `float` 解析 |
 | save-system.md（规则 15） | 等级越界钳制并报告；类型错误走损坏路径 | 决策 §1 解码后的结构校验：类型不符（含 JSON number 出现在整数字段）→ `CORRUPT`；越界 → 钳制 + `warnings` |
-| save-system.md（规则 24 / AC 26） | 同一内存状态两次写出逐字节相同 | 决策 §1：无随机 id、无时间戳参与、无平台换行、键码点序排序 |
+| save-system.md（规则 24 / AC 26） | 同一内存状态两次写出逐字节相同 | 决策 §1：无随机 id、无时间戳参与、无平台换行、键按引擎的确定性顺序（`StringLikeVariantOrder`）递归排序 |
 | ui-flow.md（TR-ui-flow-005） | 锁优先的 `Blocked` 出口与 `retry_load` 路径 | 决策 §3：`lock_live = true` 时任何原因都只给「退出」「重试」；`retry_load()` 是唯一重新探测入口，且不隔离文件 |
 | records-and-milestones.md（TR-records-001） | `records` 命名空间 schema 由纪录系统定义 | 决策 §6：Save 不拥有 `records` 字段，全局「十进制字符串 → int64」解码规则让 #14 可以在不改本 ADR 的前提下设计其字段 |
 
@@ -384,7 +384,7 @@ enum FlushResult:   OK | SAVE_DEFERRED | NOT_WRITABLE | IO_ERROR
 
 - **CPU**: 编码 = 一次递归排序 + `JSON.stringify`，解码 = `JSON.parse_string` + 一遍结构校验。8.5 KiB 档在 60 fps 预算下约 < 1 ms；MVP 的 2.5 KiB 档更低。迁移链为空，无额外开销。
 - **Memory**: 峰值 = 原始文本（≤ 256 KiB）+ 解析树 + 编码产物。远低于单帧预算。读取时按 `SAVE_BYTES_MAX + 1` 截断，避免一个异常大的文件把内存吃掉。
-- **Load Time**: 目标 p95 ≤ 100 ms（AC 28），实际预期 < 10 ms；锁探测多一次 `DirAccess` 与一次 `OS.is_process_running`（微秒级）。
+- **Load Time**: 目标 p95 ≤ 100 ms（AC 28），实际预期 < 10 ms；锁判定只多一次 `make_dir` 与两次小文件读。持锁期间的心跳是每 30 s 一次 tmp+rename 的小文件写，不在载入或写入的临界路径上。
 - **Network**: 无。MVP 不接云同步。
 
 ## Migration Plan
