@@ -40,7 +40,7 @@
 #   unsupported layout, with its number.
 
 version: 1
-last_updated: ""
+last_updated: "2026-11-04"
 
 # ─── STATE OWNERSHIP ─────────────────────────────────────────────────────────
 # Who is the authoritative owner of each piece of shared game state.
@@ -53,7 +53,72 @@ last_updated: ""
 # interface: how other systems access this state (read-only property, method call,
 #   signal, shared resource, etc.) — this is the contract other ADRs depend on.
 
-state_ownership: []
+state_ownership:
+  - state: career_save_document
+    status: active
+    owner_system: save-system
+    adr: docs/architecture/adr-0002-persistence-format.md
+    interface: "SaveSystem.commit(tx) / get_namespace(owner) / load() — no caller opens a file"
+    write_access: save-system-only
+    referenced_by:
+      - docs/architecture/adr-0002-persistence-format.md
+    added: 2026-11-04
+    revised: ""
+
+  - state: ui_screen_stack
+    status: active
+    owner_system: ui-flow
+    adr: docs/architecture/adr-0003-scene-screen-architecture.md
+    interface: "UIRoot.screen_stack() (read-only Array[ScreenId], depth 0–2)"
+    write_access: ui-flow-only
+    referenced_by:
+      - docs/architecture/adr-0003-scene-screen-architecture.md
+    added: 2026-11-04
+    revised: ""
+
+  - state: ui_modal_stack
+    status: active
+    owner_system: ui-flow
+    adr: docs/architecture/adr-0003-scene-screen-architecture.md
+    interface: "UIRoot.modal_stack() (read-only Array[ModalId], depth 0–2); push_modal() / pop_modal()"
+    write_access: ui-flow-only
+    referenced_by:
+      - docs/architecture/adr-0003-scene-screen-architecture.md
+    added: 2026-11-04
+    revised: ""
+
+  - state: focus_and_hover_owner
+    status: active
+    owner_system: input
+    adr: docs/architecture/adr-0003-scene-screen-architecture.md
+    interface: "InputRouter.get_focus_owner() / get_hover_owner() (read-only Control)"
+    write_access: input-only
+    referenced_by:
+      - docs/architecture/adr-0003-scene-screen-architecture.md
+    added: 2026-11-04
+    revised: ""
+
+  - state: content_catalog
+    status: active
+    owner_system: data-config
+    adr: docs/architecture/adr-0001-content-data-format.md
+    interface: "DataConfig.get_dish / get_upgrade / get_station / get_dish_icon / get_balance (read-only records), plus get_state() and the ready/failed signals"
+    write_access: data-config-only
+    referenced_by:
+      - docs/architecture/adr-0001-content-data-format.md
+    added: 2026-11-04
+    revised: ""
+
+  - state: milestone_catalog
+    status: active
+    owner_system: records
+    adr: docs/architecture/adr-0001-content-data-format.md
+    interface: "Records.get_milestone_catalog() and milestone_progress(id) (read-only)"
+    write_access: records-only
+    referenced_by:
+      - docs/architecture/adr-0001-content-data-format.md
+    added: 2026-11-04
+    revised: ""
 
 # Example:
 #
@@ -81,7 +146,98 @@ state_ownership: []
 #
 # pattern options: signal | direct_call | event_bus | shared_resource | rpc | none
 
-interfaces: []
+interfaces:
+  - contract: save_commit
+    status: active
+    pattern: direct_call
+    producer: save-system
+    consumers:
+      - meta-upgrades
+      - unlocks-and-stations
+      - records-and-milestones
+      - ui-flow
+    adr: docs/architecture/adr-0002-persistence-format.md
+    signal_signature: "commit(tx: Dictionary) -> CommitResult"
+    referenced_by:
+      - docs/architecture/adr-0002-persistence-format.md
+    added: 2026-11-04
+    revised: ""
+
+  - contract: ui_screen_mount
+    status: active
+    pattern: direct_call
+    producer: scene-flow
+    consumers:
+      - ui-flow
+    adr: docs/architecture/adr-0003-scene-screen-architecture.md
+    signal_signature: "state_changed(from: SceneState, to: SceneState, payload: Variant)"
+    referenced_by:
+      - docs/architecture/adr-0003-scene-screen-architecture.md
+    added: 2026-11-04
+    revised: ""
+
+  - contract: ui_modal_context
+    status: active
+    pattern: direct_call
+    producer: ui-flow
+    consumers:
+      - input
+    adr: docs/architecture/adr-0003-scene-screen-architecture.md
+    signal_signature: "push_context(&\"Modal\") / pop_context() — paired; no pop after a top-level transition"
+    referenced_by:
+      - docs/architecture/adr-0003-scene-screen-architecture.md
+    added: 2026-11-04
+    revised: ""
+
+  - contract: ui_activation
+    status: active
+    pattern: direct_call
+    producer: input
+    consumers:
+      - ui-flow
+    adr: docs/architecture/adr-0003-scene-screen-architecture.md
+    signal_signature: "handle_action(action: StringName) -> bool — exactly once per press"
+    referenced_by:
+      - docs/architecture/adr-0003-scene-screen-architecture.md
+    added: 2026-11-04
+    revised: ""
+
+  - contract: content_boot_gate
+    status: active
+    pattern: signal
+    producer: data-config
+    consumers:
+      - scene-flow
+      - save
+      - records
+      - run-flow
+    adr: docs/architecture/adr-0001-content-data-format.md
+    signal_signature: "ready(); failed(error: DataError)"
+    referenced_by:
+      - docs/architecture/adr-0001-content-data-format.md
+    added: 2026-11-04
+    revised: ""
+
+  - contract: content_query
+    status: active
+    pattern: direct_call
+    producer: data-config
+    consumers:
+      - dish-values
+      - cloying-and-taste
+      - menu-waves
+      - meta-upgrades
+      - run-flow
+      - settlement
+      - unlocks-and-stations
+      - ui-flow
+      - records
+    adr: docs/architecture/adr-0001-content-data-format.md
+    signal_signature: "get_dish(id) / get_upgrade(id) / get_station(id) / get_dish_icon(id) -> DataResult; get_balance() -> BalanceData (READY only)"
+    referenced_by:
+      - docs/architecture/adr-0001-content-data-format.md
+    added: 2026-11-04
+    revised: ""
 
 # Example:
 #
@@ -110,7 +266,16 @@ interfaces: []
 # Register a budget when an ADR explicitly claims a frame time allocation.
 # The registry lets /architecture-review verify the total doesn't exceed the target.
 
-performance_budgets: []
+performance_budgets:
+  - system: save
+    status: active
+    budget_ms: 50
+    adr: docs/architecture/adr-0002-persistence-format.md
+    notes: "Career write p95 <= 50 ms and load p95 <= 100 ms at the Full Vision 8.5 KiB fixture; main-thread only, no background save thread"
+    referenced_by:
+      - docs/architecture/adr-0002-persistence-format.md
+    added: 2026-11-04
+    revised: ""
 
 # Example:
 #
@@ -141,7 +306,94 @@ performance_budgets: []
 # Register an API decision when the choice is non-obvious and other ADRs might
 # make a different choice for the same purpose without knowing this was decided.
 
-api_decisions: []
+api_decisions:
+  - purpose: save_serialization
+    status: active
+    api: "JSON stringify/parse with every integer carried as a decimal string"
+    not: "JSON numbers, FileAccess.store_var, custom binary"
+    adr: docs/architecture/adr-0002-persistence-format.md
+    reason: "Godot 4 JSON parsing returns every number as float, so int64 beyond 2^53 cannot round-trip; GDD rule 24 also requires integers in decimal"
+    referenced_by:
+      - docs/architecture/adr-0002-persistence-format.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: single_writer_file_lock
+    status: active
+    api: "atomically created lock directory (DirAccess.make_dir) + heartbeat timestamp"
+    not: "OS.is_process_running, named mutex, port lock"
+    adr: docs/architecture/adr-0002-persistence-format.md
+    reason: "OS.is_process_running only sees child processes in Godot 4.7, so it reports every independently launched instance as dead"
+    referenced_by:
+      - docs/architecture/adr-0002-persistence-format.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: atomic_file_replace
+    status: active
+    api: "temp file -> rename primary to backup -> rename temp to primary"
+    not: "writing directly to the primary path"
+    adr: docs/architecture/adr-0002-persistence-format.md
+    reason: "A crash in any window leaves either the primary, the backup or both recoverable"
+    referenced_by:
+      - docs/architecture/adr-0002-persistence-format.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: screen_mount
+    status: active
+    api: "PackedScene.instantiate() + add_child() / remove_child() + queue_free(), one PackedScene per screen"
+    not: "SceneTree.change_scene_to_file() / one mega-scene with visibility toggles"
+    adr: docs/architecture/adr-0003-scene-screen-architecture.md
+    reason: "change_scene_* unloads the whole tree (kills HUD and SceneFlow) and defers a frame"
+    referenced_by:
+      - docs/architecture/adr-0003-scene-screen-architecture.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: focus_neighbours
+    status: active
+    api: "explicit Control.focus_neighbor_* resolved to the next eligible control, applied after present()"
+    not: "geometric auto-resolution via find_next_valid_focus()"
+    adr: docs/architecture/adr-0003-scene-screen-architecture.md
+    reason: "declared screen-position order survives 150% text reflow and is headlessly assertable"
+    referenced_by:
+      - docs/architecture/adr-0003-scene-screen-architecture.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: focus_query
+    status: active
+    api: "Viewport.gui_get_focus_owner() projected by InputRouter"
+    not: "per-screen focus bookkeeping"
+    adr: docs/architecture/adr-0003-scene-screen-architecture.md
+    reason: "single authority; Godot 4.6 separates hover from keyboard focus"
+    referenced_by:
+      - docs/architecture/adr-0003-scene-screen-architecture.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: top_level_transition_visual
+    status: active
+    api: "FadeLayer ColorRect + Tween, cover-and-reveal, total <= 0.2 s, never awaited"
+    not: "holding the outgoing screen an extra frame; tween_await() in the state path"
+    adr: docs/architecture/adr-0003-scene-screen-architecture.md
+    reason: "scene-flow AC 31 forbids a frame where state changed but the old picture still shows"
+    referenced_by:
+      - docs/architecture/adr-0003-scene-screen-architecture.md
+    added: 2026-11-04
+    revised: ""
+
+  - purpose: content_record_format
+    status: active
+    api: "Typed Resource subclasses (.tres) plus explicit catalog manifest resources"
+    not: "Runtime JSON/CSV parsing"
+    adr: docs/architecture/adr-0001-content-data-format.md
+    reason: "Type safety, inspector authoring and native resource references for under 100 records; no parser to maintain."
+    referenced_by:
+      - docs/architecture/adr-0001-content-data-format.md
+    added: 2026-11-04
+    revised: ""
 
 # Example:
 #
@@ -167,7 +419,69 @@ api_decisions: []
 # Register a pattern when an ADR explicitly bans it AND other ADRs might
 # unknowingly use it (i.e., it's a tempting but wrong approach for this project).
 
-forbidden_patterns: []
+forbidden_patterns:
+  - pattern: direct_save_file_write
+    status: active
+    description: "A caller module must never open, write, rename or delete any file under user://save/. Mutation goes through SaveSystem.commit only."
+    why: "Save owns atomicity, backup rotation and the single-writer lock; a second writer bypasses all three."
+    adr: docs/architecture/adr-0002-persistence-format.md
+    added: 2026-11-04
+
+  - pattern: json_number_in_save_document
+    status: active
+    description: "Never write an integer as a JSON number in the save document. Every integer is a decimal string."
+    why: "JSON.parse_string returns all numbers as float, corrupting any value beyond 2^53 and breaking the byte-identical round-trip."
+    adr: docs/architecture/adr-0002-persistence-format.md
+    added: 2026-11-04
+
+  - pattern: change_scene_to_file_for_ui
+    status: active
+    description: "UI screens must never be swapped with SceneTree.change_scene_to_file()."
+    why: "Unloads the whole tree, destroying HUD and SceneFlow; cannot express the screen stack or same-frame rules."
+    adr: docs/architecture/adr-0003-scene-screen-architecture.md
+    added: 2026-11-04
+
+  - pattern: screen_direct_input_event_handling
+    status: active
+    description: "Screens must not listen to InputEvent or rely on BaseButton's automatic ui_accept activation."
+    why: "Activation must pass one entry point so ui_button_activated fires exactly once."
+    adr: docs/architecture/adr-0003-scene-screen-architecture.md
+    added: 2026-11-04
+
+  - pattern: deferred_screen_removal
+    status: active
+    description: "Never queue_free() a screen still in the tree; remove_child() first."
+    why: "queue_free() frees at frame end, so the outgoing screen keeps drawing for the rest of the frame."
+    adr: docs/architecture/adr-0003-scene-screen-architecture.md
+    added: 2026-11-04
+
+  - pattern: modal_scrim_only
+    status: active
+    description: "A modal must not rely on a MOUSE_FILTER_STOP scrim alone to block the screen beneath."
+    why: "The scrim stops the mouse only; Tab and ui_focus_next still reach the controls behind it."
+    adr: docs/architecture/adr-0003-scene-screen-architecture.md
+    added: 2026-11-04
+
+  - pattern: balance_literal_in_gdscript
+    status: active
+    description: "Gameplay values must come from content records; GDScript may hold only structural constants (0, 1, empty)."
+    why: "One owner per number; changing balance must not require a code edit."
+    adr: docs/architecture/adr-0001-content-data-format.md
+    added: 2026-11-04
+
+  - pattern: runtime_catalog_directory_scan
+    status: active
+    description: "Do not enumerate res://data with DirAccess at runtime; load the explicit catalog manifests."
+    why: "Exported PCKs convert text resources to binary and add .uid sidecars; scans miss or double-count records."
+    adr: docs/architecture/adr-0001-content-data-format.md
+    added: 2026-11-04
+
+  - pattern: partial_catalog_publish
+    status: active
+    description: "Never expose a subset of validated records; a single ERROR keeps the whole catalog unpublished."
+    why: "Downstream systems assume every id resolves; a partial catalog turns a data error into a runtime crash."
+    adr: docs/architecture/adr-0001-content-data-format.md
+    added: 2026-11-04
 
 # Example:
 #
