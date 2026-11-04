@@ -376,8 +376,8 @@ The `displayed_value` formula is defined as:
 - **If 新最佳 `net_profit ≤ 0`**：不显示「新纪录」印章、不显示安慰文案；若存在旧最佳，并排显示旧值，否则只显示本局。
 - **If 同一帧达成多条里程碑**：收据底部「新达成」条按 id 升序列出全部；`career_completed()` 同帧到达时，完成横幅仍只显示一次，并排在里程碑条之后。
 - **If `career_completed()` 在收据滚动中到达**：横幅等滚动结束（或跳过）后显示；若玩家在滚动结束前离开收据，横幅改为在下一次 `MainMenu` 根屏显示，且只显示一次。
-- **If `纪录与里程碑.apply_run` 返回致命错误**（`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY`）：不调用 `局外升级.apply_run_result`、不提交任何命名空间；收据仍显示 `RunResult` 的原始值，但顶部标注「结算数据异常，未入账、未记录」；不显示新纪录印章。
-- **If 钱包入账溢出（`WALLET_OVERFLOW`）**：不提交本次结算事务，纪录更新一并放弃；收据显示原始值并标注「入账失败」；不显示新纪录印章。
+- **If `纪录与里程碑.prepare_run` 返回致命错误**（`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY`）：不调用 `局外升级.prepare_run_result`、不提交任何命名空间；收据仍显示 `RunResult` 的原始值，但顶部标注「结算数据异常，未入账、未记录」；不显示新纪录印章。
+- **If 钱包入账溢出（`WALLET_OVERFLOW`）**：钱包不变，但纪录仍按本局更新；收据显示原始值并标注「入账失败」；新纪录印章按纪录结果正常显示。
 - **If 结算事务写盘失败**：钱包与纪录保留内存新值、标记 dirty、由存档在下个时点重试；收据显示「未保存」标记；不把收据内容回滚成旧值，也不重复入账。
 - **If 收据未关闭时又发生 `Run → Menu`**：不可能——一局只交付一次 `RunResult`；若发生，按同一 `run_id` 重复交付处理（忽略并记 WARNING）。
 

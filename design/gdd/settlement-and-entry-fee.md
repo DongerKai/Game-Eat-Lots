@@ -23,7 +23,7 @@
 ### Core Rules
 
 1. **职责边界**：本系统拥有入场费的套用、本局总值的求和、净利与回本判定、以及结算明细 `RunResult` 的组装。它不拥有菜品价格与饱腹（数据配置 / 菜品数值）、腻度惩罚（腻度与口味）、可吃性与回合推进（胃容量 / 时间与回合）、持久化钱包与升级（局外升级 / 存档）、最佳纪录比较（纪录与里程碑）或界面绘制（界面流程）。
-2. **入场费是数据**：入场费取自 `StationData.entry_fee`（int ≥ 0）。MVP 档口 `station_canteen.entry_fee = 85`，本 GDD 确认该值（回应菜品数值 Open Question 2）。运行期只读；结算不得写回记录。
+2. **入场费是本局冻结的数据**：入场费来自本局 `RunLog.entry_fee`（int ≥ 0），由餐局流程在开局时从 `RunConfig.entry_fee_override` 或 `StationData.entry_fee` 解析并冻结。MVP 档口 `station_canteen.entry_fee = 85`，本 GDD 确认该值（回应菜品数值 Open Question 2）。运行期只读；结算不得写回记录。
 3. **价格即得分，没有额外加成**：本局总值 `total_value` 是吃下的每道菜 `price` 之和，不计算时间奖励、容量奖励、连击倍率、口味加成或随机修正。任何玩家在局内看不到的加成都违反支柱 1——算术题必须能在局内算完。
 4. **一次交易，一张收据**：入场费在收据上是一条扣款项。叙事上它在进店前支付，机制上只在结算时发生一次；开局不做钱包扣款，也不存在"付不起就不能进"的门槛。MVP 不设钱包门槛（见 Open Questions 1）。
 5. **净利可以为负，且不被钳制**：`net_profit = total_value − entry_fee`，有符号 int64。亏损就是负值，如实显示；不改成 0，不转成下局抵扣，不静默换算成"经验"。
@@ -40,7 +40,7 @@
 16. **重复出现的菜按次计价**：同一道菜被吃两次时，收据出现两行，各自计一次 `price` 与各自的实际饱腹，不合并、不取最后一次。MVP 假设不重复抽取；本条为菜单波次的未来改动预留。
 17. **数据未就绪或记录缺失是错误，不是零分**：若数据配置不在 `Ready`、或吃菜记录中的 id 无法解析，返回结构化错误（调用者、dish id、原因），不生成部分收据、不用占位菜、不按 0 元计入。
 18. **结算不碰钱包，也不比较纪录**：它只产出 `RunResult`。净利如何进入钱包（是否允许为负、是否有下限）、是否刷新最佳纪录、是否解锁档口，分别属于「局外升级」「纪录与里程碑」「解锁与档口」。这条边界让结算可独立测试，也避免与未设计的局外系统形成环。
-19. **局内净利与本系统同一套求和**：「局内 HUD」显示的实时净利必须调用本系统公开的 `running_net` 与整数累加器，不得自行再写一份求和。两处一旦漂移，玩家在局内和结算页会看到两个不同的世界。
+19. **局内净利与本系统同一套求和**：实时累加器由「餐局流程」维护——开局以 `−entry_fee` 初始化，每次成功提交 `+price(d)`；本系统定义 `running_net` / `shortfall` 两个纯函数，并在结算时用同一公式复核。HUD 只读餐局流程的快照与这两个函数，不得自行再写一份求和。两处一旦漂移，玩家在局内和结算页会看到两个不同的世界。
 
 ### States and Transitions
 
@@ -102,7 +102,7 @@
 | 局外升级 | 下游 | `net_profit`（有符号）、`broke_even`；钱包策略由它拥有 | 硬 |
 | 纪录与里程碑 | 下游 | `net_profit`、`total_value`、`return_ratio`、`station_id`、`end_reason`；时间戳由它添加 | 硬 |
 | 存档 | 下游（间接） | 只持久化局外升级与纪录保留下来的字段；结算本身无 I/O | 软 |
-| 局内 HUD | 下游 | `running_net(k)`：局内实时总值减入场费 | 硬 |
+| 局内 HUD | 下游 | `running_net(k)` / `shortfall(k)` 的定义；实时累加器由餐局流程维护，HUD 只读 | 硬 |
 | 首局引导 | 下游 | 每行的静态 / 实际单位价值 | 软 |
 | 音效反馈 | 下游 | `settlement_started`、`broke_even`、`loss` 三个结算事件 | 软 |
 
@@ -134,13 +134,13 @@ The `total_value` formula is defined as:
 
 The `net_profit` formula is defined as:
 
-`net_profit(R) = total_value(R) − entry_fee(station_id)`
+`net_profit(R) = total_value(R) − R.entry_fee`
 
 **Variables:**
 
 | Variable | Type | Range | Source | Description |
 |---|---|---|---|---|
-| `entry_fee(station_id)` | int | 0–INT32_MAX | `StationData.entry_fee`（数据配置） | 本档口入场费；MVP `station_canteen = 85` |
+| `R.entry_fee` | int | 0–INT32_MAX | `RunLog.entry_fee` | 本局冻结入场费；MVP `station_canteen = 85`，首局可 override 为 40 |
 | `net_profit` | int64 | −entry_fee–(Σprice − entry_fee) | calculated | 本局净利，有符号；负值表示亏损 |
 
 **Output Range:** 下界 `−entry_fee`（一道没吃），上界由菜单与容量决定。**不做钳制**：负值原样返回，是否进入钱包或按 0 计入由「局外升级」决定。
@@ -167,7 +167,7 @@ The `broke_even` formula is defined as:
 
 The `return_ratio` formula is defined as:
 
-`return_ratio(R) = total_value(R) / entry_fee(station_id)`，当 `entry_fee = 0` 时无定义
+`return_ratio(R) = total_value(R) / R.entry_fee`，当 `R.entry_fee = 0` 时无定义
 
 展示值用整数基点计算，避免浮点格式化漂移：
 
@@ -312,7 +312,7 @@ The `shortfall` formula is defined as:
 - **If 回合耗尽但仍有剩余容量**：正常结算，`end_reason = TIME_EXHAUSTED`，收据显示浪费容量。这是玩家可以复盘的失败（"最后两格没用上"），不是错误。
 - **If 没有任何合法动作（所有可见菜都放不下且无法等待）**：正常结算，`end_reason = NO_EATABLE_DISH`。该结束条件由「时间与回合」/「餐局流程」判定，结算只记录原因，不自行判断。
 - **If 本局只有一道菜**：正常结算；`turns_used` 可能为 1、`wasted_capacity` 可能很大，全部如实显示。
-- **If 首局**：结算流程与数值完全不变；「首局引导」只额外使用收据里的单位价值列做讲解，不改变任何合计。
+- **If 首局**：结算按本局 `RunLog.entry_fee` 计算；首局引导可传 `entry_fee_override = 40`，此时净利/回本率用 40 而不是 85（公式不变，数值随 override 变化）。「首局引导」只额外使用收据里的单位价值列做讲解，不改变合计公式。
 - **If 收据的显示精度与实际精度不一致**：合计与净利为整数元；单位价值固定两位小数（菜品数值规则）；回本率固定一位小数的百分比。展示值不参与任何判定，判定一律用整数或未格式化的 float64。
 
 ## Dependencies
@@ -335,7 +335,7 @@ The `shortfall` formula is defined as:
 | 局外升级 | 硬 | `net_profit`（有符号）、`broke_even`；钱包策略与是否钳制由它拥有 | GDD 已写（`design/gdd/meta-upgrades.md`） |
 | 纪录与里程碑 | 硬 | `net_profit`、`total_value`、`return_ratio`、`station_id`、`end_reason`；时间戳由它添加 | GDD 已写（`design/gdd/records-and-milestones.md`） |
 | 界面流程 | 硬 | `RunResult` → 收据屏；在 `Run → Menu` 同帧接收 | GDD 已写（`design/gdd/ui-flow.md`） |
-| 局内 HUD | 硬 | `running_net(k)` 与共享的 int64 累加器；不得自行求和 | GDD 已写（`design/gdd/in-game-hud.md`） |
+| 局内 HUD | 硬 | `running_net(k)` / `shortfall(k)` 的定义；实时累加器由餐局流程维护；不得自行求和 | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 首局引导 | 软 | 每行的静态 / 实际单位价值，用于讲解与替换建议 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 | 音效反馈 | 软 | `settlement_started` / `broke_even` / `loss` 事件；结果 cue 在数字滚动结束时起播 | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 存档 | 软（间接） | 只持久化局外升级与纪录保留下来的字段；结算无 I/O | GDD 已写（`design/gdd/save-system.md`） |
@@ -411,7 +411,7 @@ The `shortfall` formula is defined as:
 
 | 文档 | 关系 | 本系统引用/依据 |
 |---|---|---|
-| `design/gdd/data-config.md` | 上游 | `StationData.entry_fee`、`DishData.price`、`Ready` 门、int64 求和规则 |
+| `design/gdd/data-config.md` | 上游 | `StationData.entry_fee`（仅作为 `RunLog.entry_fee` 的默认来源）、`DishData.price`、`Ready` 门、int64 求和规则 |
 | `design/gdd/dish-values.md` | 上游 | `price`、`unit_value`（静态）、`opt_value` 只供设计期校准，不进结算 |
 | `design/gdd/cloying-and-taste.md` | 上游 | `extra_satiety` / `effective_satiety` 的行快照；求和使用实际付出容量 |
 | `design/gdd/scene-flow.md` | 上游/下游 | `Run → Menu` 携带 `RunResult`；放弃与进入失败不结算的边界 |
@@ -472,6 +472,7 @@ The `shortfall` formula is defined as:
 28. **GIVEN** MVP 菜池、`C = 20`、`T = 10`、`entry_fee = 85`，**WHEN** 计算 `calibration_ratio`，**THEN** 结果为 `1.2235…`，落在 `[1.15, 1.35]`；**GIVEN** 见证顺序 `红烧肉 → 拍黄瓜（解腻「肉」）→ 糖醋里脊 → 其余七道`，**THEN** 合计恰好 20 格、104 元，证明 104 可达且不是静态相加得出的。
 29. **GIVEN** 静态检查运行时 API，**THEN** 没有任何导出函数求和或计算净利时绕过 `RunLog` 与 checked int64；`opt_value` 只能从 CI / 设计审查入口到达，结算无引用。
 30. **GIVEN** 20 行以内的正常 `RunLog`，**WHEN** 结算，**THEN** 单次结算 ≤ 1 ms（硬上限 5 ms）。这是逻辑预算，不是帧时间预算。
+31. **GIVEN** 首局 `RunLog.entry_fee = 40`、`eaten` 总值为 82，**WHEN** 结算，**THEN** `net_profit = +42`、`return_percent_x10 = 2050`、`broke_even = true`；把同一份 `eaten` 的 `RunLog.entry_fee` 改成 85 不产生这组值。
 
 **无法直接断言的规则**
 

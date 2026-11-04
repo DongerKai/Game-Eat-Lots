@@ -33,7 +33,7 @@
 7. **只写当前版本** — 存档只以当前 `SAVE_SCHEMA_VERSION` 写出；不写旧版本，不提供「导出为旧版」。
 8. **原子提交** — 一次写入要么完整生效，要么完全不生效。写入顺序固定为：校验 → 写临时文件 → flush → 主档改名备份 → 临时文件改名主档。任何一步失败，主档保持原样，临时文件删除，事务报告失败。
 9. **备份保留一份** — `SAVE_BACKUP_COUNT = 1`，备份保存的是**上一次成功写入**的完整主档。备份不是同步副本，它总是落后一个成功事务；这也是恢复时可能损失最近一次事务的原因，恢复报告必须如实说明。
-10. **载入结果六态** — `Fresh`（无档）、`Loaded`（当前版本、结构合法）、`Migrated`（从旧版本迁移成功）、`Recovered`（主档不可用、备份可用）、`ReadOnly`（另一实例持有存活写锁，但主档可读且版本匹配，可浏览不可写）、`Blocked`（无可用副本、版本高于游戏、迁移失败、或持锁且文件不可读）。每种结果附一份 `LoadReport`（来源版本、原因码、警告列表、是否可写）。
+10. **载入结果六态** — `Fresh`（无档）、`Loaded`（当前版本、结构合法）、`Migrated`（从旧版本迁移成功）、`Recovered`（主档不可用、备份可用）、`ReadOnly`（另一实例持有存活写锁，但主档可读，可浏览不可写、不迁移）、`Blocked`（无可用副本、版本高于游戏、迁移失败、或持锁且文件不可读）。每种结果附一份 `LoadReport`（来源版本、原因码、警告列表、是否可写）。
 11. **载入永不阻断启动** — 存档不驱动顶层状态切换。任何载入结果（包括 `Blocked`）都让 `Boot → Menu` 照常发生（场景与流程管理规则 4）；`Blocked` 时写入被禁用，由界面流程在进入 `Menu` 后显示说明。存档不静默覆盖、不自动删除任何文件。
 12. **版本高于游戏 = 拒绝** — 存档版本 `>` 当前游戏版本时，不加载、不迁移、不回退到备份、不覆盖。避免旧程序读新档丢掉新字段。只有玩家明确选择「新建生涯」时，旧档才被改名隔离。
 13. **迁移是单向链** — 旧版本逐级迁移：`v → v+1 → … → n`。每一步是纯函数，只依赖存档自身与该步定义，不读时钟、不读运行期状态、不联网。任何一步失败，载入结果为 `Blocked`，原文件保持不变。
@@ -62,7 +62,7 @@
 | `Loaded` | 主档可读、版本 = 当前、结构合法 | 是 | 直接使用 |
 | `Migrated` | 主档可读、版本 < 当前、迁移链成功 | 是 | 立即写回当前版本；若写失败则保持 dirty 并重试 |
 | `Recovered` | 主档不可用、备份可读且版本 ≤ 当前、迁移成功 | 是 | 使用备份内容，报告可能丢失的事务；下次写入重建主档 |
-| `ReadOnly` | 另一实例持锁、主档可读且版本 = 当前 | 否 | 可浏览；写入禁用；不提供「新建生涯」 |
+| `ReadOnly` | 另一实例持锁、主档可读（任意版本） | 否 | 可浏览；写入禁用；不迁移；不提供「新建生涯」 |
 | `Blocked` | 无可用副本 / 主档版本 > 当前 / 迁移失败 / 持锁且文件不可读 | 否 | 进入 `Menu` 后由界面流程说明；只有玩家确认新建生涯或退出 |
 
 **写入生命周期**：
@@ -132,13 +132,13 @@ The `load_outcome` formula is defined as:
 
 `load_outcome(P, B, V, L) =`
 
-- `ReadOnly`，若 `L = live ∧ readable(P) ∧ valid(P) ∧ version(P) = V`
+- `ReadOnly`，若 `L = live ∧ readable(P)`
 - 否则 `Blocked`，若 `L = live`
 - 否则 `Fresh`，若 `P = ∅ ∧ B = ∅`
 - 否则 `Blocked`，若 `readable(P) ∧ version(P) > V`
 - 否则 `Loaded`，若 `readable(P) ∧ valid(P) ∧ version(P) = V`
-- 否则 `Migrated`，若 `readable(P) ∧ valid(P) ∧ 1 ≤ version(P) < V ∧ migrate(P, version(P), V) ≠ error`
-- 否则 `Blocked`，若 `readable(P) ∧ valid(P) ∧ 1 ≤ version(P) < V ∧ migrate(P, version(P), V) = error`
+- 否则 `Migrated`，若 `readable(P) ∧ valid(P) ∧ version(P) < V ∧ migrate(P, version(P), V) ≠ error`
+- 否则 `Blocked`，若 `readable(P) ∧ valid(P) ∧ version(P) < V ∧ migrate(P, version(P), V) = error`
 - 否则 `Recovered`，若 `readable(B) ∧ valid(B) ∧ version(B) ≤ V ∧ migrate(B, version(B), V) ≠ error`
 - 否则 `Blocked`
 
@@ -151,14 +151,14 @@ The `load_outcome` formula is defined as:
 | `V` | int | 1–INT32_MAX | constant | 当前游戏的 `SAVE_SCHEMA_VERSION` |
 | `L` | enum | `none` / `live` / `stale` | lock file + process probe | 写锁状态；`stale` 视为 `none` |
 | `readable(x)` | bool | {true, false} | calculated | 文件存在、非空、可解析为存档结构 |
-| `valid(x)` | bool | {true, false} | calculated | 字段类型与结构合法（不做玩法校验） |
+| `valid(x)` | bool | {true, false} | calculated | 在声明的 `version(x)` 对应 schema 下结构合法（不做玩法校验） |
 | `version(x)` | int | 0–INT32_MAX | 文件 | 文件声明的 `schema_version`；0 只用于迁移测试夹具 |
 | `migrate(x, a, b)` | SaveFile \| error | 迁移成功或失败 | calculated | 见下一条公式 |
 | `load_outcome` | enum | 6 值 | calculated | `Fresh` / `Loaded` / `Migrated` / `Recovered` / `ReadOnly` / `Blocked` |
 
 **Output Range:** 恰好六个值之一，无中间态。`Blocked` 与 `ReadOnly` 时 `writable = false`，任何写入请求返回对应结果而不创建临时文件。
 
-**Example:** 主档版本 1、当前版本 1、结构合法、无锁 → `Loaded`。主档缺失、备份版本 1 合法（上次改名后崩溃）→ `Recovered`。主档版本 2、当前游戏版本 1 → `Blocked`，**不回退到版本 1 的备份**：静默使用旧备份会丢掉新版本写入的进度。另一实例持锁、主档可读且版本 = 当前 → `ReadOnly`，允许浏览但不写入。
+**Example:** 主档版本 1、当前版本 1、结构合法、无锁 → `Loaded`。主档缺失、备份版本 1 合法（上次改名后崩溃）→ `Recovered`。主档版本 2、当前游戏版本 1 → `Blocked`，**不回退到版本 1 的备份**：静默使用旧备份会丢掉新版本写入的进度。另一实例持锁、主档可读 → `ReadOnly`，允许浏览但不写入、不迁移。
 
 ### 迁移链 `migrate`
 

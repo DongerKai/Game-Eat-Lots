@@ -25,7 +25,7 @@
 ### Core Rules
 
 1. **职责边界**：本系统拥有**一局的容量上限、已用容量计数、可吃性判定**，以及容量状态在一局开始时的重置。它不拥有 `effective_satiety`（腻度与口味）、`satiety`（数据配置 / 菜品数值）、回合（时间与回合）、可见菜与焦点（菜单波次 / 局内 HUD）、结束条件（餐局流程）、等级到加成的换算（局外升级）或净利与浪费容量的展示（结算与入场费）。
-2. **一局一份容量状态**：餐局流程在每局的 `Initializing` 中**恰好调用一次** `initialize(upgrade_snapshot)`，且在 `run_started` 之前完成。`initialize` 把 `capacity_used` 置 0，并按快照算出 `capacity_total`。**同一局内**第二次调用是契约违例，进入 `Faulted`，不得静默重置——静默重置会抹掉已用容量。跨局的第二次调用是正常重开，不是违例。**局边界触发器**：本系统订阅餐局流程的 `run_ended` 与 `run_discarded`；收到任一时立即回到 `未初始化`（丢弃本局容量）。因此下一次 `initialize` 必然是新局，`initialize` 本身不需要携带 run identity。
+2. **一局一份容量状态**：餐局流程在每局的 `Initializing` 中**恰好调用一次** `initialize(upgrade_snapshot)`，且在 `run_started` 之前完成。`initialize` 把 `capacity_used` 置 0，并按快照算出 `capacity_total`。**同一局内**第二次调用是契约违例，进入 `Faulted`，不得静默重置——静默重置会抹掉已用容量。跨局的第二次调用是正常重开，不是违例。**局边界触发器**：本系统订阅餐局流程的 `run_ended`、`run_discarded` 与 `run_faulted`；收到任一时立即回到 `未初始化`（丢弃本局容量）。`initialize` 失败时不写入任何字段，账本保持/回到 `未初始化`。因此失败后的下一次 `initialize` 必然是新局，不会被误判为同局第二次；`initialize` 本身不需要携带 run identity。
 3. **容量按整格计**：容量与 `effective_satiety` 都是整数格，没有小数、没有四舍五入。`effective_satiety` 由腻度与口味给出且恒 ≥ 1；本系统只消费这个值，**不重算、不缓存、不改写**。
 4. **上限来自快照，不来自等级**：`capacity_total = C0 + capacity_bonus`。`C0` 是基础容量（数据配置提供的平衡常数，MVP = 20）。`capacity_bonus` 是局外升级在开局前算好的非负整数，本系统只相加。快照缺少 `capacity_bonus`、值为负数、`null` 或非整数时，初始化失败——**不缺省为 0、不钳制**。
 5. **可吃性是唯一闸门**：`can_fit(e) ⇔ e 是 ≥ 1 的整数 ∧ capacity_used + e ≤ capacity_total`。边界**包含等号**：恰好填满最后一格是允许的（104 元最优餐正好占满 20 / 20，改成严格小于会让校准最优不可达）。
@@ -45,11 +45,11 @@
 
 | 阶段 | 进入条件 | 允许的写 | 离开 |
 |---|---|---|---|
-| `未初始化` | 应用启动 / 收到 `run_ended` 或 `run_discarded` | 仅 `initialize` | 成功 → `就绪`；失败 → `初始化失败`（餐局流程 `Failed`） |
+| `未初始化` | 应用启动 / 收到 `run_ended`、`run_discarded` 或 `run_faulted` | 仅 `initialize` | 成功 → `就绪`；失败 → 保持 `未初始化`（餐局流程 `Failed`） |
 | `就绪` | `initialize` 成功，`used = 0` | `consume` | 本局结束 / 放弃 → `未初始化` |
 | `已满` | `used = total`（**派生判断，不是独立状态**） | 本局 `consume` 全部拒绝；仍接受下一局的 `initialize` | 同 `就绪` |
-| `初始化失败` | 输入非法 / 上限越界 / 同局重复初始化 | 无（交餐局流程进入 `Failed` 或 `Faulted`） | 下一局 `initialize` |
-| `已丢弃` | 餐局流程放弃或退出 | 无 | 下一局 `initialize` |
+| `初始化失败` | 输入非法 / 上限越界 / 同局重复初始化 | 无（交餐局流程进入 `Failed` 或 `Faulted`） | 立即回到 `未初始化`；下一次 `initialize` 是新局 |
+| `已丢弃` | 餐局流程放弃、退出或 `run_faulted` | 无 | 立即回到 `未初始化`；下一次 `initialize` 是新局 |
 
 - `已满` 与 `已丢弃` 都不是结束判定：本系统不产生 `end_reason`，也不调用结算。
 - 暂停/冻结（`frozen = true`）不改变容量，也不阻止读取；恢复后数值与冻结前逐字段一致。
@@ -59,7 +59,7 @@
 
 | 系统 | 方向 | 数据/接口 | 硬/软 |
 |---|---|---|---|
-| 餐局流程 | 上游 | `initialize(upgrade_snapshot) → capacity_total \| 结构化错误`；`can_fit(e)`；`consume(e)`；读取 `capacity_total` / `capacity_used` / `capacity_remaining`；订阅 `run_ended` / `run_discarded` 作为局边界 | 硬 |
+| 餐局流程 | 上游 | `initialize(upgrade_snapshot) → capacity_total \| 结构化错误`；`can_fit(e)`；`consume(e)`；读取 `capacity_total` / `capacity_used` / `capacity_remaining`；订阅 `run_ended` / `run_discarded` / `run_faulted` 作为局边界 | 硬 |
 | 数据配置 | 上游 | `BalanceData.base_capacity`（`C0`，MVP 20）；**不读取 `DishData`** | 硬（字段缺口见 Open Questions 1） |
 | 局外升级 | 上游（经快照） | `upgrade_snapshot.capacity_bonus: int ≥ 0`（已解析值）；购买时保证 `C0 + 最大加成 ≤ 999` | 硬（GDD 已写：`design/gdd/meta-upgrades.md`） |
 | 腻度与口味 | 间接上游 | `effective_satiety` 经餐局流程传入；本系统不直接调用、不重算 | 硬（值依赖，无调用边） |
@@ -181,7 +181,7 @@ The `capacity_bonus` formula is defined as:
 - **If `upgrade_snapshot` 缺少 `capacity_bonus`，或值为 `null` / 负数 / 非整数**：初始化失败 `CAPACITY_INIT_INVALID`；餐局流程进入 `Failed`。**不缺省为 0、不取绝对值、不四舍五入。**
 - **If `C0` 缺失、`< 1` 或不是整数**：数据配置在启动校验时失败，游戏不进入 `Ready`，本系统不会被初始化。若绕过启动校验直接注入非法 `C0`，`initialize` 返回 `CAPACITY_INIT_INVALID`。
 - **If `C0 + capacity_bonus > 999`**：`initialize` 返回 `CAPACITY_TOTAL_OUT_OF_RANGE`，进入 `Failed`，不钳制。购买侧的预防见规则 10 与 Open Question 2。
-- **If 同一局内第二次调用 `initialize`**：返回 `CAPACITY_INIT_INVALID`，餐局流程进入 `Faulted`；`capacity_used` 保持不变。静默重置会抹掉本局已用容量，因此禁止。
+- **If 同一局内第二次调用 `initialize`**（仅指第一次 `initialize` 已成功、账本为 `就绪` 的情形）：返回 `CAPACITY_INIT_INVALID`，餐局流程进入 `Faulted`；`capacity_used` 保持不变。静默重置会抹掉本局已用容量，因此禁止。**若第一次 `initialize` 就失败**，账本保持 `未初始化`，下一次 `initialize` 是新局，不触发此错误。
 - **If `consume` 被调用时 `capacity_used + e > capacity_total`**（无论调用方是否先走过 `can_fit`）：返回 `CAPACITY_OVERFLOW`，所有字段不变，餐局流程进入 `Faulted`。不钳到上限——钳制会把越界伪装成一次正常吃菜。本系统无法识别“跳过 `can_fit` 但数值仍放得下”的调用；那种调用在账本上是合法的，重复提交由 `RunLog` 不变式捕获（见下一条）。
 - **If 同一次吃菜被提交两次**：第二次仍受本系统校验；若放得下，本系统无法仅凭自身识别重复提交。该错误由餐局流程在组装 `RunLog` 时用 `capacity_used = Σ effective_satiety` 的不变式捕获，或由结算返回 `CAPACITY_MISMATCH`。本系统不引入额外的提交令牌。
 - **If 本局被放弃或退出**：收到 `run_discarded`（或正常结束的 `run_ended`）后立即回到 `未初始化`，容量状态直接丢弃，不结算、不写纪录；下一局 `initialize` 从 `used = 0` 开始。丢弃不需要额外清理调用——订阅回调即触发。
@@ -198,7 +198,7 @@ The `capacity_bonus` formula is defined as:
 
 | 系统 | 方向 | 数据/接口 | 硬/软 |
 |---|---|---|---|
-| 餐局流程 | 上游 | `initialize(upgrade_snapshot) → capacity_total \| 结构化错误`；`can_fit(e)`；`consume(e)`；读取 `capacity_total` / `capacity_used` / `capacity_remaining`；订阅 `run_ended` / `run_discarded` 作为局边界 | 硬 |
+| 餐局流程 | 上游 | `initialize(upgrade_snapshot) → capacity_total \| 结构化错误`；`can_fit(e)`；`consume(e)`；读取 `capacity_total` / `capacity_used` / `capacity_remaining`；订阅 `run_ended` / `run_discarded` / `run_faulted` 作为局边界 | 硬 |
 | 数据配置 | 上游 | `BalanceData.base_capacity`（`C0`，MVP 20）；不读 `DishData` | 硬（GDD 已写：`design/gdd/data-config.md`） |
 | 局外升级 | 上游（经快照） | `upgrade_snapshot.capacity_bonus: int ≥ 0`；购买时保证 `C0 + 最大加成 ≤ 999` | 硬（GDD 已写：`design/gdd/meta-upgrades.md`） |
 | 腻度与口味 | 间接上游 | `effective_satiety` 由餐局流程在吃下前取得并传入；本系统不直接调用、不重算 | 硬（值依赖，无调用边） |
@@ -302,6 +302,7 @@ The `capacity_bonus` formula is defined as:
 23. **GIVEN** 同一组输入（`C0`、`capacity_bonus`、吃菜序列）执行两次，**WHEN** 比较，**THEN** `capacity_total`、`capacity_used` 与每次 `can_fit` / `consume` 的返回码逐项相同。
 24. **GIVEN** 本局在 `capacity_used = 12` 时被放弃，**WHEN** 下一局 `initialize`，**THEN** `capacity_used = 0`，且放弃的那一局不产生 `RunResult`、不影响下一局。
 25. **GIVEN** 在 `initialize` 之前读取 `capacity_total` / `capacity_used` / `capacity_remaining`，**WHEN** 读取，**THEN** 返回 `0` 并各记一条 ERROR（正常流程不会发生）。
+26. **GIVEN** 一次 `initialize` 因非法 `capacity_bonus` 失败、餐局流程进入 `Failed` / `Faulted`，**WHEN** 下一局以合法快照调用 `initialize`，**THEN** 初始化成功（`capacity_used = 0`），不被判为同局第二次。
 
 > 夹具 3、4、10、15 需要直接注入非法快照与非法 `e`；夹具 21 需要空菜单。不得为通过测试修改 12 道菜或 `UpgradeData` 的真实数值。
 

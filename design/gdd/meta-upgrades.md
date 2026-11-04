@@ -34,7 +34,7 @@
 
 5. **一局只入账一次** — 结算保证同一 `run_id` 只产出一份 `RunResult`；本系统再以会话内的 `last_applied_run_id` 兜底：同一 `run_id` 的第二次 `apply_run_result` 被拒绝为 `ALREADY_APPLIED`，钱包不变。`run_id` 是会话级的（餐局流程），因此该去重不跨会话、不写档；见 Open Question 8。
 
-6. **入账先于收据显示** — 界面流程在收到 `RunResult` 后、绘制收据前调用 `apply_run_result`。顺序：内存应用 → `commit` → 收据显示「+N，余额 X」。写盘失败时**保留内存中的新值**、请求存档把 `progression` 标记为 dirty（需在存档 GDD 补一条规则，见待回改）、返回 `APPLIED_UNSAVED`，收据照常显示并带「未保存」标记，下一次 `flush`/成功提交时重试。理由：玩家已经打完这一局，因为磁盘故障没收收益比显示「未保存」更糟；这与存档对纪录类更新使用 `mark_dirty` 的策略一致。
+6. **入账先于收据显示（编排者一次提交）** — 界面流程是结算提交编排者：收到 `RunResult` 后先调用本系统的 `prepare_run_result` 与纪录的 `prepare_run`，把 `progression` 与 `records` 合并为一次 `save.commit`，成功后再绘制收据。本系统只计算并保留 `progression` 新值，不自行 `commit`。写盘失败时**保留内存中的新值**、由存档标记 dirty、返回 `APPLIED_UNSAVED`，收据照常显示并带「未保存」标记，下一次 `flush`/成功提交时重试。理由：玩家已经打完这一局，因为磁盘故障没收收益比显示「未保存」更糟；这与存档对纪录类更新使用 `mark_dirty` 的策略一致。
 
 7. **购买是事务：先落盘，再确认** — 购买顺序固定为：校验 → 内存应用 → `save.commit({progression: …})` → 成功后才返回成交；写盘失败则**回滚内存**到购买前的钱包与等级，返回 `COMMIT_FAILED`，界面显示「未保存，购买未生效」。这条直接落实存档 Core Rule 17，禁止出现「界面说买了、重启后没了」。校验顺序固定为 `DATA_NOT_READY` → `NOT_WRITABLE` → `NOT_IN_MENU` → `UNKNOWN_UPGRADE` → `BUSY` → `MAX_LEVEL` → `PREREQUISITE_LOCKED` → `NO_EFFECT` → `INSUFFICIENT_FUNDS`，保证同一状态下永远返回同一个错误。
 
@@ -104,7 +104,7 @@
 | 解锁与档口 | 下游 | 读取钱包与等级作为解锁前置；`unlock_cost` 的扣款经 `spend(amount, reason, extra)`（GDD 已写：`design/gdd/unlocks-and-stations.md`） | 软 |
 | 纪录与里程碑 | 下游 | 从 `RunResult.upgrade_snapshot.levels` 冻结历史等级；排名规则不归本系统 | 软 |
 | 首局引导 | 下游 | 读取价格与可负担性，可推荐第一笔升级；不得自动购买 | 软 |
-| 音效反馈 | 下游 | `purchase_succeeded`、`purchase_failed`、`run_result_applied` 事件 | 软 |
+| 音效反馈 | 下游（可选） | 本系统发出 `purchase_succeeded` / `purchase_failed` / `run_result_applied`；音效反馈 MVP 不消费（其 GDD 明确这些事件不产生声音） | 软 |
 | 场景与流程管理 | 时序 | 只影响顶层状态：购买只在 `Menu` 生效；本系统不驱动顶层切换 | 软（编排） |
 
 **接口所有权**：本系统拥有钱包语义、价格曲线、等级语义与快照解析；存档拥有字段的持久化与事务；数据配置拥有记录 schema；下游拥有各自对修正值的消费规则。
@@ -119,7 +119,7 @@
 | `can_purchase(id)` | 升级 id | `{ok, reason}` | 只校验，不改状态；顺序见 Edge Cases |
 | `purchase(id)` | 升级 id | `PurchaseResult` | 事务；成功后磁盘已更新 |
 | `spend(amount, reason, extra)` | 金额 int64、原因枚举、额外上下文 | `SpendResult` | 通用扣款事务，用于档口解锁。与购买一样先落盘再确认；`amount < 0` 立即拒绝 |
-| `apply_run_result(result)` | `RunResult` | `ApplyResult` | 每局一次；内存 → commit → 返回 |
+| `prepare_run_result(result)` | `RunResult` | `{progression_update, status}` | 每局一次；只计算内存新值，不写盘；由结算提交编排者合并后一次 `commit` |
 | `resolve_upgrade_snapshot()` | — | `Dictionary` | 含三个已解析值 + `levels` 副本；每次返回新副本 |
 | `get_catalog()` | — | 升级视图数组 | 供升级页渲染：当前等级、当前效果、下一效果、下一价格 |
 | `progression_changed` | — | 信号 | 携带 `wallet` 与 `upgrade_levels`；钱包或等级实际变化后发一次（含 `APPLIED_UNSAVED`）；被拒绝的购买与重复入账不发 |
@@ -350,7 +350,7 @@ The `menu_vision_useful_max` formula is defined as:
 | 解锁与档口 | 软 | 读取钱包与等级作为解锁前置；`unlock_cost` 扣款经 `spend(amount, reason, extra)` | GDD 已写（`design/gdd/unlocks-and-stations.md`） |
 | 纪录与里程碑 | 软 | 从 `upgrade_snapshot.levels` 冻结历史等级 | GDD 已写（`design/gdd/records-and-milestones.md`） |
 | 首局引导 | 软 | 价格与可负担性；可推荐、不可自动购买 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
-| 音效反馈 | 软 | `purchase_succeeded` / `purchase_failed` / `run_result_applied` | GDD 已写（`design/gdd/audio-feedback.md`） |
+| 音效反馈 | 软（可选） | 本系统发出 `purchase_succeeded` / `purchase_failed` / `run_result_applied`；MVP 不消费 | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 场景与流程管理 | 软（编排） | 购买只在 `Menu`；本系统不驱动顶层状态 | GDD 已写（`design/gdd/scene-flow.md`） |
 
 **双向一致要求**：以上每个上游必须在其 Dependencies 中列出本系统，并在 Cross-References 中回指；下游必须写明「只消费快照，不重算等级」。存档已在下游表列出本系统；结算已列出；数据配置已列出。腻度与口味、菜单波次需要补上「局外升级」行并把 Open Question 标记为已回答（见下）。
@@ -441,10 +441,10 @@ The `menu_vision_useful_max` formula is defined as:
 **钱包**
 
 1. **GIVEN** 新生涯，**WHEN** 读取状态，**THEN** `wallet = 0`、`upgrade_levels` 为空表、`resolve_upgrade_snapshot()` 返回 `capacity_bonus = 0`、`cloying_resistance = 0.0`、`menu_vision = 0`。
-2. **GIVEN** `wallet = 0` 与一局 `net_profit = +19` 的 `RunResult`，**WHEN** 入账，**THEN** `wallet = 19`，`commit` 被调用一次并携带完整的新钱包值（不是增量），信号 `progression_changed` 恰好发一次。
+2. **GIVEN** `wallet = 0` 与一局 `net_profit = +19` 的 `RunResult`，**WHEN** 编排者入账，**THEN** `wallet = 19`，编排者对 `progression` 与 `records` 只调用一次 `commit`（携带完整的新钱包值，不是增量），信号 `progression_changed` 恰好发一次。
 3. **GIVEN** `wallet = 19` 与 `net_profit = −31`，**WHEN** 入账，**THEN** `wallet = −12`；**不**钳制为 0。
 4. **GIVEN** 同一 `RunResult` 连续入账两次，**WHEN** 第二次调用，**THEN** 返回 `ALREADY_APPLIED`，钱包仍为第一次的结果，`commit` 只发生一次。
-5. **GIVEN** 注入 `commit` 失败，**WHEN** 入账 `+19`，**THEN** 返回 `APPLIED_UNSAVED`，内存钱包为 19，`progression` 为 dirty；随后恢复写盘并 `flush`，磁盘上的钱包为 19。
+5. **GIVEN** 注入编排者 `commit` 失败，**WHEN** 入账 `+19`，**THEN** 返回 `APPLIED_UNSAVED`，内存钱包为 19，`progression` 为 dirty；随后恢复写盘并 `flush`，磁盘上的钱包为 19。
 6. **GIVEN** 注入 `wallet + net_profit` 溢出 int64，**WHEN** 入账，**THEN** 返回 `WALLET_OVERFLOW`，钱包保持原值，未写档。
 
 **价格**

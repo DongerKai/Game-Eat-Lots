@@ -57,15 +57,15 @@ were found.
 | 1 | 数据配置 | Core | MVP | Approved | design/gdd/data-config.md | — |
 | 2 | 输入 | Core | MVP | In Review | design/gdd/input.md | — |
 | 3 | 场景与流程管理 | Core | MVP | In Review | design/gdd/scene-flow.md | 数据配置, 输入 |
-| 4 | 存档 | Persistence | MVP | Needs Revision | design/gdd/save-system.md | 数据配置 |
+| 4 | 存档 | Persistence | MVP | In Review | design/gdd/save-system.md | 数据配置 |
 | 5 | 餐局流程 | Core | MVP | Approved | design/gdd/run-flow.md | 场景与流程管理, 数据配置, 输入 |
 | 6 | 时间与回合 | Core | MVP | Approved | design/gdd/time-and-turns.md | 餐局流程 |
-| 7 | 胃容量 | Gameplay | MVP | Needs Revision | design/gdd/stomach-capacity.md | 餐局流程, 数据配置 |
+| 7 | 胃容量 | Gameplay | MVP | In Review | design/gdd/stomach-capacity.md | 餐局流程, 数据配置 |
 | 8 | 菜品数值 | Gameplay | MVP | Approved | design/gdd/dish-values.md | 数据配置 |
-| 9 | 腻度与口味 | Gameplay | MVP | Needs Revision | design/gdd/cloying-and-taste.md | 菜品数值, 餐局流程 |
-| 10 | 菜单波次 | Gameplay | Vertical Slice | Needs Revision | design/gdd/menu-waves.md | 菜品数值, 数据配置, 餐局流程 |
-| 11 | 结算与入场费 | Economy | MVP | Needs Revision | design/gdd/settlement-and-entry-fee.md | 菜品数值, 腻度与口味, 胃容量, 时间与回合, 餐局流程 |
-| 12 | 局外升级 | Progression | MVP | Needs Revision | design/gdd/meta-upgrades.md | 结算与入场费, 存档, 数据配置 |
+| 9 | 腻度与口味 | Gameplay | MVP | In Review | design/gdd/cloying-and-taste.md | 菜品数值, 餐局流程 |
+| 10 | 菜单波次 | Gameplay | Vertical Slice | In Review | design/gdd/menu-waves.md | 菜品数值, 数据配置, 餐局流程 |
+| 11 | 结算与入场费 | Economy | MVP | In Review | design/gdd/settlement-and-entry-fee.md | 菜品数值, 腻度与口味, 胃容量, 时间与回合, 餐局流程 |
+| 12 | 局外升级 | Progression | MVP | In Review | design/gdd/meta-upgrades.md | 结算与入场费, 存档, 数据配置 |
 | 13 | 解锁与档口 | Progression | Vertical Slice | Designed | design/gdd/unlocks-and-stations.md | 局外升级, 存档, 数据配置 |
 | 14 | 纪录与里程碑 | Progression | Vertical Slice | Designed | design/gdd/records-and-milestones.md | 结算与入场费, 存档, 数据配置 |
 | 15 | 局内 HUD | UI | MVP | Designed | design/gdd/in-game-hud.md | 餐局流程, 时间与回合, 胃容量, 菜品数值, 输入, 结算与入场费, 腻度与口味, 菜单波次 |
@@ -83,7 +83,7 @@ were found.
 > 腻度面板）。`/ux-design` 需覆盖这两块，相关 story 引用 `design/ux/hud.md`。
 >
 > 菜单波次 also imposes UI requirements on 局内 HUD（波次条与 `?` 占位、下一波预览、
-> 跳过/结束取餐的确认框）。`/ux-design` 需一并覆盖。
+> 跳过/结束取餐的代价展示）。`/ux-design` 需一并覆盖。
 >
 > 结算与入场费 imposes UI requirements on a receipt-style settlement screen and on
 > the run HUD's live net profit / break-even shortfall. `/ux-design` must cover both;
