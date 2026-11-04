@@ -40,6 +40,11 @@ section — accept either heading, never rewrite one into the other.
 **Validation:** Run `/design-review [path]` after authoring any GDD.
 Run `/review-all-gdds` after completing a set of related GDDs.
 
+Post-approval edits follow the receipt rule in
+`.claude/rules/design-docs.md` § Review receipts and post-approval edits:
+substantive changes return the system to `In Review`; advisory-only changes need
+a `Re-stamp` entry in the review log.
+
 ## Quick Specs (`design/quick-specs/`)
 
 Lightweight specs for tuning changes, minor mechanics, or balance adjustments.
