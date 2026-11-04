@@ -219,3 +219,66 @@ Reviewed-Content-Hash: design/gdd/run-flow.md e1f10d21046a92cf452a81f4d6fd544367
 Reviewed-Content-Hash: design/gdd/menu-waves.md a9ed433be48d155399168a5519ae0f3c99c7d9f8
 Reviewed-Content-Hash: design/gdd/scene-flow.md e1d10bd89706bef8f4cffa93065a9206fb1f54b6
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+
+---
+
+## Review — 2026-11-04 — Verdict: APPROVED
+
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean mode — Phase 3b not run)
+Blocking items: 0 | Recommended: 9
+Prior verdict resolved: Yes — the single blocking item is resolved
+
+Summary: The Fresh-baseline sequencing now has a real hook on both sides: rule 14 requires save to call this system's `normalize()` before the first baseline write, `save-system.md:232` states the same order, AC 1 asserts the Fresh baseline carries the backfilled set, and AC 2 is now explicitly scoped to a `Loaded` career so its `persisted = []` expectation is unambiguous. With no blocking item left, the design's rule layer (derived availability, monotonic ledger, ordered validation, `INVALID_STATION_DATA` ahead of `INSUFFICIENT_FUNDS`, 41 testable ACs) stands as approved. The remaining findings are cross-document bookkeeping: `normalize()` is still missing from this GDD's own interface table, the four downstream edges remain one-sided, `records` still says "互不读写", and three stale citations/status markers persist.
+
+### Prior Blocking Items — Status
+
+1. **RESOLVED** — Fresh-career baseline sequencing. Rule 14 (`:53`) now requires save to call `normalize(∅)` before writing the first baseline and to merge the backfill into that same transaction; `save-system.md:232` independently states "写基线之前先调用解锁与档口的 `normalize()`…不写空集合基线"; AC 1 (`:450`) adds the `Fresh` case asserting the first baseline carries the backfilled `stations` / `dishes`; AC 2 (`:451`) is rewritten as a `Loaded` career so "持久化集合仍是 `[]`" is executable. The narrow residual window for old careers whose empty set was never written is acknowledged in rule 14 and the edge case (`:333`).
+
+### Findings
+
+- [RECOMMENDED] Interfaces (`:105-116`) / rule 14 (`:53`) vs `save-system.md:232`: `normalize()` is now load-bearing but absent from the "对外接口（设计级）" table, and its call form differs between the two documents (`normalize(∅)` here, `normalize()` there). Save's own AC 1 (`:360`) still asserts only "内存中解锁集为空" and never that the baseline carries the backfill. Add the interface row (input, return, whether it mutates the in-memory set, dirty semantics), align the call form, and ask the save session to extend its AC 1.
+- [RECOMMENDED] `spend` contract (`:120-131`) vs `meta-upgrades.md:84-89`, `:121`: `spend` now appears in #12's interface table, rule 2 and OQ 11, but #12 still does not state its validation order, `extra` merge, rollback or the shared in-flight `BUSY`, and its state table still names the in-flight state `Purchasing` with "只允许一笔" scoped to purchases. This GDD's dependency row (`:360`) still says "`spend` 待回写" — now stale.
+- [RECOMMENDED] 待回改 (`:376-386`) / status rows (`:358-372`): items 1, 2, 3, 5, 7 and 9 have landed — `systems-index.md:69` is `In Review` with 数据配置 in `Depends On`; the six formulas exist at `entities.yaml:1003-1087`; `data-config.md:187` and rule 7 (`:55`) exist; `save-system.md:232`, `:254`, `:271`, AC 13 (`:378`) and AC 20 (`:388`) are updated; `records-and-milestones.md:446` answers OQ 4; the UX note is at `systems-index.md:113`. Item 4 is partial (above); only item 6 (the optional `run-flow` guard) is genuinely open.
+- [RECOMMENDED] Dependencies (`:367-372`) / 双向一致要求 (`:374`): `run-flow`, `menu-waves`, `scene-flow` and `first-run-onboarding` contain zero occurrences of 解锁与档口 yet are marked `GDD 已写`. `records-and-milestones.md:304` still says 局外升级 / 解锁与档口 "互不读写", contradicting the display dependency asserted at `:95` and `:369`. `ui-flow.md:164` still says "#13，未设计" while `:443` says `GDD 已写`.
+- [RECOMMENDED] Interfaces (`:108`) / UI Requirements (`:420`): `StationView` still has no `entry_fee`, the data-config contract (`:89`, `:358`) omits it, and the catalog row must show 入场费. `ui-flow.md:161` currently reads `entry_fee` directly from 数据配置 — decide whether the row is rendered from `StationView` or from `ui-flow`'s own read.
+- [RECOMMENDED] Rule 8 (`:41`) / rule 9 (`:43`): `NOT_IN_MENU` still covers "收据未完成 / 场景切换中", but no interface supplies either flag. Name the predicate (e.g. `ui-flow.is_menu_ready()`), otherwise the guard cannot be implemented as written.
+- [RECOMMENDED] Formulas `runs_to_unlock` (`:250-273`): unchanged; the 4–8 band still divides by the previous station's optimal net profit as if every yuan went to the unlock, while upgrades draw on the same wallet (`:398`). State the zero-upgrade-spend assumption in the band. `opt_net_profit` is still not a registry entry (named as a variable at `entities.yaml:1072`, no owning entry), and `opt_value` remains defined over `(M, C, T)` (`:443-458`), not over a station.
+- [RECOMMENDED] Rule 15 (`:55`): still cites "存档规则 80"; `save-system.md` has 25 core rules. Point at save rule 18 + AC 13 (`:378`) and the records orchestrator contract (`records-and-milestones.md:120`).
+- [RECOMMENDED] Header (`:3`) / interfaces (`:91`) / dependencies (`:360`): `Status: In Design` while `systems-index.md:69` says `In Review`; `spend` is still called a "新增接口" although `meta-upgrades.md:121` lists it; "`spend` 待回写" is stale.
+
+### Nice-to-Have
+
+The prior review's six remaining nice-to-haves are unchanged: locked-station dish count (`:402` vs `:420`), `get_load_outcome()` "载入后一次确定" vs the `Unavailable → Ready` transition (`:107` / `:79`), whether `can_unlock` reports `BUSY` (`:112`), AC 38's same-frame ordering being a defensive save case rather than a reachable UI path (`:505`), the unspecified sort collation (`:57`, `:200`), and "前一个档口" being ambiguous for the third station (`:267`).
+
+### Completeness
+
+6/6 required sections present at `workflow: standard` (Overview, Detailed Design as Detailed Rules, Formulas, Edge Cases, Dependencies, Acceptance Criteria). Player Fantasy is absent as a heading (`## Game Feel` carries it) — advisory only; Tuning Knobs present.
+
+### Dependency Graph
+
+All eleven declared systems have GDDs on disk. Three upstream edges are reciprocated; four downstream edges are one-sided (finding above).
+
+### Registry Values
+
+No value conflicts. `station_available`, `effective_unlocks`, `unlock_decision`, `station_unlock_cost`, `runs_to_unlock` and `unlock_progress` reproduce the GDD's expressions; `station_canteen_entry_fee = 85`, `opt_value` at 104 (C=20/T=10) and `save_bytes_max = 262144` match. `opt_net_profit` remains unregistered.
+
+### Suggested Status
+
+`Approved` in `design/gdd/systems-index.md` (currently `In Review`). Not written by this review.
+
+Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 5aafb0674e6a0bc5bd6a370c275e95a2f01ebfa9
+Reviewed-Content-Hash: design/registry/entities.yaml f8361d463dc6172ce3c22a462bccce6d2037d35c
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/data-config.md 0be338a35d8e5fa9ded4c219b29801021835938a
+Reviewed-Content-Hash: design/gdd/save-system.md 772ed596d68eb5cbae207b7bac9a170ec55c1524
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md b9b9235e9a4ad7d8739ad778e98dd147b1c72f94
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 9fe5183795ca3d47798510a1d00a040dabe3ca61
+Reviewed-Content-Hash: design/gdd/audio-feedback.md f6ac7fbd915341f63761529b664028eec6b216c0
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 3f99e25a3d35bd4922c0717adc033569a50abafb
+Reviewed-Content-Hash: design/gdd/ui-flow.md 21482b6d00538b95af113995e613b8df29985a8a
+Reviewed-Content-Hash: design/gdd/run-flow.md ed8848ea7c41823db26e22fb7d5df5f998fc0234
+Reviewed-Content-Hash: design/gdd/menu-waves.md ce532d3265df1ed7555ba5aa46383be35bbee4a1
+Reviewed-Content-Hash: design/gdd/scene-flow.md 4efc24d198112aa612551f5b3e5bdeeac28cd52e
+Reviewed-Content-Hash: design/gdd/systems-index.md 15e0bd3d307ed09738b74dd3c099816b497b69e8
