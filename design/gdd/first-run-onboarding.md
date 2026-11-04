@@ -184,7 +184,7 @@ The `beat_next` formula is defined as:
 | `focused_dish_id` | StringName \| ⊥ | 可见菜 id / `⊥` | HUD | 当前焦点菜品 |
 | `group_count(g)` | int | 0–`cloy_cap` | 腻度与口味 | 组的当前计数 |
 
-**Output Range:** 上表覆盖的全部节点。**推进事件按输入序列号单调消费**：只接受 `input_seq > last_consumed_seq` 的事件，同一帧到达的两个事件里第二个被丢弃；`ui_accept` 的自动重复已由输入规则 5 排除。B1 的模态分支在动作提交之前消费事件，并把该事件标记为已消费，餐局流程因此看不到它。
+**Output Range:** 上表覆盖的全部节点。**推进事件按输入序列号单调消费**：只接受 `input_seq > last_consumed_seq` 的事件，同一帧到达的两个事件里第二个被丢弃；`ui_accept` 的自动重复已由输入规则 5 排除。B1 的模态分支在动作提交之前调用 `输入.consume_action(ui_accept)` 取走本帧的确认；餐局流程随后轮询同一个动作得到 `false`，因此看不到它。
 
 **Example:** B1 中玩家把鼠标移到「清蒸鱼」再按确认 → `focused_dish_id = dish_steamed_fish ≠ ⊥` → 进入 `COACHING`；餐局流程没有收到这次 `ui_accept`，清蒸鱼没有被吃。
 
@@ -293,7 +293,7 @@ The `first_run_pool` 常量表（内容决策，不是运行时计算）：
 
 - **基础饱腹恰好 20 格**，与本局容量相等；两对重复组（鲜、肉）各追加 1 格，六道全吃最多要 22 格；用糖醋里脊（`酸`）把鲜组解掉一次后，最少仍需 21 格。玩家**必须且只能放弃一道**，第一局就出现一次真实取舍，而不是「全拿」。
 - **放弃最便宜的一道是最优解**：保留五道最贵的 → `20+18+16+15+13 = 82` 元；放弃其余任何一道都更低（79 / 78 / 76 / 81）。这个结论与「每格最值」不一致——最贵的海鲜锅每格最低（3.33），但容量只允许少拿一道时，价格才是得分。这正是菜品数值 Core Rule 的「价格是得分、容量是成本」。
-- **六道覆盖 1 / 2 / 3 / 4 / 6 格**，且单位价值跨度 `3.33–6.50 ≥ 1.5`，满足菜品数值的数值带要求；全部六道都是 `station_canteen.dish_pool` 的成员，不需要新增菜品或档口。
+- **六道覆盖 2 / 3 / 4 / 6 格**，且单位价值跨度 `3.33–6.50 ≥ 1.5`，满足菜品数值的数值带要求；全部六道都是 `station_canteen.dish_pool` 的成员，不需要新增菜品或档口。
 - **教学价 40，不是零**：五道最优组合 82 元、入场费 40 → 净利 `+42`、回本率 `205%`，玩家第一局结束就能买下 12 元的「加宽胃袋」，局外循环在第一局就打开。取 40 而不是 85 的理由有两条：一是 `82 − 85 = −3`，用正式入场费会让最优解也亏，玩家第一印象就是「无论怎么玩都输」；二是零入场费会让 HUD 的 `running_net` / `shortfall` / 回本率三个读数在本局退化（见 Overview），而这一局最该被看见的就是「−40 → 还差 40 → 回本」。40 同时留出了容错：吃掉 3 道（54 元）仍盈利 `+14`，仍买得起最便宜的升级；只有吃掉 ≤ 2 道才会亏。
 - **回本率偏高是刻意的**：`205%` 高于正式菜单静态最优的 `122.3%`，因为教学局的菜池只有 6 道、入场费按「保证第一次升级可负担」定，不按 `calibration_ratio` 校准。收据讲解必须写明「首局入场费是教学价 40 元，正式食堂是 85 元」，避免玩家把 205% 当成基准。
 
@@ -307,7 +307,7 @@ The `replacement_hint` formula is defined as:
 
 ```
 worst_eaten = argmin_{r ∈ RunResult.rows} r.effective_unit_value      # 并列取 dish_id 字典序最小
-skipped     = station.dish_pool \ eaten
+skipped     = run_menu \ eaten
 best_menu   = argmax_{d ∈ skipped} unit_value(d)                     # 并列取 dish_id 字典序最小
 uv_gap      = unit_value(best_menu) − worst_eaten.effective_unit_value
 ```
@@ -317,18 +317,18 @@ uv_gap      = unit_value(best_menu) − worst_eaten.effective_unit_value
 | Variable | Type | Range | Source | Description |
 |---|---|---|---|---|
 | `RunResult.rows[]` | EatenRow[] | 0–`capacity_total` 条 | 结算与入场费 | 本局吃下的每一行，含静态与实际单位价值 |
-| `station.dish_pool` | StringName[] | 1–12 项 | 数据配置 | 本档口完整菜池（首局为六道） |
-| `eaten` | StringName 集合 | ⊆ `dish_pool` | `RunResult.rows` | 本局吃过的菜 |
-| `skipped` | StringName 集合 | 0–11 项 | calculated | 本局没吃到的菜；空集时整条建议不产出 |
+| `run_menu` | StringName[] | 1–12 项 | 菜单波次 | 本局有效菜单（分区后，含 `pool_override`；首局为六道） |
+| `eaten` | StringName 集合 | ⊆ `run_menu` | `RunResult.rows` | 本局吃过的菜 |
+| `skipped` | StringName 集合 | 0–11 项 | calculated | 本局没吃到的菜；教学局不可为空 |
 | `worst_eaten` | EatenRow \| ⊥ | 行 / `⊥` | calculated | 本局每格最亏的一道；空局为 `⊥` |
 | `best_menu` | DishData \| ⊥ | 菜 / `⊥` | 菜品数值 | 本局没吃到的菜里每格最高的一道 |
 | `uv_gap` | float64 | −7 – +7 | calculated | 每格差（元/格） |
 
-**Output Range:** `uv_gap ∈ [−7, 7]`（MVP 数值带）。文案分四支：`rows = ∅` → 只给「这一局你没有吃」；`skipped = ∅` → 「这一桌你都吃了，没有可换的」；`uv_gap > 0.5` → 「没吃到的那道每格更值」；`|uv_gap| ≤ 0.5` 或 `uv_gap < −0.5` → 「你吃到的已经是最值的，选对了」。
+**Output Range:** `uv_gap ∈ [−7, 7]`（MVP 数值带）。文案分四支：`rows = ∅` → 只给「这一局你没有吃」；`skipped = ∅` → 「这一桌你都吃了，没有可换的」（防御分支：教学局六道需 ≥ 21 格 > 20，不可达）；`uv_gap > 0.5` → 「没吃到的那道每格更值」；`|uv_gap| ≤ 0.5` 或 `uv_gap < −0.5` → 「你吃到的已经是最值的，选对了」。
 
 **这是一条「每格比较」，不是增量收益式**：替换一道菜会重算整局的腻度与容量，单对差值不等于换掉后的净利差。因此文案只说「每格差」，并补一句「两道菜的格子数不同」；**本系统不声称可以等价替换，也不给出替换后的总分**。这是刻意的：给出总分等于泄露最优解（菜品数值规则 11、局内 HUD 规则 9 的同一理由）。
 
-**Example:** 本局吃了海鲜锅等五道，放弃麻婆豆腐；`skipped` 里 `冰淇淋` 的 `unit_value = 7.00` 最高 → `worst_eaten = 海鲜锅（3.33）`，`best_menu = 冰淇淋（7.00）`，`uv_gap = 3.67 > 0.5` → 收据写「海鲜锅每格 3.33 元，是这局最亏的一道；食堂里每格最高的是冰淇淋（7.00 元）——下一局先算一算再拿」。
+**Example:** 本局吃了海鲜锅等五道，放弃麻婆豆腐；`skipped = {麻婆豆腐}`，`unit_value = 6.00` 最高 → `worst_eaten = 海鲜锅（3.33）`，`best_menu = 麻婆豆腐（6.00）`，`uv_gap = 2.67 > 0.5` → 收据写「海鲜锅每格 3.33 元，是这局最亏的一道；这一桌里每格最高的是麻婆豆腐（6.00 元）——下一局先算一算再拿」。
 
 ## Edge Cases
 
@@ -390,9 +390,9 @@ uv_gap      = unit_value(best_menu) − worst_eaten.effective_unit_value
 
 **双向一致核对**：
 
-- 上游 GDD 的交互表都已有「首局引导」行，现已统一改为「GDD 已写（`design/gdd/first-run-onboarding.md`）」。
+- `run-flow.md`、`ui-flow.md` 的交互表已回指本系统；`audio-feedback.md` 没有本系统行（音效不消费首局事件）。
 - `menu-waves.md`、`cloying-and-taste.md`、`meta-upgrades.md`、`settlement-and-entry-fee.md` 已把本系统列为软下游，本文件已逐条列出接口，双向成立。
-- **契约缺口（需要在共享文件里补，不在本文件修改）**：`input.md` 的 `Blocked` 上下文只放行 `ui_pause`，与本 GDD 需要的「白名单」不一致；`run-flow.md` 的 `RunConfig` 没有 `entry_fee_override`；`menu-waves.md` 的 `initialize` 未接受 `pool_override`。三项都在 Open Questions 里给出建议落点。
+- **三项契约缺口均已关闭**：`input.md` 已有 `push_context(context, allow := [])` 与 `consume_action`；`run-flow.md` 已有 `RunConfig.entry_fee_override`；`menu-waves.md` 的 `initialize` 与健康检查已接受 `pool_override`。
 
 ## Visual/Audio Requirements
 
@@ -498,9 +498,9 @@ uv_gap      = unit_value(best_menu) − worst_eaten.effective_unit_value
 
 | # | 问题 | 建议 | 负责人 | 何时解决 |
 |---|---|---|---|---|
-| 1 | 首局教学价 40 怎么落到 `RunConfig`？现有 schema 没有 `entry_fee_override`。 | 在 `RunConfig` 增加 `entry_fee_override: int \| null`，由餐局流程解析后写入 `RunLog.entry_fee`，结算读 `RunLog.entry_fee`（`RunResult.entry_fee` 已存在，语义不变）。这落实了局外升级 Open Question 1 的建议（「首局用低费，而不是给钱包开特例」），只是把「专用低费档口」换成「同一档口的本局低费」。备选：数据配置新增专用档口，但需要六道新菜记录，并违反「每道菜只属于一个档口」的双向校验。 | 编排会话 + 餐局流程 / 结算 | 写 epics 之前 |
-| 2 | 菜单波次只读 `StationData.dish_pool`，`RunConfig.pool_override` 目前无处落地。 | 让 `initialize(...)` 接受可选 `pool_override`（餐局流程的交互表已按此签名预留），健康检查也改用覆盖后的池。 | 编排会话 + 菜单波次 | 同上 |
-| 3 | `Blocked` 上下文只放行 `ui_pause`，本系统需要推进气泡的 `ui_accept` 与导航。 | 给 `push_context` 增加可选白名单 `allow: Array[StringName]`（默认空，保持现有语义），只有首局引导传非空值。 | 编排会话 + 输入 | 同上 |
+| 1 | 首局教学价 40 怎么落到 `RunConfig`？**已回答（2026-11-04）**：`RunConfig.entry_fee_override` 已定义。 | — | 编排会话 + 餐局流程 / 结算 | 已关闭 |
+| 2 | 菜单波次只读 `StationData.dish_pool`，`RunConfig.pool_override` 目前无处落地。**已回答（2026-11-04）**：`initialize(...)` 与健康检查已接受 `pool_override`。 | — | 编排会话 + 菜单波次 | 已关闭 |
+| 3 | `Blocked` 上下文只放行 `ui_pause`。**已回答（2026-11-04）**：`push_context` 已有 `allow` 白名单，`consume_action` 解决确认键争用。 | — | 编排会话 + 输入 | 已关闭 |
 | 4 | 收据讲解由界面流程渲染还是由本系统覆盖层渲染？界面流程尚未设计。 | 本系统只交付 `FirstRunExplanation` payload，界面流程负责排版与关闭时机；本系统不假设收据的锚点。 | 界面流程 | 界面流程 GDD 完成时 |
 | 5 | 「跳过/完成」是否需要持久化，而不只是由 `runs_settled == 0` 推断？ | MVP 先用 `runs_settled == 0`：完成一局（含跳过后的那一局）自动结束首局；放弃则下次仍是首局。若试玩反馈「跳过还要再看」不可接受，再加一个 `onboarding` 命名空间。 | 界面流程 + 存档 | Vertical Slice 试玩后 |
 | 6 | 六道菜池是否应该让容量刚好卡住（本设计）还是留有余量（全都能吃）？ | 采用卡住：只有卡住才会出现一次真实取舍，教学才有对象。代价是玩家必须放弃一道，收据讲解用「装不下」而非「选错了」的口径。 | systems-designer | 试玩验证 |

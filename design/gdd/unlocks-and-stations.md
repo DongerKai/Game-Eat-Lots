@@ -50,7 +50,7 @@ Vertical Slice 加入第二个付费档口后，玩家在菜单里用钱包买�
 
 13. **存档不可写时只读** — `LoadReport.writable = false`（`Blocked`）或存档尚未载入完成时，解锁返回 `NOT_WRITABLE`；可用性查询与进度照常显示，玩家仍能进已解锁的档口。
 
-14. **回填是内存优先、写盘跟随现有写入时点** — 载入后立即计算 `effective_unlocks`（`effective_unlocks` 公式）。若它与持久化的集合不同，在内存中采用推导值并把 `unlocks` 标记为 dirty：新建生涯（`Fresh`）时随存档的首次基线一起写出；已有生涯则在下一个写入时点（结算 / 购买 / 退出 / flush，见存档规则 6）落盘。可用性不等待写盘，界面不会因为一次晚到的写盘闪回锁定态。这条规则留下一个很窄的窗口：旧档的空集合若在退出前从未写盘，而两次会话之间数据把该免费档口改为付费，下一次载入会把它当作付费档口——见 Edge Cases 的「免费档口涨价」，根治方式是新建生涯立即写基线，本设计已要求。
+14. **回填是内存优先、写盘跟随现有写入时点** — 载入后立即计算 `effective_unlocks`（`effective_unlocks` 公式）。若它与持久化的集合不同，在内存中采用推导值并把 `unlocks` 标记为 dirty：新建生涯（`Fresh`）时，存档在写首个基线之前调用本系统的 `normalize(∅)`，把回填结果并入同一基线事务，不先写空集合基线；已有生涯则在下一个写入时点（结算 / 购买 / 退出 / flush，见存档规则 6）落盘。可用性不等待写盘，界面不会因为一次晚到的写盘闪回锁定态。这条规则留下一个很窄的窗口：旧档的空集合若在退出前从未写盘，而两次会话之间数据把该免费档口改为付费，下一次载入会把它当作付费档口——见 Edge Cases 的「免费档口涨价」，根治方式是新建生涯立即写基线，本设计已要求。
 
 15. **不参与结算事务** — 一局结束不改变解锁（MVP 与 Vertical Slice 都不存在局内奖励解锁）。若未来某一局要奖励解锁，必须并入结算事务（存档规则 80 与纪录 GDD 的编排契约），不得让解锁单独写盘。**这是对纪录与里程碑 Open Question 4 的回答：完成条件在 MVP 与 Vertical Slice 只展示，不发放解锁。**
 
@@ -447,8 +447,8 @@ unlock_progress(U, S) =
 
 **载入与回填**
 
-1. **GIVEN** 解锁集合为空、数据含 `station_canteen`（`unlock_cost = 0`，12 道菜），**WHEN** 载入，**THEN** `get_load_outcome() = Backfilled`，`get_available_stations() = [station_canteen]`，`get_available_dishes("station_canteen")` 返回全部 12 个 id，且不产生错误。
-2. **GIVEN** 用例 1 的状态，**WHEN** 在任何写入时点之前查询，**THEN** 可用性与菜列表已完整，而持久化集合仍是 `[]`（证明可用性不等写盘）；**WHEN** `flush()`，**THEN** 持久化 `stations = [station_canteen]`、`dishes` 为 12 个 id，均升序无重复。
+1. **GIVEN** 解锁集合为空、数据含 `station_canteen`（`unlock_cost = 0`，12 道菜），**WHEN** 载入，**THEN** `get_load_outcome() = Backfilled`，`get_available_stations() = [station_canteen]`，`get_available_dishes("station_canteen")` 返回全部 12 个 id，且不产生错误；**GIVEN** 这是 `Fresh` 生涯，**THEN** 首个基线事务已携带回填后的 `stations` / `dishes`，不是空集合。
+2. **GIVEN** 用例 1 的状态但为 `Loaded` 旧档（已有基线），**WHEN** 在任何写入时点之前查询，**THEN** 可用性与菜列表已完整，而持久化集合仍是 `[]`（证明可用性不等写盘）；**WHEN** `flush()`，**THEN** 持久化 `stations = [station_canteen]`、`dishes` 为 12 个 id，均升序无重复。
 3. **GIVEN** 数据中所有档口 `unlock_cost > 0` 且解锁集合为空，**WHEN** 载入，**THEN** `get_load_outcome() = NoPlayableStation`，`get_available_stations()` 为空，`get_station_catalog()` 仍列出全部档口且都标记锁定，commit spy 调用 0 次。
 4. **GIVEN** `station_canteen` 免费，**WHEN** `is_station_available("station_canteen")`，**THEN** `true`；**WHEN** `is_station_available("station_nope")`，**THEN** `false`（未知 id 不抛错）。
 5. **GIVEN** `station_banquet`（`unlock_cost = 120`，12 道菜）未解锁，**WHEN** `get_available_dishes("station_banquet")`，**THEN** 返回空数组；`get_station_catalog()` 中该档口标记为锁定且 `cost = 120`。

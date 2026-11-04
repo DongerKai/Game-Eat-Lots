@@ -51,6 +51,7 @@ Godot 4.6 起鼠标焦点与键盘/手柄焦点分离，因此输入层负责分
     | `request_context(context, clear_stack := true, allow := []) -> bool` | 设置权威上下文；`clear_stack` 为真时清空临时栈 | 场景与流程管理 |
     | `push_context(context, allow := []) -> bool` | 把上下文压入临时栈，保留栈下内容；`allow` 仅在 `Blocked` 上生效 | 界面流程（`Modal`）、首局引导（`Blocked`） |
     | `pop_context() -> bool` | 弹出临时栈顶，回到压栈前的上下文 | 界面流程、首局引导 |
+    | `consume_action(action) -> bool` | 在 `Blocked` 上下文中取走本帧的一个动作；首个消费者返回 `true`，之后同一帧返回 `false` | 首局引导 |
 
     输入**不判断请求是否合理**（例如"Menu 能不能进 Run"），只校验 `context` 是否为五个已知上下文之一；未知值返回 `false`，栈与当前上下文都不变。合法性由请求方负责——这与「场景与流程管理」的"不做规则校验"是同一条边界。`push_context` 总是增加栈深并发出 `context_changed(from, to)`，包括同值压栈 `context_changed(Modal, Modal)`；`pop_context` 同样发出。只有 `request_context` 在目标上下文与当前栈顶相同且 `clear_stack = false` 时才是无信号空操作。`allow` 只对 `Blocked` 生效：`ui_pause` 始终允许；`allow` 在它之上追加其他动作（空列表即只有 `ui_pause`）。场景与流程管理在顶层切换时用 `clear_stack = true`，因此界面流程与首局引导遗留的临时上下文不会跨状态存活。
 
@@ -142,7 +143,7 @@ The `stick_engaged` formula is defined as:
 - **If 窗口失去焦点**（Alt-Tab、点击别的窗口）：输入层不生成任何动作，上下文保持不变。是否暂停由场景与流程管理决定（当前设计：**不自动暂停**——回合制没有实时压力，见 scene-flow.md）。
 - **If 手柄在局中拔出**：输入层停止接受该设备的事件，按下中的动作按释放处理，上下文保持不变。是否暂停由场景与流程管理决定（当前设计：**不自动暂停**）；重连后继续，键盘仍可操作。
 - **If 手柄在局中接入**：不改变当前状态，新设备立即开始工作。
-- **If 鼠标与键盘/手柄同时操作**：双焦点各自记录；以最近一次输入的方式决定当前绘制哪种焦点样式，任何动作都不会丢失。
+- **If 鼠标与键盘/手柄同时操作**：双焦点各自记录、同时绘制；最近一次输入决定主高亮，但不隐藏另一种焦点样式，任何动作都不会丢失。
 - **If 长按 `ui_accept` 或 `game_skip_wave`**：只触发一次，不重复。
 - **If 操作系统发出按键回显**（`event.echo == true`）：忽略，不产生第二次动作。
 - **If 弹窗打开时按 Esc**：按 `ui_cancel` 关闭弹窗，不触发暂停。
@@ -218,7 +219,7 @@ The `stick_engaged` formula is defined as:
 8. **GIVEN** F6，**WHEN** 鼠标悬停在卡片 B 后按方向下，**THEN** 悬停仍在 B、键盘焦点已移动，两套样式同时绘制；**WHEN** 移动鼠标，**THEN** 键盘焦点不变。
 9. **GIVEN** F7，**WHEN** 合成 `device=0` 的 `InputEventKey` 与 `InputEventMouseMotion`，**THEN** 按事件类型判为键盘/鼠标；**GIVEN** `device=0` 的手柄事件，**THEN** 不误判。源码搜索 `device ==` 命中 0 次。
 10. **GIVEN** F2，**WHEN** 扫描 InputMap 的写入点，**THEN** 只有中央表 1 处、8 个动作，重绑入口为 0。
-11. **GIVEN** 下游探针场景，**WHEN** 调用输入 API，**THEN** 暴露的接口恰好是：`is_action_just_pressed(action) -> bool`、`get_focus_owner() -> NodePath`、`get_hover_owner() -> NodePath`、`request_context(...)`、`push_context(...)`、`pop_context()`；静态扫描中 `InputEvent` 引用只出现在输入层。
+11. **GIVEN** 下游探针场景，**WHEN** 调用输入 API，**THEN** 暴露的接口恰好是：`is_action_just_pressed(action) -> bool`、`get_focus_owner() -> NodePath`、`get_hover_owner() -> NodePath`、`request_context(...)`、`push_context(...)`、`pop_context()`、`consume_action(...)`；静态扫描中 `InputEvent` 引用只出现在输入层。
 12. **GIVEN** F8，**WHEN** Run → Paused → Run、Run → Modal → 来源上下文，**THEN** 动作白名单与状态表一致，Blocked 上下文除 `ui_pause` 与 `allow` 追加动作外全部丢弃；**WHEN** 窗口失焦或手柄拔出，**THEN** 上下文不变、不产生任何动作；手柄拔出后键盘仍能完成 `ui_accept`。
 13. **GIVEN** 方向键保持按住，**WHEN** 切换上下文再切回，**THEN** 不产生导航，必须释放后重按。
 14. **GIVEN** 同一帧按下手柄 A 与 Enter，**WHEN** 两者映射到同一动作，**THEN** 动作计数为 1。

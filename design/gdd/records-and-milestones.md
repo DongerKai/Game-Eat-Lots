@@ -243,6 +243,7 @@ The `career_complete` formula is defined as:
 | `ms_canteen_return_1000` | `RETURN_RATIO_X10` | `station_canteen` | 1000 | 是 | 食堂回本 |
 | `ms_canteen_return_1100` | `RETURN_RATIO_X10` | `station_canteen` | 1100 | 否 | 超过回本线 10% |
 | `ms_canteen_return_1200` | `RETURN_RATIO_X10` | `station_canteen` | 1200 | 否 | 接近静态最优（校准上限 1223） |
+| `ms_banquet_return_1000` | `RETURN_RATIO_X10` | `station_banquet` | 1000 | 是 | 宴会档口回本；第二个档口的必需项 |
 | `ms_runs_10` | `RUNS_SETTLED` | — | 10 | 否 | 累计 10 局 |
 | `ms_runs_25` | `RUNS_SETTLED` | — | 25 | 否 | 累计 25 局 |
 | `ms_lifetime_500` | `LIFETIME_NET_PROFIT` | — | 500 | 否 | 终身净利 500 |
@@ -288,13 +289,13 @@ The `career_complete` formula is defined as:
 |---|---|---|---|
 | 结算与入场费 | 硬 | 一份 `RunResult`：`run_id`、`station_id`、`end_reason`、`entry_fee`、`total_value`、`net_profit`、`return_ratio` / `return_percent_x10`、`upgrade_snapshot`；每局恰好一次 | GDD 已写（`design/gdd/settlement-and-entry-fee.md`） |
 | 存档 | 硬 | `records` 命名空间的读写；`commit` / `mark_dirty`；`LoadReport.warnings`；载入前提是数据 `Ready` 之后 | GDD 已写（`design/gdd/save-system.md`） |
-| 数据配置 | 硬 | 里程碑目录 `MilestoneData`（id、指标、档口过滤器、阈值、完成必需）；`get_station(id)` → `display_name`、是否存在；前提 `Ready` | GDD 已写，**需扩展第四类记录**（见下） |
+| 数据配置 | 硬 | `get_station(id)` → `display_name`、是否存在；前提 `Ready`。里程碑目录由本系统自带的只读加载器提供，不进入数据配置 schema（OQ2 已定） | GDD 已写（`design/gdd/data-config.md`） |
 
 **下游依赖方：**
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 界面流程 | 硬（UI） | 只读 `RecordsSnapshot` 与 `milestone_progress`；纪录页、里程碑列表、完成横幅；收据屏「新纪录」标记 | GDD 已写（`design/gdd/ui-flow.md`） |
+| 界面流程 | 硬（UI） | 只读 `RecordsSnapshot`、`get_milestone_catalog()`（名称/条件文案/阈值）与 `milestone_progress`；纪录页、里程碑列表、完成横幅；收据屏「新纪录」标记 | GDD 已写（`design/gdd/ui-flow.md`） |
 | 音效反馈 | 软 | `record_broken`、`milestone_earned`、`career_completed` | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 在线挑战 | 软（未来） | 只读展示；不得信任本地纪录作为排行榜数据 | GDD 未写 |
 
@@ -308,9 +309,9 @@ The `career_complete` formula is defined as:
 
 - `settlement-and-entry-fee.md`：下游表「纪录与里程碑」状态改为「GDD 已写」；Open Question 3（按哪个指标排名）由本 GDD 回答：**按净利排名**，同时冻结总值、回本率、入场费与升级快照。
 - `save-system.md`：下游表「纪录与里程碑」状态改为「GDD 已写」；Open Question 7（是否要逐局历史）由本 GDD 回答：**不要**，MVP/Vertical Slice 只存聚合与每档口最佳。
-- `data-config.md`：下游表新增「纪录与里程碑」一行——本系统需要里程碑目录与档口 `display_name`。这是本 GDD 对数据配置提出的唯一结构性扩展。
+- `data-config.md`：下游表新增「纪录与里程碑」一行——本系统需要档口 `display_name`。里程碑目录不进入数据配置 schema。
 
-**对数据配置的扩展契约（provisional）**：里程碑阈值是可调的玩法数值，按编码标准必须数据驱动；数据配置是唯一数值来源（数据配置规则 1）。因此本系统要求新增第四类记录 `MilestoneData`：
+**里程碑目录的归属（OQ2 已定）**：里程碑阈值是可调的玩法数值，按编码标准必须数据驱动。数据配置当前是四类记录（Dish / Upgrade / Station / Balance），不含 `MilestoneData`；本系统自带一个只读的里程碑资源加载器，在启动序列里与数据配置一起校验，不把阈值写在代码里。`MilestoneData` 的字段如下：
 
 | 字段 | 类型 | 校验 |
 |---|---|---|
@@ -322,7 +323,7 @@ The `career_complete` formula is defined as:
 | `station_id: StringName` | 档口过滤器 | 空或已存在档口；仅单局类指标可非空 |
 | `required_for_completion: bool` | 是否通关必需 | 至少一条为 true，否则 `NO_COMPLETION_PATH` 警告 |
 
-若编排评审决定不扩展数据配置，则本系统必须自带一个只读的里程碑资源加载器，并在启动序列里与数据配置一起校验；两条路只能选一条，不能一边说「唯一数值来源」一边把里程碑阈值写在代码里。
+本系统的只读加载器与数据配置的 `Ready` 门并列：任一失败则不进入游戏。`MilestoneData` 不进入 data-config schema。
 
 **对存档的契约澄清（provisional）**：存档规则 18 规定「纪录写盘失败保留内存并重试」，规则的状态表又规定「一次结算引起的钱包、纪录与解锁变化合并为同一个事务」。两条同时成立时，混合事务的失败策略必须明确：本系统要求**结算来源的事务整体延后重试**（钱包、纪录、解锁一起留在内存），而不是钱包回滚、纪录保留——否则同一份结算结果会在两个命名空间里出现不同的事实。购买来源的事务仍按存档规则 17 回滚，两者按事务来源区分。若 `apply_run` 返回错误，该事务**不提交**（不是延后重试），其他命名空间也不得写入。
 
@@ -425,7 +426,7 @@ The `career_complete` formula is defined as:
 
 **设计期 / CI（不进入运行时）**
 
-32. **GIVEN** Vertical Slice 里程碑目录，**WHEN** 运行数据校验，**THEN** 所有 id 匹配 `^ms_[a-z0-9_]+$` 且唯一；至少一条 `required_for_completion = true`；`RUNS_SETTLED` 与 `RETURN_RATIO_X10` 的阈值 ≥ 1；没有任何 `RETURN_RATIO_X10` 里程碑绑定零入场费档口；没有生涯指标带 `station_id`；每条必需里程碑的目标档口存在（否则 `REQUIRED_MILESTONE_UNREACHABLE`）。
+32. **GIVEN** Vertical Slice 里程碑目录，**WHEN** 运行数据校验，**THEN** 所有 id 匹配 `^ms_[a-z0-9_]+$` 且唯一；至少一条 `required_for_completion = true`；`RUNS_SETTLED` 与 `RETURN_RATIO_X10` 的阈值 ≥ 1；没有任何 `RETURN_RATIO_X10` 里程碑绑定零入场费档口；没有生涯指标带 `station_id`；每条必需里程碑的目标档口存在；**每个档口至少一条 `*_return_1000` 且标记为完成必需**（否则 `REQUIRED_MILESTONE_UNREACHABLE`）。
 33. **GIVEN** 4 个档口、每个档口 1 条纪录、目录 24 条里程碑全部达成，**WHEN** 估算 `save_bytes`，**THEN** 体积不超过 `SAVE_BYTES_MAX`；新增里程碑或档口时该估算随目录一起更新。
 34. **GIVEN** 20 行以内的正常结算结果，**WHEN** 在 headless 基准中应用 1000 次（丢弃前 100 次预热，取中位数），**THEN** 单次更新中位数 ≤ 1 ms、p99 ≤ 5 ms。这是逻辑预算，不是帧时间预算。
 
@@ -440,7 +441,7 @@ The `career_complete` formula is defined as:
 | # | 问题 | 负责人 | 目标解决时间 |
 |---|---|---|---|
 | 1 | **谁拥有「结算提交编排者」？** 本系统返回新的 `records` 值，但把 `progression`、`records`、`unlocks` 合并为同一事务的调用者尚未指定。由界面流程、局外升级还是场景流程承担？该决定同时决定混合事务的失败策略（见 Dependencies 的存档契约澄清）。 | lead-programmer + technical-director | 架构阶段 |
-| 2 | **`MilestoneData` 放进数据配置，还是纪录系统自带资源加载器？** 数据配置现有四类记录（Dish / Upgrade / Station / Balance）；若选择放进数据配置，`MilestoneData` 将成为第五类记录，否则由纪录系统自带只读加载器。两条路只能选一条。 | technical-director（数据配置 + 纪录） | 架构阶段 |
+| 2 | **`MilestoneData` 放进数据配置，还是纪录系统自带资源加载器？** **已回答（2026-11-04）**：由纪录系统自带只读加载器，在启动序列校验；数据配置保持四类记录，不扩展。 | technical-director（数据配置 + 纪录） | 架构阶段 |
 | 3 | **里程碑阈值如何校准？** 当前基线的 1100 / 1200 依据食堂静态最优 1223；多档口、升级生效后可达上限会变化。需要 economy-designer 在 `/prototype` 后按每档口的 `calibration_ratio` 重算，并保证每条必需里程碑可达。 | economy-designer + prototyper | Vertical Slice 设计前 |
 | 4 | **完成条件是否应该解锁内容？** **已回答（2026-11-03）**：MVP/VS 完成条件不发放解锁；若未来发放，必须并入结算事务——见 `design/gdd/unlocks-and-stations.md`。 | game-designer（解锁与档口 + 纪录） | 解锁与档口 GDD 完成时 |
 | 5 | **是否需要跨档口的生涯最佳（而非每档口最佳）？** 当前只存每档口最佳，纪录页可派生「所有档口里的最高净利」。若界面要单独展示「生涯最高一局」，需明确跨档口比较是否公平（不同入场费下的绝对净利不可比）。 | ux-designer（界面流程 + 纪录） | 纪录页 UX 规格时 |

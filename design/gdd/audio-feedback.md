@@ -35,7 +35,7 @@
 9. **冷却**：每个 cue 有独立的最小重触发间隔（见 Formulas）；间隔内的请求记为 `dropped:cooldown`，且**不刷新**冷却起点。结果 cue 与“每局一次”的生命周期 cue 不受冷却约束，由“每 `run_id` 一次”保证不重复。吃菜提交不用冷却，改用“同一 `action_id` 每帧至多一次”的去重，避免把确认反馈丢掉。
 10. **变体轮换是确定的**：同一 cue 有多个变体时按固定顺序轮换（round-robin），不使用随机数；同一事件序列必须产生同一 cue 序列，以便回放与自动化测试。轮换游标在会话内单调前进，不因暂停、静音或丢弃而重置。
 11. **音量由四段相加**：`cue_volume_db = clamp(base_db + bus_offset_db + master_gain_db + sfx_gain_db, -80, 0)`。`base_db` 属于声音规范（数据驱动），`bus_offset_db` 属于混音路由（SFX / UI 两条总线），后两项来自玩家设置。任何 cue 不得以正增益播放。
-12. **结算结果 cue 每局一次、绝不叠加**：`settlement_started`（Lifecycle）先起播；`broke_even` 或 `loss`（Critical）在数字滚动结束时起播。结果 cue 每 `run_id` 只允许一次。同一帧同时收到两个结果语义是上游 bug；**`loss` 优先**——宁可少一次庆祝，也绝不把亏损听成回本。后到者记为 `suppressed:duplicate_outcome`。回本 cue 时长上限 0.4 秒（结算 GDD），本系统不得延长。
+12. **结算结果 cue 每局一次、绝不叠加**：`settlement_started`（Lifecycle）先起播；`broke_even` 或 `loss`（Critical）在数字滚动结束时起播。结果 cue 每 `run_id` 只允许一次。同一帧同时收到两个结果语义是上游 bug；**`loss` 优先**——宁可少一次庆祝，也绝不把亏损听成回本。后到者记为 `suppressed:duplicate_outcome`。回本 cue 时长上限 0.4 秒（结算 GDD），本系统不得延长。每张收据的多个 `number_roll_started(field, ...)` 是独立滚动；结果 cue 只在**最后一个** `number_roll_finished`（或玩家跳过全部）后起播一次。缺少配对的 `number_roll_finished` 时，等待 `duration_ms + 100 ms` 后强制清除 `pending_outcome` 并起播结果 cue。
 13. **丢弃与故障必须平静**：`run_discarded` 与 `run_faulted` 使用中性、低存在感的 cue，不得使用上扬、收银机或庆祝音色。故障使结果失效：`run_faulted` 到达时取消待播或正在播放的结果 cue。`run_discarded` 与**待播**的结果 cue 同时成立时，丢弃优先，结果 cue 记为 `suppressed:preempted`——放弃不是结算，声音不能暗示玩家拿到了结果；若结果 cue 已经在播，则让它自然结束，丢弃 cue 自己按 Lifecycle 规则排队或被丢弃，不去截断一个已经成立的结果。
 14. **暂停即静默**：进入顶层 `Paused` 时，1 帧内停止所有正在播放的 voice，并取消待播的结算结果 cue；暂停期间的所有请求记为 `dropped:paused`；恢复后**不补播**暂停期间错过的事件。恢复本身可以有一个 UI 级 cue。
 15. **静音是丢弃，不是静默播放**：主音量静音或有效增益到达 `-80 dB` 时，请求记为 `dropped:muted`，不分配 voice、不推进冷却；解除静音后不补播，下一条新请求正常发声。这样“静音”有唯一可观测的行为，测试不必区分“在放但听不见”和“没放”。
@@ -55,7 +55,7 @@
 | `sfx.run.start` | `run_started` | 进入 `Active` 同帧 | 进店、开局 | Lifecycle | — | 1 |
 | `sfx.eat.commit` | `action_committed(eat)` | 提交同帧 | 这一口落定 | Gameplay | —（同一 `action_id` 每帧一次） | 不限 |
 | `sfx.wave.skip` | `action_committed(skip_wave)` | 提交同帧 | 翻到下一波 | Gameplay | 120 ms | 不限 |
-| `sfx.meal.end` | `action_committed(end_meal)` | 提交同帧 | 主动收手 | Gameplay | 120 ms | 1 |
+| `sfx.meal.end` | `action_committed(end_pickup)` | 提交同帧 | 主动收手 | Gameplay | 120 ms | 1 |
 | `sfx.eat.reject` | HUD 的拒绝事件（#15 契约） | 拒绝同帧 | 放不下，低闷短音 | Gameplay | 240 ms | 不限 |
 | `sfx.run.end` | `run_ended` | 结束判定同帧 | 最后一响，中性 | Lifecycle | — | 1 |
 | `sfx.run.discard` | `run_discarded` | 丢弃同帧 | 平静收尾 | Lifecycle | — | 1 |
@@ -68,7 +68,10 @@
 | `sfx.flow.menu` | 顶层进入 `Menu`（非结算交接） | 状态生效同帧 | 回到菜单 | UI | 300 ms | 不限 |
 | `sfx.flow.quit` | 顶层进入 `Quit` | 状态生效同帧 | 退出 | UI | — | 1 / 会话 |
 | `sfx.ui.click` | 界面流程 `ui_button_activated`（#16 契约） | 激活同帧 | 控件按下 | UI | 30 ms | 不限 |
-| `sfx.num.tick` | HUD / 收据的数字滚动（#15 / #16 契约） | 滚动时间表 | 数字上涨的颗粒 | Gameplay | —（由滚动时间表限速） | ≤ 10 / 次滚动 |
+| `sfx.num.tick` | HUD / 收据的数字滚动（#15 / #16 契约） | 滚动时间表 | 数字上涨的颗粒 | Gameplay | —（由滚动时间表限速） | ≤ 10 / 次滚动（每次 `number_roll_started` 独立计） |
+| `sfx.record.broken` | `record_broken`（#14） | 收据打开时 | 新纪录图章 | UI | — | 1 |
+| `sfx.milestone` | `milestone_earned`（#14） | 达成同帧 | 翻页 / 勾选 | UI | 120 ms | 不限 |
+| `sfx.career.complete` | `career_completed`（#14） | 完成同帧 | 一次性收尾 | Lifecycle | — | 1 / 会话 |
 | `sfx.num.land` | 数字滚动结束 / 跳过 | 落定同帧 | 数字停住 | Gameplay | — | 1 / 次滚动 |
 
 **同帧多事件的裁定顺序**（仅用于同一帧内多个 cue 竞争同一 voice 的情形）：`run_faulted` > 结算结果（`loss` 优先于 `broke_even`）> `settlement_started` > `run_ended` > `run_discarded` > `run_started`。低优先级 cue 不因裁定顺序而跳过冷却或去重检查。
@@ -179,15 +182,15 @@ The `voice_admission` formula is defined as:
 | 4 | 该 cue 是每 `run_id` 一次的 cue 且该 `run_id` 已发过 | `DROP(dedupe)` |
 | 5 | `retrigger_ok(r.cue, t) = false` | `DROP(cooldown)` |
 | 6 | 全局空闲 voice > 0 且该优先级未达上限 | `PLAY` |
-| 7 | 存在优先级严格更低、且已起播 ≥ 50 ms 的 voice | `PLAY_STEAL(最旧者)` |
-| 8 | `r.priority = Critical` 且存在已起播 ≥ 50 ms 的 Critical voice | `PLAY_STEAL(最旧者)` |
+| 7 | `r.priority = Critical` 且存在已起播 ≥ 50 ms 的 Critical voice | `PLAY_STEAL(最旧者)` |
+| 8 | 存在优先级严格更低、且已起播 ≥ 50 ms 的 voice | `PLAY_STEAL(最旧者)` |
 | 9 | 其他 | `DROP(pool_full)` |
 
 **Variables:**
 | Variable | Type | Range | Source | Description |
 |----------|------|-------|--------|-------------|
 | `MAX_VOICES` | int | 10 | constant（固定） | 全局同时发声上限 |
-| `cap[p]` | int | Critical 1 / Lifecycle 2 / Gameplay 3 / UI 3 | constant（固定） | 每级上限；合计 9，留 1 个全局余量 |
+| `cap[p]` | int | Critical 1 / Lifecycle 3 / Gameplay 3 / UI 3 | constant（固定） | 每级上限；合计 10，等于 `MAX_VOICES` |
 | `MIN_STEAL_AGE_MS` | int | 50 ms | constant（固定） | 起播不足 50 ms 的 voice 不可被抢占，避免截断咔哒声 |
 | `p(r)` | int | 1 … 4 | 事件目录 | 请求的优先级 |
 | `voices_used(p)` | int | 0 … cap[p] | runtime | 该级正在发声的 voice 数 |
@@ -235,12 +238,12 @@ The `roll_ticks` formula is defined as:
 **Variables:**
 | Variable | Type | Range | Source | Description |
 |----------|------|-------|--------|-------------|
-| `d` | int | 0 … 600 ms | HUD / 界面流程事件 | 数字滚动时长；收据滚动上限 600 ms，局内即时变化不发滚动事件 |
+| `d` | int | 0 … 1500 ms | HUD / 界面流程事件 | 数字滚动时长；收据滚动 0.3–1.5 s（默认 0.8），局内即时变化不发滚动事件 |
 | `TICK_MS` | int | 60 ms | data file | 一个 tick 的目标间隔 |
-| `MAX_TICKS` | int | 10 | constant（固定） | 600 / 60 = 10；上限保证一次滚动不刷屏 |
+| `MAX_TICKS` | int | 10 | constant（固定） | 1500 / 150 = 10；上限保证一次滚动不刷屏 |
 
-**Output Range:** tick 数 0 … 10；间隔 0 … 60 ms。`d = 0` 或 `end = start` 时**不产生任何 tick 与 `land` cue**——局内即时变化由吃菜 cue 承载，不叠加第二层声音。
-**Example:** `d = 600` → 10 个 tick，每 60 ms 一个，t=0 … 540 ms；`d = 250` → 4 个 tick，间隔 62.5 ms（向下取整后的余数平均分配给各间隔，不使用随机抖动）；`d = 40` → 0 个 tick。
+**Output Range:** tick 数 0 … 10；间隔 60 … 150 ms。`d = 0` 或 `end = start` 时**不产生任何 tick 与 `land` cue**——局内即时变化由吃菜 cue 承载，不叠加第二层声音。
+**Example:** `d = 800` → 10 个 tick（封顶），每 80 ms 一个；`d = 1500` → 10 个 tick，每 150 ms 一个；`d = 250` → 4 个 tick；`d = 40` → 0 个 tick。
 
 ### 数字滚动音高 `number_tick_pitch`
 
@@ -349,7 +352,8 @@ The `duck_db` formula is defined as:
 |---|---|---|---|
 | 餐局流程 | 硬（事件契约）；产品意义上软 | 订阅 `run_started`、`action_committed(action, payload)`、`run_ended`、`run_faulted`、`run_discarded`；`run_settled` 只用于确认交接，不映射 cue | GDD 已写（`design/gdd/run-flow.md`，Designed） |
 | 结算与入场费 | 硬（事件契约）；产品意义上软 | 订阅 `settlement_started`、`broke_even`、`loss`；只读事件语义，不读 `RunResult`、不重算 `net_profit` / `broke_even` | GDD 已写（`design/gdd/settlement-and-entry-fee.md`，Designed） |
-| 场景与流程管理 | 硬（状态契约）；产品意义上软 | 顶层状态转移（`Boot / Error / Menu / Run / Paused / Quit`）与冻结 / 恢复通知；驱动 `Ready` / `Frozen` / `Shutdown` 与 `flow.*` cue | GDD 已写（`design/gdd/scene-flow.md`，In Review） |
+| 场景与流程管理 | 硬（状态契约）；产品意义上软 | 顶级状态转移（`Boot / Error / Menu / Run / Paused / Quit`）与 `state_changed(from, to)` 信号；驱动 `Ready` / `Frozen` / `Shutdown` 与 `flow.*` cue | GDD 已写（`design/gdd/scene-flow.md`，In Review） |
+| 纪录与里程碑 | 硬（事件契约） | 订阅 `record_broken` / `milestone_earned` / `career_completed` | GDD 已写（`design/gdd/records-and-milestones.md`） |
 | 声音规范（audio-director / sound-designer，非代码系统） | 硬（内容） | cue → 音频流与变体、`base_db`、时长、录音素材；本系统只消费映射 | **未建立**（尚无 `design/audio/` 或 sound bible；见 Open Question 2） |
 
 **下游依赖方（它们把事件交给本系统，或消费本系统的行为）：**
@@ -373,7 +377,7 @@ The `duck_db` formula is defined as:
 - **输入**：本系统不订阅任何原始输入动作。它消费的是界面流程与 HUD 发出的语义事件；把输入列为依赖会把焦点移动、悬停与“按下但未提交”混进 cue 目录。
 - **数据配置**：cue → 流的映射属于声音规范与音频数据，不进入 MVP 的菜品 / 档位 schema。若未来把 cue 表并入 `数据配置`，那是一次 schema 扩展，不是本 GDD 的既有依赖。
 - **存档**：音量、静音与“减少重复音效”属于设置，存档 GDD 已明确设置文件独立于生涯档；本系统不读写存档。
-- **局外升级 / 纪录与里程碑 / 解锁与档口**：无直接调用。局外升级虽发出 `purchase_succeeded` / `purchase_failed` / `run_result_applied`，MVP 不把它们映射为 cue；结算声音只由结算的三个语义承载。
+- **局外升级 / 解锁与档口**：无直接调用。局外升级虽发出 `purchase_succeeded` / `purchase_failed` / `run_result_applied`，MVP 不把它们映射为 cue；结算声音只由结算的三个语义承载。纪录与里程碑的 `record_broken` / `milestone_earned` / `career_completed` 已在上表映射为 `sfx.record.broken` / `sfx.milestone` / `sfx.career.complete`。
 
 **双向一致核对（不在本文件修改）：**
 
@@ -489,7 +493,7 @@ The `duck_db` formula is defined as:
 
 **优先级与并发**
 
-6. **GIVEN** 已有 8 个 voice（UI 3 + Gameplay 3 + Lifecycle 2），**WHEN** `broke_even` 到达，**THEN** `sfx.settle.broke_even` 为 `admitted`、无 `stolen_voice_id`、`active_count = 9`。
+6. **GIVEN** 已有 8 个 voice（UI 3 + Gameplay 3 + Lifecycle 2），**WHEN** `broke_even` 到达，**THEN** `sfx.settle.broke_even` 为 `deferred:pending_outcome`；**WHEN** 最后一个 `number_roll_finished` 到达，**THEN** 它才 `admitted`、无 `stolen_voice_id`、`active_count = 9`。
 7. **GIVEN** 10 个 voice 全满且最旧的低优先级 voice 已起播 ≥ 50 ms，**WHEN** 一个更高优先级请求到达，**THEN** 该请求 `admitted` 且 `stolen_voice_id` 指向最旧 voice，`active_count = 10`。
 8. **GIVEN** 一个 Critical 正在播放且已起播 30 ms，**WHEN** 第二个 Critical 到达，**THEN** `dropped:pool_full`；**WHEN** 第一个已起播 60 ms，**THEN** 第二个 `admitted`、旧 voice 被停止、`active_count = 1`。
 9. **GIVEN** 10 个 voice 全满且没有任何严格更低优先级的 voice，**WHEN** 新请求到达，**THEN** `dropped:pool_full`，无 voice 被停止。
@@ -497,7 +501,7 @@ The `duck_db` formula is defined as:
 **结算时序**
 
 10. **GIVEN** `settlement_started` 与 `broke_even` 在同一帧，**WHEN** 处理，**THEN** `sfx.settle.print` 立即 `admitted`；`sfx.settle.broke_even` 为 `deferred:pending_outcome`，**WHEN** `number_roll_finished` 到达，**THEN** 它才 `admitted`，且两条 cue 的播放区间不重叠。
-11. **GIVEN** 同一帧同时收到 `broke_even` 与 `loss`，**WHEN** 处理，**THEN** `sfx.settle.loss` 为 `admitted`，`sfx.settle.broke_even` 为 `suppressed:duplicate_outcome`，活跃 voice 数为 1。
+11. **GIVEN** `settlement_started`、同一帧的 `broke_even` 与 `loss`，**WHEN** 处理，**THEN** `sfx.settle.print` 立即 `admitted`；结果 cue 待 `number_roll_finished`；到齐后 `sfx.settle.loss` 为 `admitted`，`sfx.settle.broke_even` 为 `suppressed:duplicate_outcome`，结果活跃 voice 数为 1。
 12. **GIVEN** 结果 cue 待播，**WHEN** `run_discarded` 到达，**THEN** `sfx.run.discard` 为 `admitted`、结果 cue 为 `suppressed:preempted`，结果 cue 的 `voice_id` 为空。
 13. **GIVEN** 结果 cue 正在播放，**WHEN** `run_faulted` 到达，**THEN** 结果 voice 被停止，`sfx.run.fault` 为 `admitted`，不受 50 ms 下限限制。
 14. **GIVEN** 结果 cue 待播，**WHEN** 玩家跳过滚动（`number_roll_finished(skipped=true)`），**THEN** 结果 cue 立即 `admitted`，之后不再出现该次滚动的 `sfx.num.tick`。

@@ -163,17 +163,17 @@ HUD 的状态是 `run_state` 的投影，加上一个独立的 `frozen` 维度�
 |---|---|---|---|
 | 餐局流程 | 上游（权威） | `run_state` 只读快照（`run_id`、`station_id`、`run_state`、`frozen`、`turns_remaining`、`turns_total`、`capacity_used`、`capacity_total`、`eaten_count`、`end_reason`、`run_seed`）；信号 `run_started` / `action_committed` / `run_ended` / `run_settled` / `run_faulted` / `run_discarded`；HUD 回传 `focused_dish_id` 与跳过意图 | 硬 |
 | 时间与回合 | 上游 | 经快照读 `turns_remaining` / `turns_total`；不自行推算耗尽 | 硬 |
-| 胃容量 | 上游 | 经快照读 `capacity_used` / `capacity_total`；读 `capacity_remaining` 与 `can_fit(d)`；不写、不自建计数器 | 硬 |
+| 胃容量 | 上游 | 经快照读 `capacity_used` / `capacity_total`；读 `capacity_remaining` 与 `can_fit(d)`；**`Ending` 期间读最后一帧快照，不实时查询**（容量可能在 `run_ended` 重置）；不写、不自建计数器 | 硬 |
 | 菜品数值 | 上游 | `get_dish(id)` → 名称、图标、`price`、`satiety`；**不请求 `unit_value`** | 硬 |
 | 腻度与口味 | 上游 | `effective_satiety(d)`、`extra_satiety(d)`、`taste_tags(d)`、`cloying_group(d)`、`cleanse_target(d)`、各组件计数 | 硬 |
 | 菜单波次 | 上游 | `wave_index` / 总波数、`visible_dishes`、`preview_dishes`、`?` 槽数量；跳过/结束取餐的可用性与代价 | 硬 |
-| 结算与入场费 | 上游 | `running_net` / `shortfall`；不自行求和、不读 `entry_fee` 自行计算 | 硬 |
+| 结算与入场费 | 上游 | 经快照读 `running_net` / `shortfall`；实时累加器由餐局流程维护；不自行求和、不读 `entry_fee` 自行计算 | 硬 |
 | 输入 | 上游 | 焦点导航（`ui_up/down/left/right`）、`ui_accept`、`ui_cancel`、`game_skip_wave`；只查询，不监听原始事件、不改映射 | 硬 |
 | 场景与流程管理 | 间接上游 | `frozen` 经餐局流程快照到达；HUD 不直接读取顶层状态 | 软（间接） |
 | 数据配置 | 间接上游 | 菜品与档口记录由菜品数值/菜单波次解析后传入；HUD 不直接查询数据目录 | 软（间接） |
 | 界面流程 | 同级协调 | 屏幕归属：HUD 画局内一屏，界面流程画暂停菜单、收据、菜单、升级、设置；`frozen` 时暂停菜单在上层，`Settling` 时收据覆盖 HUD。无数据依赖 | 协调 |
-| 首局引导 | 下游（软） | 在 HUD 之上叠加讲解层；需要 HUD 提供焦点与卡片锚点，可请求 Blocked 上下文；不得隐藏回合、容量或净利数字 | 软 |
-| 音效反馈 | 下游（软） | 订阅 HUD 的焦点移动、确认、拒绝、跳过意图，用于 UI 音效；HUD 不播放音频、不拥有音效 | 软 |
+| 首局引导 | 下游（软） | 在 HUD 之上叠加讲解层；HUD 提供 `get_anchor_rect(anchor_id)` 与三个受保护矩形（回合读数、容量读数、净利/回本差额），可请求 Blocked 上下文；不得隐藏回合、容量或净利数字 | 软 |
+| 音效反馈 | 下游（软） | HUD 发 `dish_action_rejected(reason)`、`number_roll_started(field, from, to, duration_ms)`、`number_roll_finished(field, skipped: bool)`；音效订阅，HUD 不播放音频、不拥有音效 | 软 |
 
 **接口所有权**：
 
@@ -208,11 +208,11 @@ HUD 的状态是 `run_state` 的投影，加上一个独立的 `frozen` 维度�
 
 | Variable | Type | Range | Source | Description |
 |---|---|---|---|---|
-| `W` / `H` | int | ≥1280 / ≥720 | 运行时视口 | 视口宽高（px） |
+| `W` / `H` | int | ≥1280 / ≥720 | 窗口像素 | 窗口宽高（px）；HUD 使用独立层，不叠加引擎 `canvas_items` 拉伸 |
 | `1280` / `720` | int | — | constant | 参考分辨率 |
 | `1.0` / `2.0` | float | — | constant | 缩放上下限 |
 
-**Output Range:** 1.0–2.0。**Example:** 1920×1080 → `min(1.5, 1.5) = 1.5`；2560×1080 → `min(2.0, 1.5) = 1.5`（超宽不放大，额外宽度给主区）；3840×2160 → `2.0`。
+**Output Range:** 1.0–2.0。**W/H 取窗口像素**；HUD 绘制在不叠加 `canvas_items` 拉伸的独立层，1080p 下 `s = 1.5` 是最终缩放，不是 2.25×。**Example:** 1920×1080 → `min(1.5, 1.5) = 1.5`；2560×1080 → `min(2.0, 1.5) = 1.5`（超宽不放大，额外宽度给主区）；3840×2160 → `2.0`。
 
 ### 菜品卡列数 `hud_card_columns`
 
@@ -232,7 +232,7 @@ HUD 的状态是 `run_state` 的投影，加上一个独立的 `frozen` 维度�
 
 ### 回合槽位 `hud_turn_slots`
 
-`slots = min(turns_total, 12)`
+`slots = max(1, min(turns_total, 12))`
 `k = clamp(floor((B − (slots − 1) × gs) / slots), 8, 24)`
 
 **Variables:**
@@ -245,11 +245,11 @@ HUD 的状态是 `run_state` 的投影，加上一个独立的 `frozen` 维度�
 | `12` | int | — | constant | 槽位绘制上限 |
 | `8` / `24` | int | — | constant | 单槽宽上下限（px） |
 
-**Output Range:** `slots ∈ [1, 12]`，`k ∈ [8, 24]`。**Example:** `turns_total = 10`、`B = 320` → `slots = 10`、`k = clamp(floor((320 − 36) / 10), 8, 24) = clamp(28) = 24` px，总宽 `10 × 24 + 9 × 4 = 276` px。`turns_total > 12` 时不画槽位，只画一根比例条 `remaining_ratio = turns_remaining / turns_total`，数字标签始终保留。
+**Output Range:** `slots ∈ [1, 12]`，`k ∈ [8, 24]`。`turns_total = 0` 是错误态：只显示 `0 / 0`，不画槽位（`slots` 取 1 只为避免除零，不渲染）。**Example:** `turns_total = 10`、`B = 320` → `slots = 10`、`k = clamp(floor((320 − 36) / 10), 8, 24) = clamp(28) = 24` px，总宽 `10 × 24 + 9 × 4 = 276` px。`turns_total > 12` 时不画槽位，只画一根比例条 `remaining_ratio = turns_remaining / turns_total`，数字标签始终保留。
 
 ### 容量格 `hud_capacity_cells`
 
-`cells = min(capacity_total, 24)`
+`cells = max(1, min(capacity_total, 24))`
 `k = clamp(floor((C − (cells − 1) × gc) / cells), 6, 14)`
 `fill_ratio = capacity_total > 0 ? capacity_used / capacity_total : 0`
 
@@ -372,7 +372,7 @@ HUD 的状态是 `run_state` 的投影，加上一个独立的 `frozen` 维度�
 - **If 非最后一波点「跳过本波」**：立即提交，不弹确认；按钮文案已写明代价。若处于 `turns_remaining = 0` 的终局帧（餐局流程尚未切到 `Ending` 的那一帧），按钮置为不可用并写明“没有回合了”，不提交、不静默。
 - **If 跳过或吃菜被餐局流程拒绝**：HUD 不乐观更新任何数字；保持旧值，焦点详情行显示一行拒绝原因（来自 `run_flow` 的结构化错误），150 ms 后恢复常态文案。
 - **If `run_discarded` 在 `Frozen` 中到达**：直接回 `Hidden`，不播放收尾动画，不显示“本局结束”；被丢弃的局没有收据。
-- **If 首局引导压入 Blocked 上下文**：HUD 的回合、容量、净利数字仍然可见（餐局流程 UI Requirements 7）；引导层由首局引导绘制，HUD 只提供被讲解控件的位置信息（矩形还是锚点 id 见 Open Question 8），不改变自己的布局。
+- **If 首局引导压入 Blocked 上下文**：HUD 的回合、容量、净利数字仍然可见（餐局流程 UI Requirements 7）；引导层由首局引导绘制，HUD 通过 `get_anchor_rect(anchor_id)` 提供被讲解控件的屏幕矩形，不改变自己的布局。
 - **If 玩家把 HUD 不透明度降到最低**：数字文本仍保持最低对比度要求（由面板底色不透明度下限保证）；不允许出现“透明到读不清”的设置组合。
 - **If 中文长菜名超过卡片宽度**：最多两行，第二行以省略号结束；完整名称在焦点详情行显示。不从中间截断数字。
 
@@ -391,7 +391,7 @@ HUD 的状态是 `run_state` 的投影，加上一个独立的 `frozen` 维度�
 | 数据配置 | 间接上游 | 菜品/档口记录经菜品数值与菜单波次解析后到达；HUD 不直接查询 | 软 | GDD 已写 |
 | 场景与流程管理 | 间接上游 | `frozen` 经餐局流程快照到达 | 软 | GDD 已写（In Review） |
 | 界面流程 | 同级协调 | 屏幕归属与 z 序：暂停菜单、收据、菜单、升级、设置不在 HUD 内绘制 | 协调 | GDD 已写（`design/gdd/ui-flow.md`） |
-| 首局引导 | 下游（软） | 需要 HUD 提供焦点/卡片锚点与 Blocked 上下文；不得隐藏核心数字 | 软 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
+| 首局引导 | 下游（软） | `get_anchor_rect(anchor_id) -> Rect2`、`get_protected_rects() -> Rect2[3]`（回合/容量/净利）与 Blocked 上下文；不得隐藏核心数字 | 软 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 | 音效反馈 | 下游（软） | 订阅焦点移动、确认、拒绝、跳过意图 | 软 | GDD 已写（`design/gdd/audio-feedback.md`） |
 
 **双向一致性（待编排会话处理，见最终报告）**：
@@ -538,4 +538,4 @@ UX 规格必须覆盖以下内容，并以本 GDD 的 Formulas 作为数值下�
 | 5 | 超宽屏（21:9 以上）主区最大宽度定为 1600 px，剩余空间留白。是否允许把右栏移到主区右侧以外的位置，或让卡片网格扩到 6 列？ | ux-designer + ui-programmer | 垂直切片前 |
 | 6 | 手柄焦点与鼠标悬停同时存在时，“提交哪张卡”定为键盘焦点优先。若玩家用鼠标点一张卡而键盘焦点在别处，点击是否应直接提交该卡（而不是只移动悬停）？ | ux-designer + game-designer | 写 `design/ux/hud.md` 时 |
 | 7 | 当前 GDD 假定 HUD 用 Godot `canvas_items` 拉伸 + 1280×720 基准。若后续支持 Steam Deck 的 1280×800 或 16:10，安全边距与顶栏比例是否需要单独一档？ | ui-programmer | 编辑器安装完成、能实机运行后，垂直切片前 |
-| 8 | 首局引导需要在 HUD 上叠加气泡并聚焦指定控件。HUD 应提供给引导的是“控件的屏幕矩形”还是“控件锚点 id + HUD 负责定位”？前者耦合渲染细节，后者需要引导知道 HUD 布局。 | ux-designer + game-designer | 写首局引导 GDD 之前 |
+| 8 | 首局引导需要在 HUD 上叠加气泡并聚焦指定控件。**已回答（2026-11-04）**：HUD 暴露 `get_anchor_rect(anchor_id) -> Rect2` 与三个受保护矩形；引导只拿矩形，不知道 HUD 布局。 | ux-designer + game-designer | 已关闭 |

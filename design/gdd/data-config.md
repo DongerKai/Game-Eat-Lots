@@ -183,7 +183,7 @@ The `valid_record_set` formula is defined as:
 | 存档 | 硬 | 持久化 id 与等级/数值；读取时不信任存档里的数值快照 | GDD 已写（`design/gdd/save-system.md`） |
 | 时间与回合 | 硬 | `StationData.turn_budget`（新增字段，int ≥ 1）；本系统不在运行时被查询 | GDD 已写（`design/gdd/time-and-turns.md`） |
 | 胃容量 | 硬 | `get_balance()` → `base_capacity`（C0 = 20；已定义第四类记录，回答胃容量 Open Question 1）；`UpgradeData.STOMACH_CAPACITY` | GDD 已写（`design/gdd/stomach-capacity.md`） |
-| 纪录与里程碑 | 条件 | `MilestoneData` 目录（若纪录 Open Question 2 选择放入数据配置，则成为第五类记录）；`get_station(id)` → `display_name` | 待 Open Question 2 决定（GDD 已写：`design/gdd/records-and-milestones.md`） |
+| 纪录与里程碑 | 硬 | `get_station(id)` → `display_name`；里程碑目录由纪录系统自带只读加载器提供，不进入本 schema | GDD 已写（`design/gdd/records-and-milestones.md`） |
 | 解锁与档口 | 硬 | `get_station(id)` → `unlock_cost`、`dish_pool`；`get_dish(id)` 存在性；建议启动校验「至少一个 `unlock_cost = 0` 的档口」 | GDD 已写（`design/gdd/unlocks-and-stations.md`） |
 | 界面流程 | 硬（显示只读） | `StationData.display_name` / `entry_fee`、里程碑目录；只用于显示，不参与玩法判定 | GDD 已写（`design/gdd/ui-flow.md`） |
 | 局内 HUD | 软（间接） | 通过菜品数值/时间与回合取得数字，不直接读 catalog | GDD 已写（`design/gdd/in-game-hud.md`） |
