@@ -158,3 +158,85 @@ Reviewed-Content-Hash: design/gdd/run-flow.md 02d37ce06fa293e6b76cb22277a68b705e
 Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 2ef73066ae97ea1591a4ebaaeba6d4a97dcf4955
 Reviewed-Content-Hash: design/gdd/audio-feedback.md 8ad91f894b044ae735d9c55d13606f8e17453900
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: M
+Specialists: none（lean 模式，未派发专员 agent）
+Blocking items: 1 | Recommended: 6
+Summary: 第三轮（终审）复审。上一轮唯一 blocking 的字面冲突已修复：规则 2 增加了作用域例外，AC 17 补了「非 `Quit` 且 `Boot` 已就绪」前提，AC 29 同步限定，`Quit` 中的同状态请求不再同时得到两种答案。但作用域例外的措辞写成了「这两段时间内任何请求一律返回 `false`」，把 `Boot` 待校验期唯一合法的 `Boot → Quit` 也一并判为拒绝，与规则 10、第 66 行的明文例外、AC 6、AC 13 直接矛盾；AC 17/29 的第二个 GIVEN 同样未限定为同状态请求。这是同一类返回值作用域问题的最后一处，修法是纯措辞限定，无结构性返工。
+Prior verdict resolved: No —— 上一轮针对「`Quit` / `Boot` 待校验期的同状态请求」的冲突已解决，但作用域例外过度扩张，在 `Boot` 待校验期与 `Boot → Quit` 的合法性产生新的直接矛盾（见 blocking 1）。
+
+### 上一轮 blocking 复核（逐条）
+
+| 上轮 blocking | 现状 | 结论 |
+|---|---|---|
+| 幂等空操作未限定状态，与 `Quit` / `Boot` 待校验期的「一律拒绝」冲突 | 规则 2（第 28 行）已加作用域例外；AC 17（第 243 行）已加「当前状态不是 `Quit` 且 `Boot` 已完成校验」前提并补返回值；AC 29（第 255 行）已同步限定。`Quit` 中的同状态请求现在一致返回 `false` | ✓ 已解决（但作用域措辞过宽，见 blocking） |
+
+### 完整性（standard 层：5 节必需 + 有数值规则时的 Formulas）
+
+必需 6/6 齐全：Overview、Detailed Design（= Detailed Rules）、Formulas、Edge Cases、Dependencies、Acceptance Criteria。Formulas 对本系统仍为必需（两条数值规则：单帧生效、过渡 ≤ 0.2 s）。
+Advisory 缺口（不阻塞）：Player Fantasy、Tuning Knobs（Game Feel 一节实质覆盖 Player Fantasy）。
+
+### Dependency Graph
+
+| 依赖 | 方向 | 文件 | 状态 |
+|---|---|---|---|
+| 数据配置 | 上游（硬） | `design/gdd/data-config.md` | ✓ 存在，第 190 行回指本系统 |
+| 输入 | 上游（硬） | `design/gdd/input.md` | ✓ 存在，第 51/73/171 行回指本系统 |
+| 界面流程 | 下游（硬） | `design/gdd/ui-flow.md` | ✓ 存在，第 13/151 行回指本系统 |
+| 餐局流程 | 下游（硬） | `design/gdd/run-flow.md` | ✓ 存在，第 13/23 行回指本系统 |
+| 首局引导 | 下游（软） | `design/gdd/first-run-onboarding.md` | ✓ 存在，第 121/361 行回指本系统 |
+| 音效反馈 | 下游（软） | `design/gdd/audio-feedback.md` | ✓ 存在，第 13/108 行回指本系统 |
+
+双向一致性成立，无断链。存档仍被正确标记为「不属于依赖」而非遗漏。
+
+### Registry Values
+
+`design/registry/entities.yaml` 共 78 条命名条目；用全部条目名（`_` 展开为 `[_ ]`、大小写不敏感）对本 GDD 全文扫描：**命中 0 行**。没有任何条目由本系统拥有或在 `referenced_by:` 中引用本系统。无数值复述冲突。
+
+### 本轮同步复核的跨文档改动
+
+本轮 `data-config.md` 与 `input.md` 在上次评审后有改动（回执为 `CHANGED`），逐项核对对本系统的影响：
+
+- `data-config.md`：新增 `|D_bal| = 1` 校验与第 30 条 AC。`Ready` / `Failed` 两个状态名与第 190 行的回指未变，本系统读取的接口不受影响。
+- `input.md`：`Blocked` 上下文改为「`ui_pause` 始终允许，`allow` 为追加而非替换」。本系统只调用 `request_context(default_ctx, clear_stack := true)`，不使用 `allow`；签名 `request_context(context, clear_stack := true, allow := []) -> bool` 与第 51/73 行一致，兼容。本系统在 `Boot` / `Menu` / `Error` / `Paused` 均不处理 `ui_pause`（规则 7 只在 `Run`），无冲突。
+
+### Findings
+
+- [BLOCKING] 规则 2 作用域（第 28 行）与 AC 17（第 243 行）/ AC 29（第 255 行）对 `Boot` 待校验期的覆盖过宽：作用域句写「这两段时间内**任何请求**一律返回 `false`」，AC 17 第二个 GIVEN 写「当前为 `Quit` 或 `Boot` 待校验期 → 返回 `false`」，AC 29 第二个 GIVEN 把「当前为 `Quit` / `Boot` 待校验期」与「同状态带 payload」并列为 `false`——三者都没有把「目标状态等于当前状态」作为 `Boot` 分支的条件。于是 `Boot` 待校验期的 `request_transition(Quit)` 按规则 2/AC 17/AC 29 返回 `false`（拒绝），但第 66 行明文规定「从 `Boot` 发起但校验结果尚未返回时的所有请求——**唯独 `Boot → Quit` 例外**，退出在启动阶段始终合法」，规则 10 要求该退出「由应用入口转成一次 `request_transition(Quit)`」，AC 6 写「退出请求仍直接进入 `Quit`」，AC 13 写 `Boot` 中退出「无确认直接进入 `Quit`」。`request_transition` 的 `true` / `false` 就是接受 / 拒绝（规则 2、AC 31），同一请求因此在 AC 13 下必须被接受、在规则 2/AC 17/AC 29 下必须被拒绝——两条判据互斥。另有两处同源口径未同步：第 68 行「同状态请求的判定」与 Edge Case 第 137 行仍把同状态无 payload 写成无条件的「幂等空操作」，未带 `Quit` / `Boot` 待校验期例外。**修法**（纯措辞）：① 规则 2 作用域改为「`Quit` 终态：任何请求返回 `false`；`Boot` 待校验期：同状态请求返回 `false`，其余请求按第 66 行处理——`Boot → Quit` 仍合法并返回 `true`」；② AC 17 第二个 GIVEN 补「请求目标等于当前状态」，并把 `Boot → Quit` 明确排除；③ AC 29 第二个 GIVEN 同样把 `Boot` 待校验期限定为同状态请求（`Quit` 可保留「任何请求」）；④ 第 68 行与 Edge Case 第 137 行引用该作用域例外。
+- [RECOMMENDED] Open Questions 第 1 行（结算屏是否提升为独立顶层状态）与第 2 行（`RunConfig` / `RunResult` schema 归属）仍未标记已解决。前者已由 `ui-flow.md` 规则 3（`Menu → MainMenu 或 ReceiptScreen`，不新增顶层状态）回答，后者已由 `run-flow.md`「RunConfig 与 RunResult 的归属」一节回答（`RunConfig` 由界面流程组装，`RunResult` 由结算与入场费拥有）。
+- [RECOMMENDED] Formulas §过渡总时长（跨文档冲突，仍未闭合）：本 GDD 第 88/118/183 行声明 `FADE_OUT` / `FADE_IN` 由 `/ux-design` 交互规格拥有；`ui-flow.md` Open Question 2（第 617 行）写「过渡时长 `FADE_OUT` / `FADE_IN` 由场景与流程管理拥有」。本轮 `ui-flow.md` 未变（回执 `UNCHANGED`），冲突原样存在；两份 GDD 必须定一个所有者。
+- [RECOMMENDED] Edge Cases 第 134 行「餐局流程依据 `request_transition` 返回 `false` 重新发起」仍读作可立即重试，但 `Paused` 下的 `Run → Menu` 不在合法转移表内；`run-flow.md` 规则 14 已写明「保留该 `RunResult`，在回到 `Run` 顶层状态后重发；暂停期间等待，不请求」。建议本条直接指向该规则。
+- [RECOMMENDED] 调用写法仍不统一：规则 2（第 28 行）定义 `request_transition(to, payload)`（按 `(current, to)` 校验），正文与 Cross-References 多处写作 `request_transition(Menu → Run, RunConfig)`（第 76/106 行等）。建议统一并在一处给出完整签名。
+- [RECOMMENDED] AC 32（第 258 行）仍把两个独立断言（总时长 ≤ 0.20 s；关闭过渡时为 0）塞进一条，且前提「`/ux-design` 给出 FADE 值」依赖尚不存在的文档；建议拆条并将前提改为「给定任意满足 0 ≤ FADE ≤ 0.10 的取值」。
+- [RECOMMENDED] AC 9（第 235 行）「画面与暂停前一致」仍不可独立判定 pass/fail；建议改为可观测形式，如「恢复后 HUD 根节点实例 id 不变，且显示值与暂停帧相同」。
+- [NICE-TO-HAVE] Tuning Knobs 缺失（standard 层 advisory）：`TRANSITION_CAP = 0.20` 是唯一常量型可调值，补一行安全区间与影响面即可。
+- [NICE-TO-HAVE] `TRANSITION_CAP` 仍列在 Variables 表中却不出现在表达式（`transition_total = FADE_OUT + FADE_IN`），可移到「约束」下避免读者困惑。
+- [NICE-TO-HAVE] 规则 7 可补一句「`ui_pause` 仅在 `Run` / `Paused` 有意义」：`input.md` 本轮改为 `Blocked` 始终放行 `ui_pause`，`Boot`（Blocked）期间的暂停按键会到达本系统；规则 7 已限定「`Run` 中收到」，语义无冲突，但写明可免实现者误解。
+
+### 已核对且无问题的跨文档接口
+
+- `request_context(context, clear_stack := true, allow := []) -> bool`、`context_changed(from, to)`：与 `input.md` 第 51/55/171 行一致；本 GDD 只调用 `request_context(default_ctx, clear_stack := true)`，未使用 `allow`，兼容本轮 `allow` 追加语义的改动。
+- 五个默认输入上下文（Blocked / Menu / Menu / Run / Paused）：与 `input.md` 上下文能力表一致。
+- `ui_pause` 由本系统消费、`ui_accept` 由界面流程消费：与 `ui-flow.md` 规则 15/27、`input.md` 规则 2 三方一致。
+- `RunConfig` / `RunResult` / `init_failed` / `abandoned` 四个 payload：`ui-flow.md` 与 `run-flow.md` 规则 4/13/14/16 均按本 GDD 的定义使用，无字段漂移。
+- 首局引导在 `Run` 内 `push_context(Blocked)` 且不改顶层状态：与 `first-run-onboarding.md` 一致。
+- 顶层切换事件作为 `audio-feedback.md` 的 `flow.*` cue 触发源：一致。
+- 数据配置 `Ready` / `Failed` 与存档 `load_outcome`（`Fresh / Loaded / Migrated / Recovered / Blocked`）仍是两套值域，未混淆。
+
+### Suggested systems-index status
+
+**Needs Revision** —— 当前索引记为 **In Review**（`systems-index.md` 第 59 行）；剩余 1 个 blocking 是作用域措辞的限定，修完即可再次复审并回到 Approved。本次按并行约束未改动 `design/gdd/systems-index.md`，状态由编排会话统一更新。
+
+### Verdict: NEEDS REVISION
+
+---
+
+Reviewed-Content-Hash: design/gdd/scene-flow.md a2c3cc81155d51d9fae36ecc8ef27bfc1d689a59
+Reviewed-Content-Hash: design/registry/entities.yaml d726500e94755343517565ffa65e786a7629c167
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/data-config.md 7dc918c23ab271495049b5fd33bddd08a5dc6c55
+Reviewed-Content-Hash: design/gdd/input.md ee9ea6022f8e289d9e00ef8f9eabb181b0c5349f
+Reviewed-Content-Hash: design/gdd/ui-flow.md 4eb7451abe5537272d446ec90150266f98e1588d
+Reviewed-Content-Hash: design/gdd/run-flow.md 02d37ce06fa293e6b76cb22277a68b705e413448
