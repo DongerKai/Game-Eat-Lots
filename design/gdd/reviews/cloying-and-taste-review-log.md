@@ -214,3 +214,97 @@ Reviewed-Content-Hash: design/gdd/menu-waves.md 2e7946416e44f6c2c56a96c646398bb4
 Reviewed-Content-Hash: design/gdd/save-system.md 23321fb466a5f9e11832039b9cb4bf051479f51e
 Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 5f341d288604293ed86ab887df1030bb0dce426d
 Reviewed-Content-Hash: design/gdd/systems-index.md ea20fa596407ffb4808db61eb2b106f565a4c821
+
+---
+
+## Review — 2026-11-04 — Verdict: APPROVED
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none（lean 模式，未派发专员 agent）
+Blocking items: 0 | Recommended: 12（上轮遗留 9 + 本轮新发现 3）
+Summary: `1b41d84`（D1/D2）对本文件的改动只有三处：`:110` 的 MVP 值域 1–7 → 1–9、新增 D1 小节（`:193-207`）、把「错一次损失 1 格」的估值由 4–5 元改为 3–4 元（`:251`、`:350`）。全文重审后 D1 的算术全部复算通过：104 的十道菜 = 全池 28 格饱腹减掉 海鲜锅（6 格 / 20 元）与 炒青菜（2 格 / 6 元）的 8 格 / 26 元，且该组合是唯一最小损失对（不含 海鲜锅 的菜对最多 7 格，装不下 10 道 × 20 格）；15/1 加入后静态上限 115（115/85 = 1.353，正好越出未升级带 [1.15, 1.35]）、15/2 与 19/3 均为 111，与表格逐个一致；保险位 0–4 元/局与 20 元定价和 `meta-upgrades.md:65,271` 完全同源。规则、公式、20 条 AC 未发现任何新增矛盾（AC 1–20 的容量与计数序列重算全部成立），D2 的 0.9 门不在本文件，无需复核平衡值。剩余 12 条均为同步与措辞问题，其中 5 条与菜单波次的回答失同步，不阻塞实现。
+Prior verdict resolved: Yes — 上轮 APPROVED 的 0 项 blocking 维持；本轮是 D1/D2 措辞改动后的强制全文复审，不是增量复审。
+
+### 复审背景
+
+- 触发：`1b41d84` 改动本文件（哈希 `15f6974` → `e6aa08b`），freshness check 对 target 报 `CHANGED`，按 skill 规定走全文复审，未做 delta。
+- 复审范围：全文 358 行（按标题分段读），外加 registry 全量条目、`dish-values`、`data-config`、`run-flow`、`meta-upgrades`、`stomach-capacity`、`settlement-and-entry-fee`、`in-game-hud`、`menu-waves`、`save-system`、`first-run-onboarding`、`game-concept`、`systems-index` 的相关行。
+- 独立复算：用穷举（组合枚举，C = 20、T = 10）复核了 `opt_value = 104`、十道菜集合的唯一性、`C = 19/21` 的 ±1 格边际值（100 / 106，故「错一次 1 格 ≈ 3–4 元」成立）、D1 表中 115 / 111 / 111 三例、以及 AC 1–20 的每一步计数。
+
+### Required Before Implementation
+
+- none
+
+### Recommended Revisions
+
+**上轮遗留（9）**
+
+1. **[RECOMMENDED] Interactions（`:62`）仍写「吃撑」**：`stomach-capacity.md:32` 明确没有「吃撑」结果、不存在 `STUFFED`，可吃性判定叫 `can_fit`。改为「`can_fit(effective_satiety)`」。（胃容量评审已把该项路由到本文件。）
+2. **[RECOMMENDED] 生命周期仍写「三个事件」**（`:60` Interactions、`:235` Dependencies）：`run-flow.md:45` 明写「重开不是独立生命周期事件」，信号只有 `run_started` / `run_ended` / `run_discarded`（`:133`）。改为两个信号 + 一句「重开 = 新的 `run_started`」，并补 `run_discarded` 作为丢弃路径；状态表（`:51`）已按同一口径写，实现无歧义。
+3. **[RECOMMENDED] Dependencies 上游表缺「局外升级」**（`:232-236`）：Interactions（`:61`）已把它列为上游（经快照），`meta-upgrades.md:372` 的改动清单也要求补这一行，上游表仍只有 菜品数值、餐局流程、数据配置。
+4. **[RECOMMENDED] `menu_cloy_pressure ≥ 1` 没有执行者**（`:177`）：`menu-waves.md:35` 的健康校验只查每波非空、划分覆盖与 `wave_reachable_opt`，从不查 pressure；`edge :226` 自己又把压力 0 当作不阻断开局。指定闸门拥有者（CI / 平衡审查）或降级为「设计期可玩性信号」。
+5. **[RECOMMENDED] `:191` 把「按实际可达值重算校准」判给菜单波次**：`menu-waves.md:35` 明写「健康校验不计腻度…是上界，不是精确判定」，`:251` 也声明「顺序造成的额外损失由腻度系统与试玩校准承担，本系统不声称已计入」。两份 GDD 对同一职责一接一推。**且波次下的后果比措辞更实在**：D1 的见证顺序（红烧肉 → 拍黄瓜 → 糖醋里脊）只有在 `wave(红烧肉) ≤ wave(拍黄瓜) ≤ wave(糖醋里脊)` 时才能成立，因此某些划分的真实可达值会低于菜单波次的 97 下界。建议把这条明确为「设计期 / 试玩校准」的责任方，或要求菜单波次在健康校验里加一道「零惩罚顺序可达」的检查（跨文件，归编排）。
+6. **[RECOMMENDED] OQ1 与 OQ7 已被菜单波次回答**：`menu-waves.md:26`（每道菜恰好属于一波、不重复出现）回答 OQ7，`:27,29`（默认只看当前波；主动跳过花 1 回合）回答 OQ1，`:251` 也自述回答了 OQ1。本文件 `:350`、`:356` 仍以未决形式列出；`:251` 的「菜单波次的 GDD 必须显式回答这一点」已可收敛为「已回答」。
+7. **[RECOMMENDED，advisory 缺口] 补 Tuning Knobs 一节**：本系统全部可调值是 `cloy_cap`（schema ≥ 1，设计带 1–5，默认 3）、规范组序（冻结 9 项数组，不随菜品表序重算）、`cloying_resistance`（设计带 0–`cloy_cap`−1，`floor` 后定点减免）、解腻标签集合（当前 `{酸, 冰}`，扩集会改变 5 道解腻菜的范围）。
+8. **[RECOMMENDED，advisory 缺口] 补 Player Fantasy 指针**：`standard` 下不阻塞；`## Game Feel`（`:269-275`）已覆盖「顺序有意义、必须能复盘、解腻有节拍」，加一段或交叉引用即可。
+9. **[RECOMMENDED] `satiety_max` 仍未定义**（`:108`、`:110`）：范围写作 `satiety_max + cloy_cap`，全文没有定义 `satiety_max`；`dish-values.md:33` 给的是 1–6。同一未定义变量也出现在 `settlement-and-entry-fee.md:203,238`，建议在本文件显式写出 `satiety_max = 6`（另一份沿用）。
+
+**本轮新发现（3）**
+
+10. **[RECOMMENDED] `:110` 的「MVP 为 1–9」与 `:90` 的「上限 3 在 MVP 中永远不生效」并列时口径不一**：9 是声明值域（`cloy_cap` 生效时 6 + 3），MVP 池最大组 2 道，实际最大是 7。建议写成「声明值域 1–9；MVP 实际最大 7」，避免读者把 9 当成 MVP 可观测值。
+11. **[RECOMMENDED] `cloy_cap` 没有交付路径**：公式消费 `StationData.cloy_cap`，上游表写 `get_station(id) → cloy_cap`，但规则 16 的 `initialize(cloying_resistance)` 不接收 `station_id` 或 `cloy_cap`，本系统无从得知本局档口。MVP 单档口（`station_canteen`，`cloy_cap = 3`）不会出错，第二档口（Vertical Slice）落地前需扩签名并在 `run-flow.md:123` 同步。
+12. **[RECOMMENDED] 组计数的公开读数名不一致**：本文件对外只以 `group_cloy(g)` 出现在公式里，没有命名查询接口；`first-run-onboarding.md:132,189` 与 HUD 消费的是 `group_count(g)`。建议在本文件写明公开读数为 `group_cloy(g)`（并注明首局引导的 `group_count` 是同一读数的别名），否则实现者要自己发明绑定。附带：`first-run-onboarding.md:189` 把上界写成 `cloy_cap`，实际可达组内菜数（AC 17/18 到 4），偏紧但 MVP 组 ≤ 2 故无害。
+
+**跨文档 / 注册表（归编排会话）**
+
+- `design/registry/entities.yaml`：`effective_satiety`（`:511`）的 `referenced_by` 缺 `stomach-capacity.md`、`in-game-hud.md`、`run-flow.md`（三者都消费它）；`cleanse_target`（`:526`）缺 `in-game-hud.md`；`cloy_cap`（`:1172`）缺 `settlement-and-entry-fee.md`（`:222` 用作上界）；`group_cloy` / `is_cleansing` 仍无条目。另：`cleanse_target` 以 0–9 组索引建模，本 GDD 以组名 ∪ {⊥} 建模，等价但实现者不要返回 int。
+- `meta-upgrades.md:350` 的状态列仍写「公式尚未含抗性项」，而本文件 `:77` 已含 `floor(cloying_resistance)`；另 `:57`（解析值已 `floor`）与 `:313`（解析值保留小数）自相矛盾，本文件的契约是「快照保留小数、读取时 `floor` 一次」，应以本文件为准。
+
+### Nice-to-Have
+
+- D1（`:195`）「`拍黄瓜` 的 UV 5.00 排在第二」方向未写明：四道 1 格菜为 冰淇淋 7.00 / 可乐 6.00 / 拍黄瓜 5.00 / 白米饭 4.00，按 UV 降序是第三、按升序是第二。D1 的结论（容量结构强制）不依赖这句话，但补一个方向词可免复算者困惑。
+- D1 表中 `:202` 的「101–103」与 `:203` 的「93–96」没有给出构造，读者无法从现有池复算；建议标注为定性区间或补上改法。
+- D1（`:207`）「≥4 道同组菜让 `cloy_cap` 真正生效」：4 道同组时第 4 道的 `group_cloy` 为 3，`min(3,3)` 只是取到 cap，尚未被钳制；真正钳制需要第 5 道。写「≥5」或「≥4 即达到 cap」更准。
+- AC 3（`:307`）只断言「已用 16 格、肉计数 1」，但序列里 番茄炒蛋（酸）会把 `主食` 减到 0、可乐（冰）会把 `蔬菜` 减到 0——断言本身成立，把中间计数写出更好复算。
+- AC 4（`:308`）是第二条零惩罚见证（红烧肉 → 可乐 → 糖醋里脊），与 Formulas 的见证不同但同样成立，注明即可。
+- AC 2、17、18 的算术隐式假设 `cloying_resistance = 0`；在夹具说明里加一句，避免读者拿已购升级的局去复算时对不上。
+- `:28` 把「压力必须落在剩余容量上」引为支柱 3，而概念文档的支柱 3 是「时间在走，手不用快」（压力来自时间格）；容量压力更贴支柱 2「没有白吃的菜」。属引用口径，不影响规则。
+- Cross-References（`:290-295`）只列 4 份文档，读起来像全集，建议注明是节选或补全下游。
+
+### Specialist Disagreements
+
+无。lean 模式未派发 specialist，Phase 3b 未运行。
+
+### Senior Verdict
+
+lean 模式不派发 `creative-director`。主评审意见即最终意见：D1/D2 的措辞改动经独立复算全部成立，且没有放宽任何规则或平衡值；规则、公式、边界与 20 条 AC 内部自洽，验收判据可独立测试。12 条 recommended 中 9 条是上轮遗留的同步/措辞问题，3 条是本次新暴露的口径问题（值域表述、`cloy_cap` 交付路径、组计数读数名），均不影响程序员按现行文本实现 MVP。
+
+### Scope Signal
+
+**Rough scope signal: L（producer 应在 sprint planning 前复核）** — Feature 层，5 组公式（`extra_satiety`、`effective_satiety`、`is_cleansing`/`cleanse_target`、`meal_step`、`menu_cloy_pressure`），3 个硬上游 + 4 个硬下游 + 3 个软/条件下游，跨 10 份 GDD 的契约面。
+
+### Verdict: APPROVED
+
+---
+
+## 建议索引状态（本次复审）
+
+**Approved**（`systems-index.md:66` 当前为 `In Review`；按并行约束未改索引，由编排会话统一更新）。同时建议：
+- 第 9 行 `Depends On` 补「局外升级（经快照）」——Interactions 已列出，索引行只有「菜品数值, 餐局流程, 数据配置（`cloy_cap`）, 菜单波次（软）」。
+- Scope 由 **M**（`:215`）上调为 **L**。
+
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md e6aa08b28eb7739e9a5c342f358f9f55b5292bde
+Reviewed-Content-Hash: design/registry/entities.yaml ac9dd64cdbbf756d272d52dd8d27bed6bf7a5b27
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/dish-values.md 8b48f38c7e01eb84a462bf847a8bbac3a7101997
+Reviewed-Content-Hash: design/gdd/data-config.md 89626e0d680a97b2887e2d2e76f07a4e3126ec2a
+Reviewed-Content-Hash: design/gdd/run-flow.md 56f6f4866e1b5ab7c8a5a8f04d22078e7d05e1cb
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md ba07eaa56adfaa489b0ba0fdac9065b492f68c64
+Reviewed-Content-Hash: design/gdd/stomach-capacity.md 77622412130d27b404e93a2fe2cdf3a99a8718ab
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 9bf45c1ead7e161599186ca5724fa460b044e314
+Reviewed-Content-Hash: design/gdd/in-game-hud.md f81ce0c2348338cd8bd3858ed659e2b13c882a06
+Reviewed-Content-Hash: design/gdd/menu-waves.md effad23c5f5bd13b0c6a657ab32c2680a078fc6b
+Reviewed-Content-Hash: design/gdd/save-system.md 1bd3148294c81eb9a186f218cbb390b30b0e08ad
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md db09042623fa8333cd6410aa8e97249c1f45e9cf
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+Reviewed-Content-Hash: design/gdd/systems-index.md e0174253c2b36603edfef7b4d00d005380530feb
