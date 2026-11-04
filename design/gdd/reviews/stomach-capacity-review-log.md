@@ -239,3 +239,61 @@ Reviewed-Content-Hash: design/gdd/in-game-hud.md 654e48d14dbf85fdbab3b923e590a4f
 Reviewed-Content-Hash: design/gdd/records-and-milestones.md 9fe5183795ca3d47798510a1d00a040dabe3ca61
 Reviewed-Content-Hash: design/gdd/audio-feedback.md f6ac7fbd915341f63761529b664028eec6b216c0
 Reviewed-Content-Hash: design/gdd/systems-index.md c0b526ff05088d426598f5dc34e3bd9e3153cf59
+
+---
+
+## Review — 2026-11-04 — Verdict: APPROVED
+Review mode: lean · Workflow: standard
+Scope signal: S
+Specialists: none（lean — Phase 3b 未运行）
+Blocking items: 0 | Recommended: 13
+Summary: 第四轮的 `end_run(reason)` 修复解决了此前连续三轮的 blocking。`run-flow.md:52` 规则 24 现在要求在**每一条**终止路径调用一次 `胃容量.end_run(reason)`，`reason ∈ {ended, discarded, failed, faulted}`，并与交互行 `run-flow.md:121` 同步；本文件规则 2（`:28`）、状态表 `未初始化` 行（`:48`）、Edge `:187`、两张接口表（`:62`、`:201`）都已改为以 `end_run` 为权威局边界、信号降为冗余。此前「`Failed` / `Faulted` 后账本停在 `就绪`，下一局被误判为同局第二次、此后每局必败」的失败链不再成立：初始化失败、运行期故障、正常交接完成与放弃/退出四条路径都会先回到 `未初始化`，下一次 `initialize` 必然是新局，且不需要 run identity。剩余 13 项均为同步、措辞与验收覆盖问题，不阻塞实现。
+Prior verdict resolved: Yes — 上轮 blocking 已解决（四条终止路径全部由 `end_run` 覆盖）。
+Findings:
+- [RECOMMENDED] run-flow 转移表 `run-flow.md:93-109`: 规则 24 已是权威，但状态转移表的“副作用”列仍未列出任何 `end_run` 调用——上轮的 blocking 判定正是建立在该列穷举这一前提上。按表施工的实现者仍可能漏调。建议在四条终止转移（`:97` Failed、`:101`/`:103`/`:107` Faulted、`:104` Handoff→Idle、`:106` 丢弃）的副作用列各补一条 `调用 胃容量.end_run(...)`（修改在 run-flow，本次范围外）。
+- [RECOMMENDED] States `:52`: `已丢弃` 行已不可达——规则 2（`:28`）说收到任意 `end_run` 立即回到 `未初始化`，该阶段永远不会被占用；进入条件也只列 `run_faulted`，漏了 `ended` / `failed`。删除该行，或改为 `未初始化` 的别名。
+- [RECOMMENDED] States `:51`: `初始化失败` 行写“立即回到 `未初始化`”，与 AC 5（`:275`，同局第二次 initialize 后 `capacity_used` 仍为 17）和 AC 25（`:304`，未初始化读取返回 `0` + ERROR）冲突。应写明“保持 `used` 直到 run-flow 进入 `Failed` 并调用 `end_run(failed)`”。
+- [RECOMMENDED] 验收缺口: 没有任何 AC 断言 `end_run(ended / discarded / failed / faulted)` 送达后账本处于 `未初始化`、读取返回 `0` + ERROR；AC 26（`:305`）仍把 `Failed` 与 `Faulted` 混写在一句里。补一条参数化用例覆盖四种 reason，并把 AC 26 拆为两条。
+- [RECOMMENDED] AC 17（`:293`）: 应限定为“一局内”；`end_run` 是第三条清零路径，未纳入“能改变 `capacity_used` 的方法”枚举。
+- [RECOMMENDED] Open Question 1（`:313`）与 `:63`、`:253`: 仍称 `C0` 没有数据归属，但 `data-config.md:59,117,185,246-247` 已定义并校验 `BalanceData.base_capacity`（1–999，默认 20）。关闭 OQ1，两处改为 `get_balance() → base_capacity`。OQ4（`:316`）亦可关闭：`entities.yaml:699-709` 已把本 GDD 列入 `capacity_used.referenced_by`（run-flow 缺失见第 12 条）。
+- [RECOMMENDED] Dependencies `:214` 与“待回指” `:261`: 仍称 局外升级 / 局内 HUD / 纪录与里程碑 / 存档 的 GDD “尚未撰写”，四份都存在且本文件 `:64`、`:66`、`:70` 自己就引用了它们；`data-config.md:185` 也已新增胃容量下游行。两处均已过期。
+- [RECOMMENDED] Cross-References `:263`: “待回改：run-flow.md 漏了 `consume(e)`”已过期——`run-flow.md:121` 已列出 `consume(e)`。删除该注。
+- [RECOMMENDED] Edge Cases `:186`: 把重复提交的防御归于 `capacity_used = Σ effective_satiety` 不变式；第二次提交若被接受同样会累加，和仍然相等。真正的第一道防御是 run-flow 的“菜仍在当前可见集”（`run-flow.md:34`）。改引该条，或把不变式的作用域限定为“只记了一行却调用两次 `consume`”。
+- [RECOMMENDED] `e` 的类型: Formulas `:147` 把 `e` 标为 `int`，但 AC 10（`:283`）/ AC 15（`:291`）传入 `2.5`；GDScript 的 `e: int` 会在进入守卫前拒绝该参数。声明 `e: Variant`，或写明测试从无类型边界进入。
+- [RECOMMENDED] 腻度行方向: `cloying-and-taste.md:62` 仍把本系统记为 `双向` 并称容量决定“吃撑”，与规则 6（无 `STUFFED`）及本文件 `:75`、`:212` 的无调用边方向矛盾。修在对方 GDD（本次范围外）。
+- [RECOMMENDED] 注册表（`entities.yaml`，由编排会话维护）: `capacity_remaining` 与 `capacity_bonus` 仍无条目；`capacity_used.referenced_by`（`:699-702`）仍漏了 `run-flow.md`（其 `:121` 读取该值）；`capacity_total` 注（`:896`）与 `base_capacity` 注（`:1275`）仍称数据归属是胃容量 Open Question，而 `data-config.md:59` 已拥有该字段。`base_capacity.referenced_by` 也漏了 `data-config.md`。
+- [RECOMMENDED] `in-game-hud.md:166`: 括注“容量可能在 `run_ended` 重置”与现在的时机不符——重置发生在交接完成后的 `end_run(ended)`，不是 `run_ended`。HUD 因 `Ending` 期间读最后一帧快照而不受影响，但措辞应改（对方 GDD，本次范围外）。
+Advisory (not counted): Tuning Knobs 仍缺失（`standard` 下 advisory）——`C0`（1–999，MVP 20）与 999 结构上限是本系统的两个可调值。公式声明 `capacity_total ∈ [1, 999]` 但 `initialize` 前读取返回 `0`（`:192`）——注明区间描述的是已初始化实例。`systems-index.md:26-27` 仍说容量 “decides when the player is stuffed”，与 OQ5 / 规则 6 矛盾（索引编辑归编排会话）。OQ7 可关闭：`audio-feedback.md` 的“容量变化” cue 无容量事件，确认由 `action_committed` 派生。
+
+### Completeness: 6/6 required sections present
+`modes.workflow: standard` → Overview, Detailed Rules (`## Detailed Design`), Formulas, Edge Cases, Dependencies, Acceptance Criteria all present. Advisory at `standard`: Player Fantasy and Tuning Knobs absent (Game Feel `:229-235` covers the fantasy informally).
+
+### Dependency Graph
+All declared dependencies have a GDD on disk: run-flow, data-config, meta-upgrades, cloying-and-taste, in-game-hud, settlement-and-entry-fee, menu-waves, dish-values, records-and-milestones, save-system. `records-and-milestones.md` still does not mention 胃容量, so the soft downstream row (`:70`, `:209`) remains one-sided.
+
+### Registry Values
+Whole-document search for the registry's capacity terms (`capacity_total`, `capacity_used`, `capacity_remaining`, `capacity_bonus`, `base_capacity`, `can_fit`, `effective_satiety`) returned 117 lines; no value conflicts. `base_capacity = 20`, `capacity_total ∈ [1, 999]`, `capacity_used ∈ [0, 999]` and the inclusive `can_fit` predicate all match. Entry and note gaps are listed under Recommended item 12.
+
+### Verdict: APPROVED
+
+---
+
+## 建议索引状态（复审）
+
+**Approved**（`systems-index.md:63` 当前为 `In Review`；按并行约束未改索引，由编排会话统一更新）。`Depends On` 仍为「餐局流程, 数据配置」，与本 GDD 的上游表一致，无需变动。
+
+Reviewed-Content-Hash: design/gdd/stomach-capacity.md 280240fddb3258864af5f96550cc7cbfd49d42eb
+Reviewed-Content-Hash: design/registry/entities.yaml 9915429b2bba990a0ae53a735bc2b21b24789d9a
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md ea6e49d52b2a08d72dc75c2b295cf54ba5b88279
+Reviewed-Content-Hash: design/gdd/data-config.md 0be338a35d8e5fa9ded4c219b29801021835938a
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md 1c8fd48bbdff0e8d24e5e436a8d801545df4da0b
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md b033f0acd34e58fa436fd583230335ee143196ae
+Reviewed-Content-Hash: design/gdd/dish-values.md 60a580b19c4b2f980cd0a33df73e8c3aa32f6d3e
+Reviewed-Content-Hash: design/gdd/menu-waves.md 4e4854fb6a38c7b0989503d8c261b69c5746adbe
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md b9b9235e9a4ad7d8739ad778e98dd147b1c72f94
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 654e48d14dbf85fdbab3b923e590a4f356dd0218
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 84e5c38fc40fb2a75d8ee608c911bdebf369c5a1
+Reviewed-Content-Hash: design/gdd/audio-feedback.md ffb1c54a84af1da89b0228395ee86e89b3e87e30
+Reviewed-Content-Hash: design/gdd/systems-index.md 56e9869c70371816e88ed49f24735f67ab3d199d
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
