@@ -221,7 +221,7 @@ wave_healthy(M, seed, pool, C0, T) =
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
 | 数据配置 | 硬 | `get_station(id)` → `dish_pool`、`wave_size`（新增字段，int ≥ 1，默认 4） | GDD 已写；**字段为新增，需回改** |
-| 菜品数值 | 硬 | 各菜 `price` / `satiety`、`opt_value(M, C, T)` | GDD 已写（Approved） |
+| 菜品数值 | 硬 | 各菜 `price` / `satiety`、`opt_value(pool, C0, T)` | GDD 已写（Approved） |
 | 餐局流程 | 硬 | 传入 `seed`、回合预算 `T`、`menu_vision`；接收"无可吃菜"信号 | GDD 已写（`design/gdd/run-flow.md`） |
 | 腻度与口味 | 软（强） | 生成校验时把 `effective_satiety` 计入可达最优；本系统不写腻度状态 | GDD 已写 |
 
