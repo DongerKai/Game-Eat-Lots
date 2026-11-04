@@ -273,3 +273,42 @@ Reviewed-Content-Hash: design/gdd/systems-index.md 63d73495be76b5b37ed9bac50452c
 Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
 Reviewed-Content-Hash: docs/engine-reference/godot/breaking-changes.md 4bc55e16796664ff88c7582c9f08e3530f7c94d4
 Reviewed-Content-Hash: docs/engine-reference/godot/current-best-practices.md a45cd2c39a8ec53eaa3e924f39f93594e62085fd
+
+---
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: S
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 1 | Recommended: 10
+Summary: The `Blocked` whitelist is now additive in the API rule (rule 12), the States table, the `Blocked` edge case and AC 12 — `ui_pause` survives a non-empty `allow`, so 首局引导 can pause during a modal beat, and the other four prior blockers remain fixed. One Core Rule was not updated: rule 2 still says `Blocked` takes only the actions inside `allow`, which is the exclusive semantics the last round rejected and which contradicts those four sites. It is a one-sentence fix. The ten recommended items are stale wording and missing AC coverage; none blocks implementation on its own.
+Prior verdict resolved: No — the contract is correct in four places but rule 2 still carries the exclusive wording.
+
+Findings:
+- [BLOCKING] Detailed Design (rule 2, `input.md:37`): "Blocked 只取 `allow` 白名单内的动作（默认仅 `ui_pause`）" still defines an exclusive whitelist. Rules 12 (`:55`), States (`:61`), Edge Cases (`:154`) and AC 12 (`:222`) now say `ui_pause` is always allowed and `allow` appends. With the non-empty `allow` 首局引导 passes (`first-run-onboarding.md:58`, B0/B1) the two readings disagree on whether Esc pauses — the precise defect the prior round blocked. Rewrite rule 2 to "Blocked 取 `ui_pause` 与 `allow` 追加的动作"; the two dependency descriptions (`:77`, `:169`) should say the same.
+- [RECOMMENDED] Acceptance Criteria 12: states the additive rule in prose but never exercises it; add a case that pushes `Blocked` with `allow=[ui_accept]` and confirms `ui_pause` still fires — the regression this round fixed has no test.
+- [RECOMMENDED] Interactions / Dependencies: 餐局流程 is listed as reading `ui_pause` (`:75`, `:167`), but `run-flow.md:116,284` says it does not read it (场景与流程管理 owns it); run-flow Open Question 2 already asks for this row to be fixed.
+- [RECOMMENDED] Acceptance Criteria 15 (`:225`): the 1-frame budget still cites `project.yaml`'s target frame rate, which does not exist (`scene-flow.md` uses a 60 Hz constant).
+- [RECOMMENDED] Acceptance Criteria 9 (`:219`): the `device ==` scan still flags the engine-recommended `device == InputEvent.DEVICE_ID_MOUSE`; narrow it to `device == 0`.
+- [RECOMMENDED] Cross-References (`:205`): still says "None — this system references no other GDD" and that reverse links are pending, though `scene-flow.md` is cited in Edge Cases and all six downstream GDDs exist.
+- [RECOMMENDED] Dependencies (`:78`, `:170`): 音效反馈 is listed as a soft consumer of action events while `audio-feedback.md:113,373,471` says it does not subscribe to input at all.
+- [RECOMMENDED] Formulas / Registry (`:97`): `nav_steps` output range is `1–∞` here but `[1, 999]` in the registry (practical clamp).
+- [RECOMMENDED] Detailed Design (`:37`): same-frame `ui_accept` + `ui_cancel` precedence is still undefined, though `ui-flow.md:145` cites "输入 规则 2" for it.
+- [RECOMMENDED] Acceptance Criteria 19 (`:229`): covers push from `Run` only; the equal-top push defined in rule 12 (`Modal` on `Modal`, depth 2) has no AC, and that is exactly ui-flow's depth-2 modal case.
+- [RECOMMENDED] Acceptance Criteria 3 (`:213`): uses `focus_owner` while rule 8 defines `get_focus_owner()`; align the name.
+Advisory (not counted): `ui_pause` is now explicitly always allowed in every `Blocked` context, including the `Boot` loading screen (States `:61`); scene-flow has no `Boot → Paused` transition, so a press there is rejected and logged WARNING (`scene-flow.md:2,28`). Pre-existing, not introduced by this fix, but worth a no-op-without-log rule if Esc spamming during boot is expected.
+Reviewed-Content-Hash: design/gdd/input.md ee9ea6022f8e289d9e00ef8f9eabb181b0c5349f
+Reviewed-Content-Hash: design/registry/entities.yaml d726500e94755343517565ffa65e786a7629c167
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+Reviewed-Content-Hash: design/gdd/ui-flow.md 4eb7451abe5537272d446ec90150266f98e1588d
+Reviewed-Content-Hash: design/gdd/run-flow.md 02d37ce06fa293e6b76cb22277a68b705e413448
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 1c51b6fff07c5d8eae58559e50e31079d165bbd9
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 2ef73066ae97ea1591a4ebaaeba6d4a97dcf4955
+Reviewed-Content-Hash: design/gdd/audio-feedback.md 8ad91f894b044ae735d9c55d13606f8e17453900
+Reviewed-Content-Hash: design/gdd/scene-flow.md a2c3cc81155d51d9fae36ecc8ef27bfc1d689a59
+Reviewed-Content-Hash: design/gdd/menu-waves.md 3c802aab667b644e6c8118e8f63b33a1cbdd87f4
+Reviewed-Content-Hash: design/gdd/systems-index.md 63d73495be76b5b37ed9bac50452c07ef281d41a
+Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
+Reviewed-Content-Hash: docs/engine-reference/godot/breaking-changes.md 4bc55e16796664ff88c7582c9f08e3530f7c94d4
+Reviewed-Content-Hash: docs/engine-reference/godot/current-best-practices.md a45cd2c39a8ec53eaa3e924f39f93594e62085fd
