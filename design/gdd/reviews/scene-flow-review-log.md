@@ -79,3 +79,82 @@ Reviewed-Content-Hash: design/gdd/run-flow.md 8d36e76a8f8024efa498c83cf83c804b85
 Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 778f0a836330a6410aee8812fa0801f9dd3cc4f3
 Reviewed-Content-Hash: design/gdd/audio-feedback.md 8ad91f894b044ae735d9c55d13606f8e17453900
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: M
+Specialists: none（lean 模式，未派发专员 agent）
+Blocking items: 1 | Recommended: 6
+Summary: 上一轮三个 blocking 的字面修复全部落地且正确：`FRAME_TIME` 改为 60 Hz 设计常量并在 Source 列显式声明不读 `project.yaml`；Cross-References 四行改为真实 GDD 路径，与 Dependencies 表一致；幂等空操作的返回值已定义（空 payload 返回 `true`，带 payload 返回 `false`）并写进 AC 29。状态机本体仍无结构性问题。唯一 blocking 是这次修复留下的一处作用域冲突：幂等空操作规则未排除终态 `Quit` 与 `Boot` 待校验期，与「`Quit` 中拒绝任何请求」「`Boot` 待校验期除 `Quit` 外全拒绝」两条规则矛盾，AC 17 与 AC 19 会给出相反结果。
+Prior verdict resolved: No —— 3 个 blocking 的字面问题已修复，但返回值的修复与其他状态规则产生了一处新的作用域冲突（见 blocking 1）。
+
+### 上一轮 blocking 复核（逐条）
+
+| 上轮 blocking | 现状 | 结论 |
+|---|---|---|
+| Formulas `FRAME_TIME` 来源悬空 | 第 101 行 Source 改为 `constant`，值 `0.0167（60 Hz）`，并注明「不读 `project.yaml`」；全文已无其它 `project.yaml` 依赖 | ✓ 已解决 |
+| Cross-References 四行标「未写」 | 第 212–217 行全部改为实际路径 `design/gdd/*.md`，与 Dependencies 表一致；全文已无「未写」字样 | ✓ 已解决 |
+| 幂等空操作返回值未定义 | 规则 2（第 28 行）与 AC 29（第 255 行）均已定义：`to == current` 且空 payload → `true`，状态不变、不发信号、不记日志；带 payload → `false` | ✓ 已解决（但引入作用域冲突，见下方 blocking） |
+
+### 完整性（standard 层：5 节必需 + 有数值规则时的 Formulas）
+
+必需 6/6 齐全：Overview、Detailed Design（= Detailed Rules）、Formulas、Edge Cases、Dependencies、Acceptance Criteria。Formulas 对本系统仍为必需（两条数值规则：单帧生效、过渡 ≤ 0.2 s）。
+Advisory 缺口（不阻塞）：Player Fantasy、Tuning Knobs（同上一轮，Game Feel 一节实质覆盖 Player Fantasy）。
+
+### Dependency Graph
+
+| 依赖 | 方向 | 文件 | 状态 |
+|---|---|---|---|
+| 数据配置 | 上游（硬） | `design/gdd/data-config.md` | ✓ 存在，第 189 行回指本系统 |
+| 输入 | 上游（硬） | `design/gdd/input.md` | ✓ 存在，第 51/73/171 行回指本系统 |
+| 界面流程 | 下游（硬） | `design/gdd/ui-flow.md` | ✓ 存在，第 13/151 行回指本系统 |
+| 餐局流程 | 下游（硬） | `design/gdd/run-flow.md` | ✓ 存在，第 13/23 行回指本系统 |
+| 首局引导 | 下游（软） | `design/gdd/first-run-onboarding.md` | ✓ 存在，第 121/361 行回指本系统 |
+| 音效反馈 | 下游（软） | `design/gdd/audio-feedback.md` | ✓ 存在，第 13/108 行回指本系统 |
+
+双向一致性成立，无断链。存档仍被正确标记为「不属于依赖」而非遗漏。
+
+### Registry Values
+
+`design/registry/entities.yaml` 现为 78 条命名条目；用全部条目名（`_` 展开为 `[_ ]`、大小写不敏感）对本 GDD 全文扫描：**命中 0 行**。没有任何条目由本系统拥有或在 `referenced_by:` 中引用本系统。无数值复述冲突。
+
+### Findings
+
+- [BLOCKING] 规则 2（第 28 行）与 Edge Case 第 150 行 / AC 19（第 245 行）作用域冲突：幂等空操作规则写作「若 `to == current` 且 payload 为空，返回 `true`」，未限定状态；而第 150 行「当前已在 `Quit`：拒绝任何后续请求」与 AC 19「处于 `Quit`，收到任何切换请求 → 全部拒绝」都把同状态请求算作应拒绝。于 `Quit` 中调用 `request_transition(Quit)`（无 payload）时，规则 2 与 AC 17 要求返回 `true`，AC 19 要求返回 `false`——两条判据互斥；`Boot` 待校验期的同状态请求（第 66/138 行「除 `Quit` 外全部拒绝」）同理。需给幂等规则加作用域例外（推荐：终态 `Quit` 与 `Boot` 校验未返回期间不适用幂等空操作，任何请求一律返回 `false`），并把 AC 17 的前提限定为非 `Quit`、`Boot` 已就绪，使 AC 17 与 AC 19 不再重叠。
+- [RECOMMENDED] Open Questions 第 1 行（结算屏是否提升为独立顶层状态）与第 2 行（`RunConfig` / `RunResult` schema 归属）仍未标记已解决；前者已由 `ui-flow.md` 规则 3（`Menu → MainMenu 或 ReceiptScreen`，不新增顶层状态）回答，后者已由 `run-flow.md`「RunConfig 与 RunResult 的归属」一节回答（`RunConfig` 由界面流程组装，`RunResult` 由结算与入场费拥有）。
+- [RECOMMENDED] Formulas §过渡总时长（跨文档冲突，仍未闭合）：本 GDD 第 88/118/183 行声明 `FADE_OUT` / `FADE_IN` 由 `/ux-design` 交互规格拥有；`ui-flow.md` Open Question 2（第 617 行）写「过渡时长 FADE_OUT / FADE_IN 由场景与流程管理拥有」。本次 `ui-flow.md` 未变（receipt UNCHANGED），冲突原样存在；两份 GDD 必须定一个所有者。
+- [RECOMMENDED] Edge Cases 第 134 行「餐局流程依据 `request_transition` 返回 `false` 重新发起」仍读作可立即重试，但 `Paused` 下的 `Run → Menu` 不在合法转移表内；`run-flow.md` 规则 14 已写明「保留该 `RunResult`，在回到 `Run` 顶层状态后重发；暂停期间等待，不请求」。建议本条直接指向该规则。
+- [RECOMMENDED] 调用写法仍不统一：规则 2（第 28 行）定义 `request_transition(to, payload)`（按 `(current, to)` 校验），正文与 Cross-References 多处写作 `request_transition(Menu → Run, RunConfig)`（第 76/106 行等）。建议统一并在一处给出完整签名。
+- [RECOMMENDED] AC 32（第 258 行）仍把两个独立断言（总时长 ≤ 0.20 s；关闭过渡时为 0）塞进一条，且前提「`/ux-design` 给出 FADE 值」依赖尚不存在的文档；建议拆条并将前提改为「给定任意满足 0 ≤ FADE ≤ 0.10 的取值」。
+- [RECOMMENDED] AC 9（第 235 行）「画面与暂停前一致」仍不可独立判定 pass/fail；建议改为可观测形式，如「恢复后 HUD 根节点实例 id 不变，且显示值与暂停帧相同」。
+- [NICE-TO-HAVE] Tuning Knobs 缺失（standard 层 advisory）：`TRANSITION_CAP = 0.20` 是唯一常量型可调值，补一行安全区间与影响面即可。
+- [NICE-TO-HAVE] `TRANSITION_CAP` 仍列在 Variables 表中却不出现在表达式（`transition_total = FADE_OUT + FADE_IN`），可移到「约束」下避免读者困惑。
+
+### 已核对且无问题的跨文档接口
+
+- `request_context(context, clear_stack := true, allow := []) -> bool`、`context_changed(from, to)`：与 `input.md` 第 51/55/171 行一致；本 GDD 只调用 `request_context(default_ctx, clear_stack := true)`，未使用 `allow`，兼容。
+- 五个默认输入上下文（Blocked / Menu / Menu / Run / Paused）：与 `input.md` 上下文能力表一致。
+- `ui_pause` 由本系统消费、`ui_accept` 由界面流程消费：与 `ui-flow.md` 规则 15/27、`input.md` 规则 2 三方一致。
+- `RunConfig` / `RunResult` / `init_failed` / `abandoned` 四个 payload：`ui-flow.md` 规则 5/8/9/16 与 `run-flow.md` 规则 4/13/14/16 均按本 GDD 的定义使用，无字段漂移。
+- 首局引导在 `Run` 内 `push_context(Blocked)` 且不改顶层状态：与 `first-run-onboarding.md` 一致。
+- 顶层切换事件作为 `audio-feedback.md` 的 `flow.*` cue 触发源：一致。
+- 数据配置 `Ready` / `Failed` 与存档 `load_outcome`（`Fresh / Loaded / Migrated / Recovered / Blocked`）仍是两套值域，未混淆。
+
+### Suggested systems-index status
+
+**Needs Revision** —— 剩余 1 个 blocking 修复前不应回到 Approved；该 blocking 是两行规则的作用域限定，修完即可再次复审。（本次按并行约束未改动 `design/gdd/systems-index.md`，状态由编排会话统一更新。）
+
+### Verdict: NEEDS REVISION
+
+---
+
+Reviewed-Content-Hash: design/gdd/scene-flow.md c19ee4c2a48183476032f3ebbe2ceb9e43588324
+Reviewed-Content-Hash: design/registry/entities.yaml d726500e94755343517565ffa65e786a7629c167
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/data-config.md 001e4ec43326ff7ab46c54c4f626664bd9fc7e23
+Reviewed-Content-Hash: design/gdd/input.md 776c41de0eb3edd497ae2ace8c78ba80192fc78f
+Reviewed-Content-Hash: design/gdd/ui-flow.md 4eb7451abe5537272d446ec90150266f98e1588d
+Reviewed-Content-Hash: design/gdd/run-flow.md 02d37ce06fa293e6b76cb22277a68b705e413448
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 2ef73066ae97ea1591a4ebaaeba6d4a97dcf4955
+Reviewed-Content-Hash: design/gdd/audio-feedback.md 8ad91f894b044ae735d9c55d13606f8e17453900
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
