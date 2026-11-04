@@ -238,3 +238,38 @@ Reviewed-Content-Hash: design/gdd/systems-index.md 721a697860f5cbf632fa991257dc4
 Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
 Reviewed-Content-Hash: docs/engine-reference/godot/breaking-changes.md 4bc55e16796664ff88c7582c9f08e3530f7c94d4
 Reviewed-Content-Hash: docs/engine-reference/godot/current-best-practices.md a45cd2c39a8ec53eaa3e924f39f93594e62085fd
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: S
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 1 | Recommended: 9
+Summary: Four of the five prior blockers are fully fixed — Esc/Paused precedence, AC 11's API surface, the `game_skip_wave` rename and equal-top `push_context` are now unambiguous and match downstream (including the focus/hover getters). The `Blocked` whitelist fix is incomplete: a non-empty `allow` replaces the default instead of adding to it, so `ui_pause` is discarded and 首局引导 cannot pause during a modal beat, contradicting its rule 17 / AC 19. The remaining recommended items are the stale 餐局流程 dependency row, AC 15's nonexistent `project.yaml` FPS key, the `device ==` scan, stale Cross-References, the 音效反馈 dependency, the `nav_steps` range, same-frame accept/cancel precedence, missing AC coverage for equal-top push, and the `focus_owner` naming.
+Prior verdict resolved: No — 4 of 5 fully resolved; the `Blocked` whitelist blocker is only partially fixed.
+
+Findings:
+- [BLOCKING] Detailed Design (rule 12) / States: a non-empty `allow` replaces the default rather than adding to it, so `ui_pause` is dropped in `Blocked`; first-run-onboarding rule 17 / AC 19 require pausing during a modal beat, and its B0/B1 lists do not include `ui_pause`. Make `ui_pause` always allowed (allow additive), or state that callers must include it and align 首局引导.
+- [RECOMMENDED] Interactions / Dependencies: 餐局流程 is listed as reading `ui_pause`, but `run-flow.md:116,284` says it does not read it (场景与流程管理 owns it); run-flow Open Question 2 already asks for this row to be fixed.
+- [RECOMMENDED] Acceptance Criteria 15: the 1-frame budget still cites `project.yaml`'s target frame rate, which does not exist (`scene-flow.md` now uses a 60 Hz constant).
+- [RECOMMENDED] Acceptance Criteria 9: the `device ==` scan still flags the engine-recommended `device == InputEvent.DEVICE_ID_MOUSE`; narrow it to `device == 0`.
+- [RECOMMENDED] Cross-References: still says "None — this system references no other GDD" and that reverse links are pending, though `scene-flow.md` is cited in Edge Cases and all six downstream GDDs exist.
+- [RECOMMENDED] Dependencies: 音效反馈 is listed as a soft consumer of action events while `audio-feedback.md:113,373,471` says it does not subscribe to input at all.
+- [RECOMMENDED] Formulas / Registry: `nav_steps` output range is `1–∞` here but `[1, 999]` in the registry (practical clamp).
+- [RECOMMENDED] Detailed Design: same-frame `ui_accept` + `ui_cancel` precedence is still undefined, though `ui-flow.md:145` cites "输入 规则 2" for it.
+- [RECOMMENDED] Acceptance Criteria 19: covers push from `Run` only; the equal-top push added to rule 12 (`Modal` on `Modal`, depth 2) has no AC, and that is exactly ui-flow's depth-2 modal case.
+- [RECOMMENDED] Acceptance Criteria 3: uses `focus_owner` while rule 8 defines `get_focus_owner()`; align the name.
+Reviewed-Content-Hash: design/gdd/input.md 776c41de0eb3edd497ae2ace8c78ba80192fc78f
+Reviewed-Content-Hash: design/registry/entities.yaml d726500e94755343517565ffa65e786a7629c167
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+Reviewed-Content-Hash: design/gdd/ui-flow.md 4eb7451abe5537272d446ec90150266f98e1588d
+Reviewed-Content-Hash: design/gdd/run-flow.md 02d37ce06fa293e6b76cb22277a68b705e413448
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 1c51b6fff07c5d8eae58559e50e31079d165bbd9
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 2ef73066ae97ea1591a4ebaaeba6d4a97dcf4955
+Reviewed-Content-Hash: design/gdd/audio-feedback.md 8ad91f894b044ae735d9c55d13606f8e17453900
+Reviewed-Content-Hash: design/gdd/scene-flow.md c19ee4c2a48183476032f3ebbe2ceb9e43588324
+Reviewed-Content-Hash: design/gdd/menu-waves.md 3c802aab667b644e6c8118e8f63b33a1cbdd87f4
+Reviewed-Content-Hash: design/gdd/systems-index.md 63d73495be76b5b37ed9bac50452c07ef281d41a
+Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
+Reviewed-Content-Hash: docs/engine-reference/godot/breaking-changes.md 4bc55e16796664ff88c7582c9f08e3530f7c94d4
+Reviewed-Content-Hash: docs/engine-reference/godot/current-best-practices.md a45cd2c39a8ec53eaa3e924f39f93594e62085fd
