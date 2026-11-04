@@ -214,3 +214,194 @@ Reviewed-Content-Hash: design/gdd/menu-waves.md 3c802aab667b644e6c8118e8f63b33a1
 Reviewed-Content-Hash: design/gdd/systems-index.md 8f9bdb61bf682a7e4d7191933202f9efb3d68cde
 Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
 ```
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION
+
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean mode — Phase 3b skipped)
+Blocking items: 2 | Recommended: 6 | Nice-to-have: 4
+Prior verdict resolved: No — 3 of 4 blocking items resolved; item 4 partially
+
+Summary: The fix commit resolved the migration-failure fall-through, the
+settlement-wallet retry policy and the AC 13 contradiction cleanly, and the
+`ReadOnly` split is wired through the load table, formula, UI requirements,
+`ui-flow` and the registry. Two defects remain: `load_outcome` still cannot
+reach `Migrated` for the version-0 fixture its own ACs and migrate section
+require, and `ReadOnly` is defined by "版本 = 当前" in the rule/table/formula
+but by "主档可读" in rule 21, the edge case, UI Requirements 3, AC 23 and
+`ui-flow` — leaving a live-lock/version-skew path that returns `Blocked` and
+offers "新建生涯" over a file another live instance owns.
+
+### Prior Blocking Items — Status
+
+1. **RESOLVED** — failed primary migration. `load_outcome` now terminates the
+   `Migrated` branch as `Blocked` on error (lines 140–141), rule 13 agrees, and
+   AC 29 covers readable primary + migration failure + valid backup.
+2. **RESOLVED** — settlement wallet retry. Rule 18 now covers `progression`,
+   `records` and unlocks; the state table (line 76), `commit` (line 103), edge
+   case (line 238) and Dependencies (line 270) all use the same
+   结算入账 / 纪录 / 迁移 → dirty (retry) vs 购买 → rollback split.
+   `meta-upgrades` rule 6 and `records` rule 16 match.
+3. **RESOLVED** — AC 13 now asserts "磁盘不发生写入，内存按规则 18 保留并标记
+   dirty", matching rule 18 and AC 16; the MVP/VS unlock note is consistent
+   with `unlocks-and-stations` rule 15.
+4. **PARTIALLY RESOLVED** — the sixth state exists and is wired end to end, but
+   its definition is inconsistent across the document. See blocking item 2.
+
+### Completeness: 6/6 required sections present (standard tier)
+
+Required at `standard`: Overview, Detailed Rules (`## Detailed Design`),
+Formulas, Edge Cases, Dependencies, Acceptance Criteria — all present.
+Formulas is required because the system defines four numeric rules.
+
+Advisory gaps (do not block at `standard`):
+- **Player Fantasy** — absent as a heading; `## Game Feel` covers the intent.
+- **Tuning Knobs** — absent as a section; constants remain scattered.
+
+### Dependency Graph
+
+- ✓ `design/gdd/data-config.md` — exists (upstream, hard)
+- ✓ `design/gdd/meta-upgrades.md` — exists (downstream, hard)
+- ✓ `design/gdd/unlocks-and-stations.md` — exists (downstream, hard)
+- ✓ `design/gdd/records-and-milestones.md` — exists (downstream, hard)
+- ✓ `design/gdd/ui-flow.md` — exists (downstream, hard UI)
+- ✓ `design/gdd/scene-flow.md` — exists (timing only)
+- ✗ `design/gdd/online-challenge.md` — NOT FOUND; `systems-index.md` #19 is
+  `Not Started`. Declared soft/未写, so an expected forward reference.
+
+### Registry Values
+
+Searched the whole document for the registry entries it owns or references:
+`load_outcome`, `migrate`, `save_bytes`, `slots_available`,
+`save_schema_version`, `save_bytes_max`, `save_max_slots`, `milestone_met`,
+`effective_unlocks`, `entry_fee`, `total_value`, `net_profit`.
+
+- **Matches:** `load_outcome` now carries six values (registry line 778) and the
+  registry expression mirrors the GDD formula; `migrate`, `slots_available`,
+  `save_schema_version = 1`, `save_bytes_max = 262144`,
+  `save_max_slots = 1` all agree.
+- **Conflicts:** `save_backup_count` (rule 9) still has no registry entry —
+  Recommended 1. `save_bytes` output range is `0–SAVE_BYTES_MAX` in the GDD
+  (line 206) and `[0, 262144]` in the registry (line 817) although
+  `B_base = 1024` — Recommended 2. The registry `load_outcome` note says
+  "live lock over a readable current file"; the GDD's rule 21 / AC 23 say
+  readable alone — blocking item 2.
+
+### Required Before Implementation
+
+1. **[BLOCKING] Formulas vs Acceptance Criteria — `load_outcome` cannot reach
+   `Migrated` for the version-0 fixture (lines 140–141, 154–155, 174, 181,
+   370–371).**
+   Both migration branches require `1 ≤ version(P) < V`, but `version(x)`'s
+   declared range is `0–INT32_MAX` with "0 只用于迁移测试夹具" (line 155),
+   `migrate`'s `v_src` range starts at 0 (line 174), and both the migrate
+   example (line 181) and AC 8 (line 370) expect a `version = 0` fixture to
+   produce `Migrated`; AC 9 (line 371) expects that fixture to return
+   `MigrationError`. Under the formula, a readable v0 file fails the guard, is
+   never passed to `migrate`, and falls to `Recovered`/`Blocked`. Second,
+   independent cause: `valid(x)` (line 154) does not say which schema it
+   validates against. Read against the current v1 schema, the v0 fixture is
+   invalid (it lacks `career_id`, `slot_id`, `records`), so it is diverted to
+   the corrupt path before migration regardless of the guard. Fix: define
+   `valid(x)` as "structurally legal under the schema of its declared
+   `version(x)`", and use `version(P) < V` (no lower bound beyond the type's 0)
+   in both migration branches.
+
+2. **[BLOCKING] States / UI Requirements — the `ReadOnly` definition is
+   inconsistent, and the residual path still offers to quarantine a live
+   instance's file (lines 36, 47, 65–66, 135–136, 249, 323–324, 394;
+   `ui-flow.md:79`).**
+   Rule 10, the load-result table (line 65) and the formula (line 135) require
+   "主档可读且版本 = 当前" for `ReadOnly`, and the formula's `L = live` fallback
+   (line 136) sends every other lock case to `Blocked`. But rule 21 (line 47),
+   the edge case (line 249), UI Requirements 3 (line 323), AC 23 (line 394) and
+   `ui-flow.md:79` all say a live lock over a readable file is `ReadOnly`,
+   without a version condition. Consequence: instance A running an older build
+   holds a live lock; instance B (new build) sees a readable primary at
+   `version < V`; the formula returns `Blocked`, and UI Requirements 4 offers
+   only "退出" and "新建生涯（旧档保留）" — choosing the latter renames the file
+   A is still writing. That is the exact hazard the sixth state was added to
+   remove, narrowed to version skew. Fix: make `ReadOnly` = `L = live ∧
+   readable(P)` (browse without migration, never write) and keep `Blocked` for
+   `L = live ∧ ¬readable(P)`; or keep the formula and branch `Blocked`'s UI by
+   reason so a lock-caused `Blocked` never offers "新建生涯". Then align rule
+   10, rule 21, the load table, the formula, the edge case, UI Requirements 3–4,
+   AC 23 and the registry note to whichever definition is chosen.
+
+### Recommended Revisions
+
+1. **[RECOMMENDED] Registry — `save_backup_count` still missing.** Rule 9
+   defines `SAVE_BACKUP_COUNT = 1`; `entities.yaml` still registers only
+   `save_schema_version`, `save_bytes_max` and `save_max_slots` from this
+   system. (Carried from the prior review; registry not editable here.)
+2. **[RECOMMENDED] Formulas — `save_bytes` lower bound is still wrong.** GDD
+   line 206 says `0–SAVE_BYTES_MAX`, registry line 817 says `[0, 262144]`, but
+   `B_base = 1024`. Both should start at 1024.
+3. **[RECOMMENDED] Detailed Rules — Rule 2's illustrative list still omits
+   `base_capacity` (line 28).** It is a current hard upstream field
+   (`data-config.md:59, 117`); add it or mark the list illustrative.
+4. **[RECOMMENDED] Open Questions — OQ 8 is answered.** `ui-flow.md` rule 24
+   owns the settings screen and model; mark OQ 8 (line 418) answered and update
+   its owner/target.
+5. **[RECOMMENDED] Cross-References — the `待回改` list is stale (lines
+   346–352).** Items 1–4 are applied; item 5 describes the index as `Designed`
+   while it now reads `In Review`. Also `meta-upgrades.md:37` still says "需在
+   存档 GDD 补一条规则，见待回改" — Rule 18 now exists, so that parenthetical
+   can be dropped.
+6. **[RECOMMENDED] Edge Cases — line 238 still says only "纪录类事务保留内存".**
+   Rule 18 now also covers settlement wallet (`progression`) and unlocks;
+   restate the retry branch as "结算入账 / 纪录 / 迁移" to match the rule and
+   the state table.
+
+### Nice-to-Have
+
+1. **`n_sta` / `n_dish` / `n_rec` ranges omit retained unknown ids (lines 197,
+   199, 200).** Rule 14 preserves unknown ids in all three namespaces, but only
+   `n_upg` says "含保留的未知 id"; the 256 KiB cap absorbs the overage, so
+   either say so or widen the ranges.
+2. **Player Fantasy / Tuning Knobs (advisory at `standard`).** Add a short
+   cross-reference or section so the standard checklist resolves.
+3. **AC 13's "磁盘不发生写入" (line 378) is imprecise.** An injected failure
+   during the temp-file write still touches disk before failing; "主档与备份
+   哈希不变" matches AC 11 and is directly assertable.
+4. **Cross-document wording — "存档规则 80".** `ui-flow.md:59/616` and
+   `unlocks-and-stations.md:55` still cite it; this GDD has 25 numbered rules,
+   so the citation means line 80. Use "存档 GDD 第 80 行".
+
+### Scope Signal
+
+**Rough scope signal: L** — four formula blocks, one upstream + six hard
+downstream systems, and three ADR-stage decisions (serialization format OQ 2,
+save path / loader OQ 3, write-lock implementation OQ 9; Steam Cloud OQ 4
+later). `systems-index.md:200` rates the design effort `S`; this review
+signals **L** and the producer should verify before sprint planning.
+
+### Verdict: NEEDS REVISION
+
+Suggested systems-index status: **Needs Revision** (`systems-index.md:60`
+currently reads `In Review`). Per the parallel constraint this review did not
+modify the index; the orchestration session updates it. Both blocking items are
+small text-level fixes to the load formula and the `ReadOnly` definition — no
+envelope or state-model redesign — so one revision pass should clear the way
+for a re-review.
+
+---
+
+Receipt (files this review read for cross-document facts):
+```
+Reviewed-Content-Hash: design/gdd/save-system.md 5d80a9bdcd8ffc603a0fa7d635fc736b40a4fe04
+Reviewed-Content-Hash: design/registry/entities.yaml 802229dacc5554b1509f98fd6d13ec637c576f7c
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/data-config.md 7dc918c23ab271495049b5fd33bddd08a5dc6c55
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md 7dc02ff087d4ac059d4a81caa1b0c375483113ed
+Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md bcde83821bc73ad7c67a24d38a8659ce2d53693b
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md ca1ecf5a176da065f59c2b3b8261174fb1479571
+Reviewed-Content-Hash: design/gdd/ui-flow.md 8f8255543b934bb5bfc11e7cbe914b668743e474
+Reviewed-Content-Hash: design/gdd/scene-flow.md e1d10bd89706bef8f4cffa93065a9206fb1f54b6
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md c4175b09389504117ef102bad74116cead0f044e
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md 38ebc87b9b529f9d32ce4fba2202411ce7891876
+Reviewed-Content-Hash: design/gdd/menu-waves.md a9ed433be48d155399168a5519ae0f3c99c7d9f8
+Reviewed-Content-Hash: design/gdd/systems-index.md 01259cc27663f7a47234e09c674e143fa3e2ba5c
+Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
+```
