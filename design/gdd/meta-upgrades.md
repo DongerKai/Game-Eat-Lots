@@ -52,17 +52,16 @@
 
 14. **`MENU_VISION` 买的是「下一波多看几道」** — 每级为本局的下一波预览额度 +1（`effect_value` 必须是正整数，由数据配置保证）；解析值 `menu_vision = Σ effect_value × level`。菜单波次按 `preview_dishes = min(menu_vision, wave_size − 1, |W_next|)` 消费它：**只揭示下一波，不揭示更远的波，也永远不揭示整波**。本系统拥有等级语义，菜单波次拥有上限语义；两者不得各自再定义一遍。升级页必须在购买前显示「下一波预览 X → Y 道（本档口上限 Z 道）」。
 
-15. **`MENU_VISION` 不卖无效等级** — 对当前档口，`menu_vision_useful_max = ceil((wave_size − 1) / effect_value)`；当前等级已达该值后再买一级不会增加任何预览，购买被拒绝为 `NO_EFFECT`，界面显示「本档口已看满」。MVP 的 `wave_size = 4`、`effect_value = 1` → 上限 3 级；这正好是记录的 `max_level`，所以正常路径不会触发 `NO_EFFECT`；它是防止未来档口 `wave_size` 变小后继续卖废等级的护栏。**这是对菜单波次 Open Question 3 / 依赖行的数值回答。**
+15. **`MENU_VISION` 不卖无效等级** — 对当前档口，`menu_vision_useful_max = ceil((wave_size − 1) / effect_value)`；当前等级已达该值后再买一级不会增加任何预览，购买被拒绝为 `NO_EFFECT`，界面显示「本档口已看满」。MVP 的 `wave_size = 4`、`effect_value = 1` → 上限 3 级；这正好是记录的 `max_level`，所以正常路径不会触发 `NO_EFFECT`；它是防止未来档口 `wave_size` 变小后继续卖废等级的护栏。**这是对菜单波次的 `MENU_VISION` 上限契约（依赖行）的数值回答；OQ 3 属于排除法遮蔽，不是本上限。**
 
-16. **`CLOYING_RESISTANCE` 是「每级减少 1 点追加饱腹」** — **这是对腻度与口味 Open Question 9 的回答。** 解析值 `R = floor(Σ effect_value × level)`；腻度系统按
+16. **`CLOYING_RESISTANCE` 是「每级减少 1 点追加饱腹」** — **这是对「腻度与口味」D1 决策的回答。** 解析值 `R = floor(Σ effect_value × level)`；腻度系统按
     `extra_satiety(d) = max(0, min(group_cloy(group(d)), cloy_cap) − R)`
     计算。抗性是**读取时偏移**，不修改 `group_cloy` 计数：解腻（计数 −1）与抗性（读数 −R）互不干扰，吃菜顺序的一切既有结论保持不变。
     - 选「定点减 1」而不是「百分比缩放」的理由：本作的全部算术必须能心算（支柱 1）。`1 × 80% = 0.8 格`无法在桌上结算；定点减法只说「少 1 点」，并且与容量升级的「多 1 格」是同一把尺子。
     - 百分比方案在 MVP 里没有区别：组最大 2 道，原始追加最多 1 点，任何 `r > 0` 都会把它抹成 0，却引入小数与取整争议。定点方案在后续大组（原始 2–3 点）里线性、可预期。
     - 护栏：任一档口的设计必须满足 `R_max ≤ cloy_cap − 1`，保证满级玩家在同组吃满时仍至少付 1 点重复代价（支柱 2「没有白吃的菜」）。MVP `cloy_cap = 3`、`R_max = 1`，满足。
     - 抗性不能让 `extra_satiety` 变负；下限 0。抗性也不改变 `cloy_cap` 的含义，后者仍是原始追加的上限。
-
-**20 元定价是保险位，不是收益位** —— 在「腻度与口味」的 canonical order（红烧肉 → 拍黄瓜 → 糖醋里脊 → 其余）下重复惩罚本来就是 0，抗性收益恒为 0；它只对尚未掌握顺序的玩家兑现，价值上限约 4 元/局（省下的 1 格换成更高值的菜）。因此这项升级不参与「每局稳定回本」的校准。`/prototype` 若测出新手在 3 局内普遍学会 canonical order，应把 L1 价格下调到 12–16，而不是加效果——加效果会让掌握顺序的玩家白拿收益，回到 D1 已否决的「解腻免费」。
+    - **20 元定价是保险位，不是收益位** —— 在「腻度与口味」的 canonical order（红烧肉 → 拍黄瓜 → 糖醋里脊 → 其余）下重复惩罚本来就是 0，抗性收益恒为 0；它只对尚未掌握顺序的玩家兑现，价值上限约 4 元/局（省下的 1 格换成更高值的菜）。因此这项升级不参与「每局稳定回本」的校准，也不通过调价把它伪装成收益位。`/prototype` 若测出新手在 3 局内普遍学会 canonical order，按「腻度与口味」D1 决策处理：第二档口必须引入 ≥4 道同组菜让 `cloy_cap` 真正生效，而不是给抗性加效果或改价绕开；是否继续售卖抗性由该 D1 决定。
 
 17. **三项效果各自独立，不交叉相乘** — 容量升级只加 `capacity_bonus`，不解腻；解腻只减追加饱腹，不加容量；视野只买信息，不改价格、饱腹或腻度。任何「升级影响另一种升级收益」的乘区都推迟到 Vertical Slice 并需重写本 GDD。
 
@@ -144,7 +143,7 @@ The `wallet_after_run` formula is defined as:
 | `net_profit(R)` | int64 | −entry_fee – (Σprice − entry_fee) | 结算 `RunResult.net_profit` | 有符号净利，结算不钳制 |
 | `wallet'` | int64 | 同上 | calculated | 本局之后的余额；不设玩法上下限 |
 
-**Output Range:** int64 全区间；**不做玩法钳制**。唯一失败模式是 checked 加法溢出 → `WALLET_OVERFLOW`，原值不变、不落盘。
+**Output Range:** int64 全区间；**不做玩法钳制**。唯一算术失败模式是 checked 加法溢出 → `WALLET_OVERFLOW`：钱包保持原值、`progression` 键不进入结算事务，磁盘上的钱包不变；`records` 仍随同一次 `commit` 提交。
 
 **Example:** 新档 `0 + 19 = 19`；下一局亏损 `19 + (−31) = −12`；再一局打平 `−12 + 0 = −12`；此时买 12 元的升级：`−12 < 12` → `INSUFFICIENT_FUNDS`。
 
@@ -293,7 +292,7 @@ The `menu_vision_useful_max` formula is defined as:
 - **If `entry_fee = 0`**：`net_profit = total_value`，钱包只增不减；入账逻辑不变。
 - **If 同一 `run_id` 第二次入账**：返回 `ALREADY_APPLIED`，钱包不变；不写档、不发信号。
 - **If 入账时 `commit` 失败**：内存保留新值，`progression` 标记 dirty，返回 `APPLIED_UNSAVED`；收据显示「+N（未保存）」，钱包余额按内存显示；下次成功提交时一并写入。
-- **If 入账加法溢出 int64**：返回 `WALLET_OVERFLOW`，钱包保持原值，不写档；收据显示「入账失败」，本局仍交由纪录系统处理。
+- **If 入账加法溢出 int64**：返回 `WALLET_OVERFLOW`，钱包保持原值，`progression` 键不进入结算事务；收据显示「入账失败」，`records` 仍随同一次 `commit` 提交（载荷不含 `progression`）。
 - **If 存档为 `Blocked` / 不可写**：入账仍更新内存钱包与「本次会话不保存」标记；购买全部返回 `NOT_WRITABLE`。
 
 **购买**
@@ -326,7 +325,7 @@ The `menu_vision_useful_max` formula is defined as:
 **生涯与生命周期**
 
 - **If 删除生涯**：钱包 0、等级表空，升级页刷新为初始状态；不保留任何内存缓存。
-- **If 首局使用 6 道菜的引导菜池**：本系统**不特判**，照常按该局档口的 `entry_fee` 入账。若引导局必然亏损，应由首局引导选择免单/低费档口，而不是由钱包开特例（见 Open Question 1）。
+- **If 首局使用 6 道菜的引导菜池**：本系统**不特判**，照常按该局档口的 `entry_fee` 入账。首局引导若需要更低的回本线，应选低费档口（当前为 `entry_fee_override = 40` 的教学价），而不是由钱包开特例（见 Open Question 1）。
 - **If 玩家在收据页停留很久后退出**：收益已在收据显示前落盘；退出不重复入账、不丢收益。
 - **If 购买成功后立刻崩溃**：磁盘已更新；重启后等级与钱包一致（这是「先落盘再确认」的全部意义）。
 
@@ -347,7 +346,7 @@ The `menu_vision_useful_max` formula is defined as:
 | 餐局流程 | 软（间接） | 经界面流程消费快照；run-flow 明确把它列为间接关系，不算直接依赖 | GDD 已写（`design/gdd/run-flow.md`） |
 | 胃容量 | 硬 | `capacity_bonus` 加到基础容量 | GDD 已写（`design/gdd/stomach-capacity.md`） |
 | 菜单波次 | 软（强） | `menu_vision` 作为总预览额度；上限由它执行 | GDD 已写（`design/gdd/menu-waves.md`） |
-| 腻度与口味 | 硬 | `cloying_resistance`；需按本 GDD 规则 16 的表达式接入 | GDD 已写（`design/gdd/cloying-and-taste.md`，公式尚未含抗性项） |
+| 腻度与口味 | 硬 | `cloying_resistance`；需按本 GDD 规则 16 的表达式接入 | GDD 已写（`design/gdd/cloying-and-taste.md`，`extra_satiety` 与 OQ 9 已含抗性） |
 | 界面流程 | 硬（UI） | 升级页、收据入账、钱包与「未保存」状态 | GDD 已写（`design/gdd/ui-flow.md`） |
 | 解锁与档口 | 软 | 读取钱包与等级作为解锁前置；`unlock_cost` 扣款经 `spend(amount, reason, extra)` | GDD 已写（`design/gdd/unlocks-and-stations.md`） |
 | 纪录与里程碑 | 软 | 从 `upgrade_snapshot.levels` 冻结历史等级 | GDD 已写（`design/gdd/records-and-milestones.md`） |
@@ -355,7 +354,7 @@ The `menu_vision_useful_max` formula is defined as:
 | 音效反馈 | 软（可选） | 本系统发出 `purchase_succeeded` / `purchase_failed` / `run_result_applied`；MVP 不消费 | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 场景与流程管理 | 软（编排） | 购买只在 `Menu`；本系统不驱动顶层状态 | GDD 已写（`design/gdd/scene-flow.md`） |
 
-**双向一致要求**：以上每个上游必须在其 Dependencies 中列出本系统，并在 Cross-References 中回指；下游必须写明「只消费快照，不重算等级」。存档已在下游表列出本系统；结算已列出；数据配置已列出。腻度与口味、菜单波次需要补上「局外升级」行并把 Open Question 标记为已回答（见下）。
+**双向一致要求**：以上每个上游必须在其 Dependencies 中列出本系统，并在 Cross-References 中回指；下游必须写明「只消费快照，不重算等级」。存档、结算、数据配置已列出本系统；菜单波次已在依赖表列出本系统并写明上限由本系统保证。腻度与口味已在 Interactions 表以「上游（经快照）」列出，但其 Dependencies 表仍缺一行，留给编排会话统一回改。
 
 **对「腻度与口味」的契约**：抗性按 `extra_satiety = max(0, min(group_cloy, cloy_cap) − floor(cloying_resistance))` 生效，作为读取时偏移；不得修改 `group_cloy`、不得改变 `cloy_cap` 语义、不得新增百分比路径。抗性由「餐局流程」在开局时随 `upgrade_snapshot` 传入，腻度不直接依赖本系统——这条依赖方向沿用腻度 GDD 已写明的理由，避免与 `局外升级 → 结算 → 腻度` 成环。
 
@@ -364,6 +363,8 @@ The `menu_vision_useful_max` formula is defined as:
 **对「结算与入场费」的契约**：净利全额入账，允许为负；不按 0 计入；入场费运行期不变，校准只按未升级上限设计。结算 Open Question 1 与 6 均在此回答。
 
 **待回改（不在本文件执行，交由编排会话统一处理）**：
+
+**2026-11-04 复核**：3、4、7、9 已回改；5 的 Interactions 行、公式与 OQ 9 已回改，但 Dependencies 表仍缺一行；6 的依赖行与归属句已回改，OQ 3 是排除法遮蔽问题、不应标记；2 的四条公式已入册（`menu_vision_useful_max` 已带 menu-waves 引用），仍缺 `cloy_cap`、`station_canteen_entry_fee`、`base_capacity` 的 `referenced_by`；1（`systems-index.md` 仍为 In Review）与 8（`run-flow.md` OQ 11 仍开放）待处理。
 
 1. `systems-index.md` — #12 行改为 `Designed` / `design/gdd/meta-upgrades.md`；进度计数 `Design docs started` 与 `MVP systems designed` 各 +1；补充升级页的 UX 备注。
 2. `entities.yaml` — 新增 `upgrade_price`、`upgrade_tree_cost`、`wallet_after_run`、`menu_vision_useful_max` 四条公式；**不新增** `upgrade_cost_growth` 常量（增长率是 `UpgradeData.cost_growth` 记录字段）；`net_profit`、`extra_satiety`、`opt_value`、`calibration_ratio` 的 `referenced_by` 追加本文件；`extra_satiety` 的表达式/notes 就地改为含抗性的版本（不新增 `resisted_extra` 条目，避免同一事实两份定义）；`net_profit` 的 notes 改为「入账规则由局外升级定义」；`calibration_ratio` 的 notes 补「满级容量 25 时 120/85 = 1.412，必须落在满级带 [1.35, 1.45]」。
@@ -427,14 +428,14 @@ The `menu_vision_useful_max` formula is defined as:
 | `design/gdd/settlement-and-entry-fee.md` | 上游 | `net_profit`（有符号、不钳制）、`RunResult`；Open Question 1/6 的答案 |
 | `design/gdd/save-system.md` | 上游 | `progression` 命名空间、`commit` 事务、`mark_dirty`/`flush`、`SaveStatus`、等级钳制与未知 id 保留 |
 | `design/gdd/data-config.md` | 上游 | `UpgradeData` 字段、`StationData.wave_size`、`Ready` 前提、id 发布后不可改名 |
-| `design/gdd/run-flow.md` | 下游（间接） | `upgrade_snapshot` 的三个必填键与冻结语义；Open Question 11 的答案 |
+| `design/gdd/run-flow.md` | 下游（间接） | `upgrade_snapshot` 的三个必填键与冻结语义；OQ 11 待关闭（本系统提供 `levels` 副本） |
 | `design/gdd/cloying-and-taste.md` | 下游 | 抗性表达式与 Open Question 9 的答案 |
-| `design/gdd/menu-waves.md` | 下游 | `menu_vision` 的消费方式与上限；Open Question 3 |
+| `design/gdd/menu-waves.md` | 下游 | `menu_vision` 的消费方式与上限契约（依赖行）；OQ 3 是排除法遮蔽 |
 | `design/gdd/dish-values.md` | 校准来源 | `opt_value = 104`、`unit_value`；`capacity_ceiling` 的输入 |
 | `design/gdd/game-concept.md` | 来源 | MVP 三项升级、会话级停点、长期成长与「数字看得见地涨」 |
 | `design/gdd/systems-index.md` | 索引 | 优先级 MVP、层 Feature、设计顺序 #11、依赖 `结算与入场费 / 存档 / 数据配置` |
 
-**待回指**：界面流程、首局引导的 GDD 写好后，必须在各自的 Dependencies 与 Cross-References 中列出「局外升级」，并写明「只消费快照，不重算等级」。胃容量、纪录与里程碑、音效反馈、解锁与档口已回指。
+**待回指**：界面流程、首局引导均已在 Dependencies 列出本系统（界面流程还消费 `prepare_run_result` 与 `purchase`），但仍需在各自的 Cross-References 中补一句「只消费快照，不重算等级」。胃容量、纪录与里程碑、音效反馈、解锁与档口已回指。
 
 ## Acceptance Criteria
 
@@ -447,7 +448,7 @@ The `menu_vision_useful_max` formula is defined as:
 3. **GIVEN** `wallet = 19` 与 `net_profit = −31`，**WHEN** 入账，**THEN** `wallet = −12`；**不**钳制为 0。
 4. **GIVEN** 同一 `RunResult` 连续入账两次，**WHEN** 第二次调用，**THEN** 返回 `ALREADY_APPLIED`，钱包仍为第一次的结果，`commit` 只发生一次。
 5. **GIVEN** 注入编排者 `commit` 失败，**WHEN** 入账 `+19`，**THEN** 返回 `APPLIED_UNSAVED`，内存钱包为 19，`progression` 为 dirty；随后恢复写盘并 `flush`，磁盘上的钱包为 19。
-6. **GIVEN** 注入 `wallet + net_profit` 溢出 int64，**WHEN** 入账，**THEN** 返回 `WALLET_OVERFLOW`，钱包保持原值，未写档。
+6. **GIVEN** 注入 `wallet + net_profit` 溢出 int64，**WHEN** 入账，**THEN** 返回 `WALLET_OVERFLOW`，钱包保持原值；编排者的 `commit` 恰好一次且载荷只含 `records`（不含 `progression`），磁盘钱包不变，不发 `progression_changed`，收据显示「入账失败」。
 
 **价格**
 
@@ -490,7 +491,7 @@ The `menu_vision_useful_max` formula is defined as:
 
 | # | 问题 | 负责人 | 目标解决时间 |
 |---|---|---|---|
-| 1 | **首局引导的 6 道菜局会不会把新玩家打进债务？** 本系统不特判首局：若引导局的菜池上限低于入场费 85，玩家第一局就负资产。建议首局使用 `entry_fee = 0` 或专用低费档口（数据配置），而不是给钱包开特例。 | ux-designer（首局引导）+ economy-designer | 首局引导 GDD 完成时 |
+| 1 | **首局引导的 6 道菜局会不会把新玩家打进债务？** **已回答（2026-11-04）**：本系统不特判首局；首局引导用 `entry_fee_override = 40` 的教学价并按该档口正常入账（它明确拒绝 0 元，零费会让 `running_net` / `shortfall` / 回本率退化），无需钱包特例。 | ux-designer（首局引导）+ economy-designer | 已回答 |
 | 2 | **负钱包是否需要一个债务上限或「重新开始」出口？** 当前无下限、无救济，玩家可以一直负着玩。若试玩显示挫败感过强，可加入「最低 0」或一次性清零，但那会改变「回本」的含义，需重写规则 3。 | economy-designer | `/prototype` 与首轮试玩后 |
 | 3 | **容量升级的收益被 10 回合封顶。** 26 格后每点容量都是废等级；是否需要「回合 +1」作为第四项升级（属于时间与回合），或把容量效果改为每级 +2？ | game-designer + economy-designer | 时间与回合 GDD 完成时 |
 | 4 | **多档口时，`menu_vision` 的等级上限按哪个 `wave_size` 算？** 当前只有一个档口；若各档口 `wave_size` 不同，升级页需要显示每个档口的上限，或改为允许购买但标注「本档口已看满」。 | ux-designer + game-designer | Vertical Slice 规划时 |
@@ -498,6 +499,6 @@ The `menu_vision_useful_max` formula is defined as:
 | 6 | **升级页是否需要「推荐购买」顺序？** 首局引导可能想高亮一项；本系统只提供价格与可负担性，不定义推荐算法。 | ux-designer（首局引导） | `/ux-design` 升级页时 |
 | 7 | **购买是否要二次确认？** UI 要求暂定「要」，因为不可退款；若试玩显示每次购买都确认太啰嗦，可只对价格 ≥ 某阈值的购买确认。 | ux-designer | `/ux-design` 升级页时 |
 | 8 | **`last_applied_run_id` 不持久化。** 会话级去重依赖结算的「每局一次」保证；若未来加入局史或断线续跑，需要把它写进存档，并走 schema 迁移。 | lead-programmer（存档） | 纪录与里程碑 GDD 完成时 |
-| 9 | **价格增长率是否需要按升级分别配置？已解决（2026-11-03）**：给 `UpgradeData` 增加 `cost_growth: float`（默认 1.35），每条记录自带增长率；MVP 三项均为 1.35。需数据配置 GDD 回改该字段。 | systems-designer + lead-programmer | 数据配置回改时 |
+| 9 | **价格增长率是否需要按升级分别配置？已解决（2026-11-03）**：给 `UpgradeData` 增加 `cost_growth: float`（默认 1.35），每条记录自带增长率；MVP 三项均为 1.35。数据配置已回改该字段（2026-11-04 复核）。 | systems-designer + lead-programmer | 已回答 |
 | 10 | **升级页在会话中的位置。** 当前只从 `Menu` 进入，且收据后自然引导；是否允许玩家在任意菜单停留点打开升级页，由界面流程决定，不影响本系统事务。 | ux-designer（界面流程） | 界面流程 GDD 完成时 |
 | 11 | **档口解锁的扣款接口。** **已回答（2026-11-03）**：采用通用 `spend(amount, reason, extra)`，与购买一样先落盘再确认；见 `design/gdd/unlocks-and-stations.md`。 | systems-designer（解锁与档口） | 解锁与档口 GDD 完成时 |
