@@ -621,3 +621,238 @@ Reviewed-Content-Hash: design/gdd/meta-upgrades.md b9b9235e9a4ad7d8739ad778e98dd
 Reviewed-Content-Hash: design/gdd/records-and-milestones.md 9fe5183795ca3d47798510a1d00a040dabe3ca61
 Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
 ```
+
+---
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION
+
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean mode — Phase 3b skipped)
+Blocking items: 3 | Recommended: 10 | Nice-to-have: 6
+Prior verdict resolved: Partially — prior blocking 1 is resolved in the formula and
+covered by a new AC but not in the three sites that still say "不迁移"; prior blocking 2
+is resolved in rule 21, UI 4 and AC 23 but survives in the state table; the newly
+offered 「重试」 action has no defined mechanism and contradicts the `load()` contract.
+
+Summary: Both fixes named in the round-3 brief are present, and the version-precedence
+half of blocking 1 is now exactly right: the load formula tests `version(P) > V` ahead
+of the lock branches (line 135), so a live lock can no longer downgrade a too-new file
+to `ReadOnly`, and AC 24b (line 400) pins both halves of that branch. What did not travel
+with the fix is the wording: rule 10 (line 36), the load table (line 65) and the formula
+example (line 161) still define `ReadOnly` as "不迁移", which is the same defect blocking 1
+named — for `version(P) < V` the definition sites forbid the only behaviour the AC allows.
+Likewise blocking 2 was applied to rule 21, UI 4 and AC 23 but not to the state table
+(lines 66, 78), which still sends every `Blocked` reason to 「新建生涯（旧档保留）」. One new
+defect is a direct consequence of the new exit: 「重试」 is now the only non-exit action in
+two `Blocked` reasons, yet `load()` is specified to cache its report and never re-read
+(line 101), and the state table has no retry transition — the button cannot do anything.
+
+### Prior Blocking Items — Status
+
+1. **PARTIALLY RESOLVED** — round 3 asked for the version check ahead of the lock
+   branches and a defined rendering source for a lower-version `ReadOnly`, plus an AC.
+   Done: line 135 returns `Blocked` for `readable(P) ∧ version(P) > V` before the lock
+   branches; AC 24b (line 400) asserts `ReadOnly` + in-memory read-only migration for
+   `version(P) < V` and `Blocked`, no browsing, for `version(P) > V`. Not done: rule 10
+   (line 36, "可浏览不可写、**不迁移**"), the load table (line 65, "可浏览；写入禁用；
+   **不迁移**") and the formula example (line 161, "允许浏览但不写入、**不迁移**") were not
+   updated. Rule 21 (line 47) and UI 3 (line 323) do not name the data source either.
+   The AC is now the only site that permits the behaviour the other three forbid.
+
+2. **PARTIALLY RESOLVED** — round 3 asked to branch the `Blocked` exits by reason and to
+   use one canonical reason set. Done in this document: rule 21 (line 47) now says the
+   lock-plus-unreadable case offers **only** 「退出」与「重试」 and never 「新建生涯」;
+   UI 4 (lines 324–329) branches all four reasons and withholds 新建生涯 from 迁移失败 and
+   持锁不可读; AC 23 (line 399) covers the atomic-window case and asserts no file is
+   renamed. Not done: the load table's `Blocked` row (line 66) still reads "只有玩家确认
+   新建生涯或退出" for all four reasons, and the transition row (line 78)
+   `Blocked → 玩家确认新建生涯 → Fresh → Clean / 旧文件改名隔离` is still unconditional —
+   the exact quarantine action rule 21 forbids against a live instance is still reachable
+   through the table. Cross-document alignment is also incomplete: `ui-flow.md`
+   (42–43, 81, 144, 401–402, 504, 586) still gives the modal exactly two exits, line 504
+   says "两种原因之一" and line 630 says "三种原因（更新版本 / 无法读取 / 另一实例）" with
+   另一实例 listed as a `Blocked` reason (it is `ReadOnly` when readable).
+
+**This round's three named fixes — verified:** version-higher-than-current checked before
+the lock branch ✓ (line 135; registry expression line 782 already matches); older-version
+`ReadOnly` rendered from an in-memory, never-persisted migration ✓ (AC 24b, line 400 —
+but see blocking 1); lock-plus-unreadable `Blocked` offers only 退出/重试 ✓ (rule 21
+line 47, UI 4 line 328, AC 23 line 399 — but see blocking 2); AC 23/24b added ✓.
+
+### Completeness: 6/6 required sections present (standard tier)
+
+Required at `standard`: Overview, Detailed Rules (`## Detailed Design`), Formulas, Edge
+Cases, Dependencies, Acceptance Criteria — all present. Formulas is required because the
+system defines four numeric rules.
+
+Advisory gaps (do not block at `standard`):
+- **Player Fantasy** — absent as a heading; `## Game Feel` covers the intent.
+- **Tuning Knobs** — absent as a section; constants remain scattered.
+
+### Dependency Graph
+
+- ✓ `design/gdd/data-config.md` — exists (upstream, hard)
+- ✓ `design/gdd/meta-upgrades.md` — exists (downstream, hard)
+- ✓ `design/gdd/unlocks-and-stations.md` — exists (downstream, hard)
+- ✓ `design/gdd/records-and-milestones.md` — exists (downstream, hard)
+- ✓ `design/gdd/ui-flow.md` — exists (downstream, hard UI)
+- ✓ `design/gdd/scene-flow.md` — exists (declared non-dependency, timing only)
+- ✗ `design/gdd/online-challenge.md` — NOT FOUND; `systems-index.md` #19 is
+  `Not Started`. Declared soft / 未写, so an expected forward reference.
+
+### Registry Values
+
+Searched the whole document for every registry entry name this system owns or references
+(`load_outcome`, `migrate`, `save_bytes`, `slots_available`, `save_schema_version`,
+`save_bytes_max`, `save_max_slots`, `save_backup_count`, `base_capacity`, `total_value`,
+`entry_fee`, `milestone_met`, `effective_unlocks`).
+
+- **Matches:** `load_outcome` has six values in both GDD (line 157) and registry (line
+  781), and the registry expression (line 782) mirrors the GDD formula *including* the
+  version-before-lock precedence — the two agree on the decision order for the first
+  time. `migrate`, `save_schema_version = 1`, `save_bytes_max = 262144`,
+  `save_max_slots = 1` and the `save_bytes` terms all agree.
+- **Conflicts:** `save_backup_count` — rule 9 (line 35) defines `SAVE_BACKUP_COUNT = 1`
+  but the registry still has no such entry (Recommended 2). `save_bytes` output range —
+  GDD line 206 says `0–SAVE_BYTES_MAX`, registry line 817 says `[0, 262144]`, while
+  `B_base = 1024` (Recommended 3). `base_capacity` exists in the registry but is missing
+  from rule 2's illustrative list (line 28) (Recommended 4).
+- **Registry note lags the fix:** `load_outcome`'s note (line 783) still says
+  "ReadOnly = a live lock over any readable file (browse, no write, **no migration**)",
+  while AC 24b requires an in-memory migration for rendering. The expression is right; the
+  prose is stale (Recommended 10).
+
+### Required Before Implementation
+
+1. **[BLOCKING] Detailed Rules / States / Formulas — `ReadOnly` is still defined as
+   "不迁移" in the three definition sites, contradicting AC 24b (lines 36, 65, 161 vs
+   line 400; `entities.yaml:783`; `ui-flow.md:81,401`).**
+   Rule 10 reads "`ReadOnly`（… 可浏览不可写、不迁移）", the load table reads
+   "可浏览；写入禁用；不迁移", and the formula example reads "允许浏览但不写入、不迁移".
+   AC 24b is the opposite: "用内存中的只读迁移渲染，不写盘". For `version(P) < V` with a
+   live lock, an implementer working from rule 10 or the table has no defined source for
+   the wallet, levels, unlocks and records the menu must display — this is exactly the
+   defect round 3's blocking 1(a) named, now confined to the definition sites.
+   Fix: in rule 10, the load table and the formula example, replace "不迁移" with
+   "迁移结果只在内存中用于渲染，绝不写盘"; add the same clause to rule 21 (line 47) and
+   UI 3 (line 323). Keep AC 24b as the test.
+
+2. **[BLOCKING] States and Transitions — the `Blocked` rows still offer 新建生涯 for all
+   four reasons (lines 66, 78; contradicts rule 21 line 47 and UI 4 lines 324–329).**
+   The load table's `Blocked` row says "进入 `Menu` 后由界面流程说明；只有玩家确认新建生涯
+   或退出", and the transition table says `Blocked | 玩家确认新建生涯 | Fresh → Clean | 旧文件
+   改名隔离`. Both are unqualified, so 迁移失败 and 持锁且文件不可读 still lead to an action
+   that renames a live instance's files — the precise violation of rule 21's
+   "绝不覆盖对方的文件 … 宁可只读，不可覆盖" that round 3 raised.
+   Fix: branch the table's 后续行为 by reason in the same four terms UI 4 uses —
+   「无可用副本」「版本高于当前」→ 退出 / 新建生涯（旧档保留）；「迁移失败」「持锁且文件不可读」
+   → 退出 / 重试；and qualify the `Blocked → Fresh` transition as 仅前两种原因.
+   Cross-document (not editable in this review): align `ui-flow.md:42–43, 81, 144,
+   401–402, 504, 586, 630` to the same four-reason set.
+
+3. **[BLOCKING] Interfaces / UI Requirements — 「重试」 has no mechanism, and `load()` is
+   specified never to re-read (lines 101, 327–328, 47, 399; no transition at lines 70–79,
+   no AC).**
+   Rule 21, UI 4 (迁移失败 and 持锁不可读 rows) and AC 23 make 「重试」 the only non-exit
+   action in two `Blocked` reasons. The interface table says `load()` "重复调用返回同一结果，
+   不重复读写", so a retry that calls `load()` returns the same `Blocked` report; the state
+   table defines no retry transition; no AC exercises it. In the 迁移失败 case the retry is
+   a re-run of a pure function over an unchanged file and is guaranteed to fail again
+   unless it re-reads from disk.
+   Fix: define the retry contract (a `retry_load()` — or `load({force: true})` — that
+   discards the cached report, re-probes the lock and re-reads P/B, callable only from
+   `Blocked`), add the `Blocked → Dirty / Clean` transition, state per reason what retry
+   does (lock: re-probe and wait; migration failure: re-read then re-run), and add an AC
+   asserting one retry after the lock clears yields the non-`Blocked` outcome.
+
+### Recommended Revisions
+
+1. **[RECOMMENDED] Formulas — the `ReadOnly` branch does not define what happens when the
+   in-memory migration fails (line 136).** It tests only `readable(P)`; `valid(P)` and
+   `migrate(...)` are not in the branch. A parseable file that is illegal under its
+   declared schema — or whose migration returns `MigrationError` — while another instance
+   holds the lock lands in `ReadOnly` with no rendering source. Define the fallback, most
+   consistently `Blocked` with 退出 / 重试 only (no quarantine), and cover it with the
+   retry AC from blocking 3.
+2. **[RECOMMENDED] Registry — `save_backup_count` is still missing.** Rule 9 (line 35)
+   defines `SAVE_BACKUP_COUNT = 1`; `entities.yaml` registers only `save_schema_version`,
+   `save_bytes_max` and `save_max_slots` for this system. (Carried; registry not editable
+   here.)
+3. **[RECOMMENDED] Formulas — `save_bytes` lower bound is still 0.** GDD line 206 and
+   registry line 817 both start at 0, but `B_base = 1024` (line 193). (Carried.)
+4. **[RECOMMENDED] Detailed Rules — rule 2's illustrative list still omits `base_capacity`
+   (line 28).** It is a current hard upstream field (`data-config.md`, registry line
+   1263). (Carried.)
+5. **[RECOMMENDED] Cross-References — the 待回改 list is stale (lines 351–357).** Items
+   1–4 are applied and item 5 still says the index should read `Designed` while
+   `systems-index.md:60` reads `In Review`. Delete the list or mark the items done.
+   (Carried.)
+6. **[RECOMMENDED] Edge Cases — line 238 still says only "纪录类事务保留内存".** Rule 18
+   covers settlement wallet (`progression`), records, unlocks and migration; restate as
+   "结算入账 / 纪录 / 迁移". (Carried from round 2.)
+7. **[RECOMMENDED] Acceptance Criteria — AC 1 (line 365) still does not account for the
+   Fresh-time backfill.** It asserts "解锁集为空" then a baseline write, while edge case
+   line 232 requires `normalize()` before the baseline and the baseline to carry the
+   backfilled `unlocks`. State "回填前解锁集为空；基线包含回填后的集合". (Carried.)
+8. **[RECOMMENDED] Interfaces — the outbound `normalize()` call is still not recorded.**
+   Edge case line 232 and `unlocks-and-stations.md:53` agree that the save system calls
+   `normalize(∅)` before the first baseline, but the interface table (lines 99–107) and
+   the 解锁与档口 row (line 89) describe only inbound `commit`/`mark_dirty`. State the
+   bootstrapping order (unlocks `Ready` after load, before the baseline transaction) and
+   what happens if `normalize()` is unavailable — otherwise both sides can deadlock on
+   "wait for the other to be ready". (Carried.)
+9. **[RECOMMENDED] Cross-document — `ui-flow.md` still carries the old `Blocked` reason
+   set.** Lines 42–43/504 give the modal two exits and "两种原因", line 630 lists three
+   reasons with 另一实例 among them. The canonical set is the load table's four
+   (line 66). Fix in the ui-flow pass. (Carried, now broader than round 3's item 8.)
+10. **[RECOMMENDED] Cross-document — the registry `load_outcome` note lags the memory-
+    migration fix (`entities.yaml:783`).** The expression is correct; the note still says
+    "no migration" for `ReadOnly`. Update once blocking 1 is written into the GDD.
+
+### Nice-to-Have
+
+1. `n_sta` / `n_dish` / `n_rec` ranges omit retained unknown ids (lines 197, 199, 200);
+   only `n_upg` says "含保留的未知 id". (Carried.)
+2. Player Fantasy / Tuning Knobs remain advisory gaps at `standard`. (Carried.)
+3. AC 13's "磁盘不发生写入" (line 383) is imprecise — an injected temp-file failure still
+   touches disk; "主档与备份哈希不变" matches AC 11. (Carried.)
+4. Cross-document wording — "存档规则 80" (`ui-flow.md:59/616`,
+   `unlocks-and-stations.md:55`) means line 80 of a GDD with 25 numbered rules. (Carried.)
+5. The version-0 fixture schema is undefined. AC 8 needs `valid(v0)` to accept a string
+   `wallet` and AC 9 needs it to accept `"abc"`. One sentence pinning the v0 fixture
+   schema would remove the last guess in the test build. (Carried.)
+6. AC 24b (line 400) is numbered between 23 and 24. Renumber to 25 and shift 25 → 26,
+   26 → 27 if the section is ever touched again; the test-fixture note (line 411) does not
+   reference it, so nothing else moves.
+
+### Scope Signal
+
+**Rough scope signal: L** — four formula blocks, one upstream + six hard downstream
+systems, and three ADR-stage decisions (serialization format OQ 2, save path / loader
+OQ 3, write-lock implementation; Steam Cloud OQ 4 later). `systems-index.md:200` rates
+the design effort `S`; this review retains **L**.
+
+### Verdict: NEEDS REVISION
+
+Suggested systems-index status: **Needs Revision** (`systems-index.md:60` currently
+reads `In Review`). Per the parallel constraint this review did not modify the index; the
+orchestration session updates it. All three blocking items are wording and contract
+defects in the load-result branch — the state table's two `Blocked` rows, the three
+"不迁移" sites, and the retry contract — no envelope, state-model or migration redesign.
+One revision pass should clear the way for a re-review.
+
+---
+
+Receipt (files this review read for cross-document facts):
+```
+Reviewed-Content-Hash: design/gdd/save-system.md f22c2228d60be43669125831bccea834e94d6026
+Reviewed-Content-Hash: design/registry/entities.yaml 9915429b2bba990a0ae53a735bc2b21b24789d9a
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 5aafb0674e6a0bc5bd6a370c275e95a2f01ebfa9
+Reviewed-Content-Hash: design/gdd/ui-flow.md 9c709252b4c631e8fb50d8a2f35a8fb394f230d7
+Reviewed-Content-Hash: design/gdd/systems-index.md 56e9869c70371816e88ed49f24735f67ab3d199d
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md b9b9235e9a4ad7d8739ad778e98dd147b1c72f94
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 84e5c38fc40fb2a75d8ee608c911bdebf369c5a1
+Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
+```
