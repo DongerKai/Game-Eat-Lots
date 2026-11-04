@@ -192,7 +192,7 @@ class FocusSpec extends RefCounted:
 `order` 与 `neighbours` 在同一个文件中声明、同一个 `apply()` 调用中生效，避免两个来源漂移。
 
 - `apply(spec, controls)` 在 **`present(view_model)` 之后**调用，并在每次控件增删或可见性/可用性变化后重新调用。顺序固定为 `instantiate → present → apply → grab_focus(initial)`；在 `_ready()` 里应用会在动态控件尚未创建时写下一份过期邻居图。
-- **方向目标必须预先解析到“下一个可用控件”，不能直接指向声明中的相邻项**：`find_next_valid_focus()` 在显式邻居不可聚焦（隐藏或 `disabled`）时会回落到几何解析，而几何在文字缩放 150% 重排后可能给出与声明顺序相反的结果。因此 `apply()` 对每个方向沿声明顺序前进，**跳过我禁用或隐藏的控件**，把 `focus_neighbor_*` 直接指向第一个可用者；整条方向都没有可用控件时才置空，由 `wrap` 或屏幕根节点兜底。升级页的“已满级”按钮、主菜单的“开始营业”被禁用时，导航不得跳到意外位置。
+- **方向目标必须预先解析到“下一个可用控件”，不能直接指向声明中的相邻项**：`find_next_valid_focus()` 在显式邻居不可聚焦（隐藏或 `disabled`）时会回落到几何解析，而几何在文字缩放 150% 重排后可能给出与声明顺序相反的结果。因此 `apply()` 对每个方向沿声明顺序前进，**跳过禁用或隐藏的控件**，把 `focus_neighbor_*` 直接指向第一个可用者；整条方向都没有可用控件时才置空，由 `wrap` 或屏幕根节点兜底。升级页的“已满级”按钮、主菜单的“开始营业”被禁用时，导航不得跳到意外位置。
 - **禁止依赖几何自动解析**：不得省略 `focus_neighbor_*` 让引擎自行按矩形挑选，也不得让任何可聚焦控件的四个方向中有一个指向不可用目标。
 - `initial_focus = first(c ∈ order | c.visible ∧ c.enabled)`；`order` 中没有任何可用控件时返回 `INVALID` 并记 ERROR（`ui-flow.md` Formulas 与断言）。破坏性确认的 `order` 以「取消」开头。
 - 焦点移动本身**不由界面流程执行**：方向动作的重复节奏归输入模块（`input.md` Formulas 的 `0.35 s / 0.12 s`），界面流程只负责把邻居图设好，使 `find_next_valid_focus()` 得到声明式结果。
