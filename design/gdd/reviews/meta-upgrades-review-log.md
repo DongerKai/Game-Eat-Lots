@@ -253,3 +253,186 @@ Reviewed-Content-Hash: design/gdd/time-and-turns.md 090c7e7fcd313a7c38092e9bf07c
 Reviewed-Content-Hash: design/gdd/dish-values.md 60a580b19c4b2f980cd0a33df73e8c3aa32f6d3e
 Reviewed-Content-Hash: design/gdd/systems-index.md 01259cc27663f7a47234e09c674e143fa3e2ba5c
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+
+---
+
+## Review — 2026-11-04 — Verdict: APPROVED
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 0 | Recommended: 10
+Summary: All three prior blocking items are resolved. The settlement hand-off now matches `ui-flow` rule 10 and `save-system` AC 13 (prepare/commit split, one orchestrated write), `WALLET_OVERFLOW` keeps the record update in both documents, and the audio row is now marked optional with `audio-feedback` acknowledging the same events. The economy core is unchanged and still reproduces exactly (price chains 121/68/20, capacity ceilings 104→121, calibration 1.224 / 1.412). What remains is cross-document drift left by the rename (`apply_run_result` still appears twice here and five times in `ui-flow`), an undefined producer for `APPLIED_UNSAVED`, and the stale "待回改"/Open-Question annotations carried over from the first review.
+Prior verdict resolved: Yes
+
+Findings:
+- [RECOMMENDED] Detailed Design rule 5 (`:35`) / Interactions (`:99`): both still name `apply_run_result` after the interface was renamed to `prepare_run_result`; `ui-flow.md:67,157,383,431,526` and AC 12 (`:565`) also still call `apply_run_result`. One settlement entry-point name across both documents.
+- [RECOMMENDED] Rule 6 (`:37`) / AC 5 (`:447`) vs rule 6 + Interface (`:122`): `prepare_run_result` never writes, so it cannot return `APPLIED_UNSAVED`; the only meta call precedes the orchestrator's commit. State who produces that status and when `progression_changed` fires.
+- [RECOMMENDED] Interfaces (`:121`) vs `unlocks-and-stations.md:124-131`: `spend` gained only "`amount < 0` 立即拒绝", which contradicts unlocks' fixed order (INVALID_AMOUNT after DATA_NOT_READY/NOT_WRITABLE/NOT_IN_MENU/BUSY); validation order, `extra` merge, rollback and `SpendReason` values are still only in unlocks.
+- [RECOMMENDED] Dependencies（待回改）(`:364-374`) / `:339`, `:348`, `:356`, `:435`: still stale — items 1–7 and 9 have landed; `cost_growth` is in `data-config.md:41`, cloying has the resistance term (`:77`,`:92`), `ui-flow`/`first-run-onboarding` both回指 this GDD. Prune to item 8.
+- [RECOMMENDED] Open Question 1 (`:491`) / Edge Cases (`:327`): still recommend `entry_fee = 0` / "免单"; `first-run-onboarding.md:21,38` chose 40 via `entry_fee_override` and rejects zero explicitly. `entities.yaml:1282` still lists this file in `first_run_entry_fee.referenced_by` although the doc never cites 40.
+- [RECOMMENDED] Interfaces (`:118-120`) / rule 15 (`:55`) / AC 26 (`:477`): `next_price`、`can_purchase`、`purchase`、`get_catalog` still take no station while `NO_EFFECT` needs `wave_size(s)`; AC 26's station fixture cannot be selected.
+- [RECOMMENDED] Design-time constraint (`:259`, `:382`): `base_capacity + max_level ≤ 26` is still called a data constraint but `data-config.md:97` `R_upg` cannot see `BalanceData` and has no cross-record check.
+- [RECOMMENDED] Rule 15 (`:55`) vs `menu-waves.md:64,227,336`: menu-waves still says it consumes "整数等级" and that the cap is guaranteed by 局外升级; and OQ 3 there is the exclusion-inference/occlusion question, which this GDD does not answer.
+- [RECOMMENDED] Cross-References (`:428`) / Dependencies (`:351`) vs `run-flow.md:66,457` and `records-and-milestones.md:84`: run-flow OQ 11 is still open, the snapshot is "至少含" three keys (so `levels` is not contractual), and records says it never interprets the snapshot — yet `:105` claims it freezes from `upgrade_snapshot.levels`.
+- [RECOMMENDED] Open Questions 3 / 8 / 10 (`:493`, `:498`, `:500`): triggers have passed — `time-and-turns.md` OQ 3 now re-homes MVP time upgrades to the VS playtest, the records GDD exists, and `ui-flow.md:84` rule 22 defines `UpgradeScreen` under `Menu`.
+
+---
+
+## Design Review: 局外升级（Meta Upgrades）
+
+Specialists consulted: none (lean mode)
+Re-review: Yes — prior verdict was NEEDS REVISION on 2026-11-04
+
+### Completeness: 6/6 required sections present
+
+`modes.workflow: standard`. Required: Overview, Detailed Rules
+(`## Detailed Design` is the accepted heading), Formulas (numeric rules:
+price curve, tree cost, snapshot resolution, resistance offset, preview cap),
+Edge Cases, Dependencies, Acceptance Criteria. All six present.
+
+Advisory at `standard`: Player Fantasy absent as a heading (`## Game Feel`
+carries the intent); Tuning Knobs present with safe ranges and the
+`base + max_level ≤ 26` / `R_max ≤ cloy_cap − 1` guards.
+
+### Prior blocking findings — resolution
+
+1. **Transaction shape — RESOLVED.** Rule 6 (`:37`) now makes 界面流程 the
+   settlement orchestrator, calls `prepare_run_result` + records `prepare_run`,
+   and performs one `save.commit` of `progression` + `records`; the interface
+   table (`:122`) documents prepare-only; AC 2 (`:444`) and AC 5 (`:447`) were
+   reworded around the orchestrator. `ui-flow.md:61` rule 10 matches (records →
+   wallet → one commit; prepare stages write nothing) and its OQ 1 is marked
+   answered; `save-system.md:378` AC 13 still requires exactly one disk write and
+   the keep-in-memory/dirty-retry policy matches. Remaining work is naming and
+   status-origin (Recommended 1–2), not the write count.
+2. **`WALLET_OVERFLOW` record outcome — RESOLVED.** `ui-flow.md:384` now says
+   the wallet is unchanged but the record still updates for this run, matching
+   rule 4 (`:33`) and edge (`:294`).
+3. **Audio — RESOLVED.** `audio-feedback.md:380` now names the three events and
+   states MVP does not map them to cues; this GDD marks the row 下游（可选）and
+   says MVP 不消费 (`:107`, `:353`). The edge is bidirectional.
+
+### Dependency Graph
+
+Every declared dependency has a GDD on disk; all upstream/downstream rows now
+回指 this system (audio included). No broken references.
+
+### Registry Values
+
+Owned entries — `wallet_after_run` (`entities.yaml:946`), `upgrade_price`
+(`:960`), `upgrade_tree_cost` (`:975`), `menu_vision_useful_max` (`:988`) —
+match the formulas byte-for-byte. Consumed entries match too: `extra_satiety`
+includes `cloying_resistance` with the floor-once note (`:479-492`),
+`calibration_ratio` carries the maxed band 120/85 = 1.412 (`:462-477`),
+`net_profit` (`:609-620`), `opt_value = 104` (`:443-455`). No numeric conflicts.
+
+Independent checks (unchanged inputs): price chains `12/17/22/30/40` (121),
+`16/22/30` (68), `20`, full tree 209; capacity ceilings 104, 106, 107, 112,
+116, 120, 121 at C = 20–26 with 27+ flat; calibration 1.224 and 1.412.
+
+Registry gaps that remain (orchestration session): `cloy_cap` (`:1155`),
+`station_canteen_entry_fee` (`:1183`), `base_capacity` (`:1263`) still omit
+`design/gdd/meta-upgrades.md` from `referenced_by`; `first_run_entry_fee`
+(`:1276-1283`) lists it without the document citing 40.
+
+### Required Before Implementation
+
+None.
+
+### Recommended Revisions
+
+1. **Finish the API rename inside this GDD.** Rule 5 (`:35`) and the
+   Interactions row (`:99`) still say `apply_run_result`. `ui-flow.md` still
+   names `apply_run_result` in its interface table (`:157`), dependency table
+   (`:431`), cross-reference (`:526`), AC 12 (`:565`), rule 13 (`:67`) and edge
+   (`:383`), while its rule 10 uses `prepare_run_result`. Pick one name and
+   apply it everywhere.
+2. **Define who returns `APPLIED_UNSAVED`.** `prepare_run_result` returns
+   `{progression_update, status}` before the orchestrator commits, so it cannot
+   observe a write failure; rule 6 (`:37`) and AC 5 (`:447`) nevertheless say
+   "返回 `APPLIED_UNSAVED`", and `ui-flow` rule 10 step ② lists it among the
+   values prepare handles. Say whether the orchestrator's settlement result
+   carries it (and meta only marks dirty), and when `progression_changed`
+   fires relative to the commit.
+3. **Make `spend` match the contract it defers to.** `:121` adds
+   "`amount < 0` 立即拒绝", but `unlocks-and-stations.md:127` places
+   `INVALID_AMOUNT` after `DATA_NOT_READY` / `NOT_WRITABLE` / `NOT_IN_MENU` /
+   `BUSY`; "立即" contradicts that order. Add the validation order, `BUSY`
+   sharing, `extra` merge and rollback here (mirroring rule 7), or state that
+   `unlocks-and-stations.md` owns them. Name the `SpendReason` values.
+4. **Prune the stale "待回改" list and annotations.** Items 1–7 and 9 of
+   `:364-374` have landed. `:339` ("`cost_growth` 待补") — `data-config.md:41`
+   defines it; `:348` ("公式尚未含抗性项") — `cloying-and-taste.md:77,92` has
+   it; `:356` — cloying lists the row and answers OQ 9, menu-waves lists the
+   row; `:435` — both `ui-flow` and `first-run-onboarding` now 回指 this GDD.
+5. **Replace the 0-元 first-run recommendation with 40.** OQ 1 (`:491`) and the
+   edge case (`:327`) still suggest zero/免单; `first-run-onboarding.md:21,38`
+   chose `entry_fee_override = 40` and rejects zero for a reason. Update both
+   and either justify or drop this file from `first_run_entry_fee.referenced_by`.
+6. **Give the purchase API a station context.** `NO_EFFECT` and the displayed
+   cap depend on `wave_size(s)` (`:55`, `:234`) but `next_price` /
+   `can_purchase` / `purchase` / `get_catalog` (`:118-124`) take only an id, and
+   AC 26's fixture cannot select its station. Name the parameter, or record the
+   single-station assumption and its source.
+7. **Assign the `base_capacity + max_level ≤ 26` check.** `:259` and `:382`
+   call it a data constraint, but `R_upg` (`data-config.md:97`) validates only
+   per-record fields. Add a cross-record rule in data-config or label it a
+   design-time review item (as `R_max ≤ cloy_cap − 1` already is).
+8. **Fix the menu-waves ownership prose and OQ citation.** `menu-waves.md:64`
+   and `:227` still say it consumes "整数等级" and that 局外升级 guarantees no
+   overselling, while this GDD owns levels and menu-waves owns the cap. Also
+   `:55` cites menu-waves OQ 3 (`:336`), which asks about exclusion inference
+   near the last wave — not the numeric cap answered here.
+9. **Close run-flow OQ 11 or drop the `levels` claim.** `run-flow.md:457` still
+   lists it open and `:66` says the snapshot "至少含" the three resolved keys;
+   `records-and-milestones.md:84` states it never interprets the snapshot. So
+   `:428` (claims the answer) and `:105`/`:351` (records freezes from
+   `upgrade_snapshot.levels`) assert more than the other documents grant.
+10. **Retire the outlived Open Questions.** OQ 3 (`:493`): `time-and-turns.md`
+    OQ 3 already re-homes MVP time upgrades to the Vertical Slice playtest.
+    OQ 8 (`:498`): the records GDD exists; keep the question, update owner/date.
+    OQ 10 (`:500`): `ui-flow.md:84` rule 22 defines `UpgradeScreen` under `Menu`
+    with the receipt → upgrade flow.
+
+### Specialist Disagreements
+
+None — lean mode runs no specialists (Phase 3b skipped).
+
+### Nice-to-Have
+
+- Rule 19 (`:69`) still equates `writable = false` with `Blocked`; save also
+  returns `ReadOnly` (both non-writable). The state table already knows both.
+- Fractional resistance can still sell an invisible 0→0 level (`:311`);
+  rule 15 rejects `NO_EFFECT` only for `MENU_VISION`.
+- `spend` has no state-table row; `Purchasing` is the only in-flight state
+  modelled here (unlocks owns `Unlocking`).
+- AC 24 (`:475`) uses `cloying_resistance = 5` outside the design band
+  `[0, cloy_cap − 1]`; label it a defensive-floor test.
+- Scope: `systems-index.md:207` records M; this review still suggests **L**
+  (6 formula groups, 3 hard upstreams, 10 downstreams, one ADR-level settlement
+  decision).
+- Player Fantasy is advisory-absent at `standard`; Game Feel covers the intent.
+
+### Verdict: APPROVED
+
+---
+
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md b9b9235e9a4ad7d8739ad778e98dd147b1c72f94
+Reviewed-Content-Hash: design/registry/entities.yaml f8361d463dc6172ce3c22a462bccce6d2037d35c
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/save-system.md 772ed596d68eb5cbae207b7bac9a170ec55c1524
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 5734623b4a60d9072657ef631c8ae61f05359f21
+Reviewed-Content-Hash: design/gdd/data-config.md 0be338a35d8e5fa9ded4c219b29801021835938a
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md 1c8fd48bbdff0e8d24e5e436a8d801545df4da0b
+Reviewed-Content-Hash: design/gdd/menu-waves.md ce532d3265df1ed7555ba5aa46383be35bbee4a1
+Reviewed-Content-Hash: design/gdd/run-flow.md ed8848ea7c41823db26e22fb7d5df5f998fc0234
+Reviewed-Content-Hash: design/gdd/ui-flow.md 21482b6d00538b95af113995e613b8df29985a8a
+Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 5aafb0674e6a0bc5bd6a370c275e95a2f01ebfa9
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 9fe5183795ca3d47798510a1d00a040dabe3ca61
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 3f99e25a3d35bd4922c0717adc033569a50abafb
+Reviewed-Content-Hash: design/gdd/audio-feedback.md f6ac7fbd915341f63761529b664028eec6b216c0
+Reviewed-Content-Hash: design/gdd/scene-flow.md 4efc24d198112aa612551f5b3e5bdeeac28cd52e
+Reviewed-Content-Hash: design/gdd/time-and-turns.md 090c7e7fcd313a7c38092e9bf07cdd12b77dd34f
+Reviewed-Content-Hash: design/gdd/dish-values.md 60a580b19c4b2f980cd0a33df73e8c3aa32f6d3e
+Reviewed-Content-Hash: design/gdd/systems-index.md 15e0bd3d307ed09738b74dd3c099816b497b69e8
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
