@@ -7,13 +7,14 @@
 - Engine: Godot 4.7 (pinned; installed version NOT DETERMINED — no editor on this machine)
 - GDDs Covered: 18 (all designed systems; #19 在线挑战 and #20 同屏合作 are Not Started)
 - ADRs Referenced: ADR-0001 内容数据格式；ADR-0002 持久化格式；ADR-0003 场景与屏幕架构；ADR-0004 服务组合与信号；ADR-0005 输入上下文栈；ADR-0006 确定性随机；ADR-0007 局内状态与结算事务；ADR-0008 设置与本地化；ADR-0009 音频播放与暂停（均为 Proposed）
+- Architecture Review: 2026-11-04 — FAIL — 56 covered / 4 partial / 44 gaps；ADR-0003↔0005↔0004 依赖环（见 `docs/architecture/architecture-review-2026-11-04.md`）
 - TD-ARCHITECTURE: 2026-11-04 — skipped — lean mode
 - LP-FEASIBILITY: 2026-11-04 — skipped — lean mode
 
 > This document is the standard-tier architecture: layer map, ownership, key data
 > flows, API boundaries and the critical ADR list. It targets Godot 4.7; every
 > engine API named here is cross-referenced against
-> `docs/engine-reference/godot/`. The full 103-requirement baseline is Appendix A.
+> `docs/engine-reference/godot/`. The full 104-requirement baseline is Appendix A.
 
 ## Engine Knowledge Gap Summary
 
@@ -209,7 +210,7 @@ Run Flow: Ending → assemble RunLog
   → UI Flow: receipt orchestration, same frame
       Records.prepare_run(RunResult)
       Meta Upgrades.prepare_run_result(RunResult)
-      Save.commit({progression, records[, unlocks]})   # exactly one write
+      Save.commit({progression, records, unlocks})     # exactly one write; unlocks empty in MVP
   → ReceiptScreen renders RunResult
 ```
 
@@ -363,10 +364,11 @@ linkage below is authoritative.
 | ADR-0007 局内状态所有权与结算事务边界 | ✅ | ✅ 4.7 | ✅ TR-run-flow-001/002/005, TR-settlement-001/004, TR-ui-flow-004, TR-meta-upgrades-005, TR-records-002 | None | ⚠️ Proposed — engine verification pending |
 | ADR-0009 音频播放、池化与暂停语义 | ✅ | ✅ 4.7 | ✅ TR-audio-feedback-001..007, TR-ui-flow-007 | None | ⚠️ Proposed — engine verification pending |
 
-**Traceability coverage:** 59 of 104 requirements covered by an ADR; 45 gaps.
-Covered: data-config 6, records 3, save 7, ui-flow 7, scene-flow 5,
-in-game-hud 2, input 6, menu-waves 6, dish-values 1, run-flow 5,
-audio-feedback 7, first-run-onboarding 1, settlement 2, meta-upgrades 1.
+**Traceability coverage:** 56 of 104 requirements covered by a Proposed ADR,
+4 partial, 44 gaps. No requirement is covered by an Accepted ADR — all nine
+ADRs remain `Proposed`. The per-requirement matrix is authoritative:
+`docs/architecture/requirements-traceability.md` (review:
+`docs/architecture/architecture-review-2026-11-04.md`).
 
 ## Required ADRs
 
@@ -427,15 +429,15 @@ Grouped by layer, Foundation first. Each group lists the TR areas it must cover;
 | QQ-07 | Settlement transaction boundary: UI Flow as orchestrator vs a dedicated transaction service. | High | Resolved — ADR-0007 D2–D4 (UIRoot calls, SettlementTransaction implements) |
 | QQ-08 | Settings file format/path/write timing and CJK font fallback. | Medium | Resolved — ADR-0008 §1–7 |
 | QQ-09 | Audio `process_mode` under pause; cue catalog data location (no `design/audio/` yet). | Medium | Resolved — ADR-0009 D3/D7 (`PROCESS_MODE_ALWAYS`, `res://data/audio/cue_catalog.tres`) |
-| QQ-10 | Whether `/review-all-gdds` runs before the Technical Setup gate; it is still ABSENT. | Medium | Run `/review-all-gdds` |
+| QQ-10 | Whether `/review-all-gdds` runs before the Technical Setup gate; it is still ABSENT. | Medium | Resolved — ran 2026-11-04 (`design/gdd/gdd-cross-review-2026-11-04.md`); blocking findings closed and re-reviewed |
 | QQ-11 | Full Vision systems (#19/#20) will add schema v2 and an input/scene split; not designed. | Low | When #19/#20 start |
 | QQ-12 | Fresh-baseline writer: Save cannot depend on Unlocks to merge `unlocks.normalize()` into the first commit; the boot orchestrator identity is unassigned. | High | Resolved — ADR-0004 D5 (`AppRoot.BootSequence`) |
 | QQ-13 | UI Flow action delivery under `Menu`/`Modal`/`Paused`: `InputRouter.consume_action` is Blocked/onboarding-only in the input GDD; the screen-side path is undefined. | High | Resolved — ADR-0005 D4 (`ActionSink`, first consumer wins) |
 
 ## Appendix A — Technical Requirements Baseline
 
-Extracted from 18 GDDs | 103 requirements | 0 registered, 103 provisional
-(TR registry: present, 0 entries)
+Extracted from 18 GDDs | 104 requirements | 104 registered in
+`docs/architecture/tr-registry.yaml`
 
 | Req ID | GDD | System | Requirement | Domain |
 |---|---|---|---|---|
@@ -546,13 +548,14 @@ Extracted from 18 GDDs | 103 requirements | 0 registered, 103 provisional
 
 ## Appendix B — Traceability Summary
 
-| Area | Requirements | ADR coverage |
-|---|---|---|
-| Foundation (data, input, scene, save) | 24 | 24 |
-| Core (run, turns, capacity, dish values) | 21 | 6 |
-| Feature (cloying, waves, settlement, meta, unlocks, records) | 34 | 12 |
-| Presentation (HUD, UI, audio, onboarding) | 25 | 17 |
-| **Total** | **104** | **59** |
+| Area | Requirements | Covered (Proposed) | Partial | Gaps |
+|---|---|---|---|---|
+| Foundation (data, input, scene, save) | 24 | 23 | 1 | 0 |
+| Core (run, turns, capacity, dish values) | 21 | 4 | 2 | 15 |
+| Feature (cloying, waves, settlement, meta, unlocks, records) | 34 | 12 | 1 | 21 |
+| Presentation (HUD, UI, audio, onboarding) | 25 | 17 | 0 | 8 |
+| **Total** | **104** | **56** | **4** | **44** |
 
-`/architecture-review` will bootstrap the Requirements Traceability Matrix and
-give every provisional ID its permanent one.
+The 2026-11-04 `/architecture-review` produced
+`docs/architecture/requirements-traceability.md`, which carries the full
+per-requirement matrix; every provisional ID now has its permanent row.
