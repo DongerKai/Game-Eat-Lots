@@ -243,10 +243,6 @@ Vertical Slice tier, and the rest are Full Vision.
 | Design docs started | 18 |
 | Design docs reviewed | 18 |
 | Design docs approved | 15 |
-
-> 场景与流程管理于 2026-11-03 通过设计评审（Approved），随后补写了 Formulas 章节并在
-> 输入 GDD 中定名了上下文切换接口，两处都是评审后才出现的改动，因此状态回到 **In Review**
-> 等待复审。复审通过后改回 Approved。
 | MVP systems designed | 13/13 |
 | Vertical Slice systems designed | 5/5 |
 
