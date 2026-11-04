@@ -2,8 +2,8 @@
 
 > **Status**: In Design
 > **Author**: user + Claude（autonomous 模式；systems-designer、qa-lead、audio-director 按 Lean 模式复核 Formulas、Acceptance Criteria 与音频方向）
-> **Last Updated**: 2026-11-03
-> **Last Verified**: 2026-11-03
+> **Last Updated**: 2026-11-04
+> **Last Verified**: 2026-11-04
 > **Implements Pillar**: 数字看得见地涨 · 没有白吃的菜
 
 ## Summary
@@ -31,20 +31,35 @@
 5. **同帧派发**：事件广播的同一帧内完成 cue 请求；不得 `await` 播放结束、不得延迟到下一帧、不得用定时器补播。唯一的例外是结算结果 cue：它必须等到收据数字滚动结束（或玩家跳过）才起播，以保证“声音与落定的数字同帧”而不是与被滚动的数字重叠。
 6. **永不阻塞**：音频路径不得门控输入、画面或状态转移。设备忙、流缺失、总线不可用时的统一行为是**丢弃并记录**，不是等待、不是重试、不是降级到别的 cue。
 7. **四级优先级**：`Critical(4) > Lifecycle(3) > Gameplay(2) > UI(1)`。Critical 只给结算的两个结果语义（`broke_even` / `loss`）；Lifecycle 给开局 / 结束 / 丢弃 / 故障 / 收据打印；Gameplay 给吃菜 / 跳波 / 拒绝 / 数字滚动；UI 给点击 / 暂停 / 恢复 / 菜单。
-8. **并发上限与抢占**：全局最多 10 个 voice；每级上限 `Critical 1 / Lifecycle 3 / Gameplay 3 / UI 3`。无空位时，只有**严格更高**优先级可以抢占该级中**最旧**的 voice；同级或更低优先级的请求被丢弃。**Critical 只能被另一个 Critical 抢占**，不能被任何低优先级抢占；被替换的 Critical 立即停止并记为 `stolen`。一个 voice 起播后的前 50 ms 不可被抢占，避免截断造成的咔哒声。
+8. **并发上限与抢占**：全局最多 10 个 voice；每级上限 `Critical 1 / Lifecycle 3 / Gameplay 3 / UI 3`。无空位时，只有**严格更高**优先级可以抢占该级中**最旧**的 voice；同级或更低优先级的请求被丢弃。**Critical 只能被另一个 Critical 抢占**，不能被任何低优先级抢占；被替换的 Critical 立即停止，新记录记 `stolen_voice_id`（`reason` 仍为 `null`，`stolen` 不是原因值）。一个 voice 起播后的前 50 ms 不可被抢占，避免截断造成的咔哒声。
 9. **冷却**：每个 cue 有独立的最小重触发间隔（见 Formulas）；间隔内的请求记为 `dropped:cooldown`，且**不刷新**冷却起点。结果 cue 与“每局一次”的生命周期 cue 不受冷却约束，由“每 `run_id` 一次”保证不重复。吃菜提交不用冷却，改用“同一 `action_id` 每帧至多一次”的去重，避免把确认反馈丢掉。
-10. **变体轮换是确定的**：同一 cue 有多个变体时按固定顺序轮换（round-robin），不使用随机数；同一事件序列必须产生同一 cue 序列，以便回放与自动化测试。轮换游标在会话内单调前进，不因暂停、静音或丢弃而重置。
-11. **音量由四段相加**：`cue_volume_db = clamp(base_db + bus_offset_db + master_gain_db + sfx_gain_db, -80, 0)`。`base_db` 属于声音规范（数据驱动），`bus_offset_db` 属于混音路由（SFX / UI 两条总线），后两项来自玩家设置。任何 cue 不得以正增益播放。
+10. **变体轮换是确定的**：同一 cue 有多个变体时按固定顺序轮换（round-robin，取 `play_index % streams.size()`），不使用随机数；同一事件序列必须产生同一 cue 序列，以便回放与自动化测试。轮换游标只在成功起播时前进，不因暂停、静音或丢弃而改变；**每 `run_id` 一次的 cue 与结果 cue 的游标在 `run_started` 重置**，其余 cue 按会话累加（ADR-0009 D11）。**MVP 没有任何随机播放参数**：pitch 抖动关闭，目录的 `pitch_min = pitch_max = 1.0`。若未来启用抖动，唯一允许的写法是用 ADR-0006 的 `SeedHash` + `SeededStream` 按 `(cue_id, run_seed, play_index)` 派生——禁止 `randf()` / `randi()` / `randi_range()` / `Array.shuffle()`，**禁止消耗 `SessionRng`**（那会让 `run_seed` 依赖音频事件数，直接破坏 ADR-0006 的复现承诺）；启用需同时改本规则、日志 `pitch` 语义与 ADR-0009 D11。
+11. **音量由四段相加**：`cue_volume_db = clamp(base_db + bus_offset_db + master_gain_db + sfx_gain_db, -80, 0)`。`base_db` 属于声音规范（数据驱动），`bus_offset_db` 是每次起播在 voice 上应用的常量（SFX 0 dB、UI −3 dB），后两项来自玩家设置。任何 cue 不得以正增益播放。**四条总线的音量恒为 0 dB、运行期永不写入**：把 `bus_offset_db` 或玩家增益写进总线会与公式双重衰减，也让无头测试必须读音频服务才能验算（ADR-0009 D2/D9）。
 12. **结算结果 cue 每局一次、绝不叠加**：`settlement_started`（Lifecycle）由界面流程在收据根创建时、任何收据动画之前**同帧发出一次**，本系统在收据打开同帧起播打印 cue；结算与入场费只发 `broke_even` 或 `loss`（Critical），二者在数字滚动结束时起播。结果 cue 每 `run_id` 只允许一次。同一帧同时收到两个结果语义是上游 bug；**`loss` 优先**——宁可少一次庆祝，也绝不把亏损听成回本。后到者记为 `suppressed:duplicate_outcome`。回本 cue 时长上限 0.4 秒（结算 GDD），本系统不得延长。每张收据的多个 `number_roll_started(field, ...)` 是独立滚动；结果 cue 只在**最后一个** `number_roll_finished`（或玩家跳过全部）后起播一次。缺少配对的 `number_roll_finished` 时，等待 `duration_ms + 100 ms` 后强制清除 `pending_outcome` 并起播结果 cue。
 13. **丢弃与故障必须平静**：`run_discarded` 与 `run_faulted` 使用中性、低存在感的 cue，不得使用上扬、收银机或庆祝音色。故障使结果失效：`run_faulted` 到达时取消待播或正在播放的结果 cue。`run_discarded` 与**待播**的结果 cue 同时成立时，丢弃优先，结果 cue 记为 `suppressed:preempted`——放弃不是结算，声音不能暗示玩家拿到了结果；若结果 cue 已经在播，则让它自然结束，丢弃 cue 自己按 Lifecycle 规则排队或被丢弃，不去截断一个已经成立的结果。**事务中止使结果失效**：`settlement_aborted(run_id, code)`（界面流程在 `records.prepare_run` 致命失败、事务未提交、收据标记为「未记录」时发出）本身不映射 cue；到达时取消同一 `run_id` 待播或正在播放的结果 cue，记 `suppressed:transaction_aborted`，并禁止此后再为同一 `run_id` 起播 `broke_even` / `loss`——没有落定的结算就没有结果声音。
-14. **暂停即静默**：进入顶层 `Paused` 时，1 帧内停止所有正在播放的池内 voice，并取消待播的结算结果 cue；暂停期间的所有请求记为 `dropped:paused`，不排队、不补播。**唯一例外是 `sfx.flow.pause`**：它属于池外转场播放器（不计 `MAX_VOICES`），在冻结的同一帧起播；恢复音在解冻之后播放（ADR-0009 D3/D4）。
-15. **静音是丢弃，不是静默播放**：主音量静音或有效增益到达 `-80 dB` 时，请求记为 `dropped:muted`，不分配 voice、不推进冷却；解除静音后不补播，下一条新请求正常发声。这样“静音”有唯一可观测的行为，测试不必区分“在放但听不见”和“没放”。
-16. **缺失资产是可见错误**：cue id 没有对应音频流时，不播放、不替代，按 cue id 每次会话记一条 WARN。静默失败必须留下痕迹，否则“少了一声”永远查不到原因。
+14. **暂停即静默**：进入顶层 `Paused` 时，1 帧内显式 `stop()` 全部 10 个池内 voice（0 ms，无淡出）并取消待播的结算结果 cue；暂停期间的池内请求记为 `dropped:paused`，不排队、不补播、不推进冷却。**唯一例外是 `sfx.flow.pause`**：`sfx.flow.pause` / `resume` / `menu` / `quit` 四个转场 cue 由池外的单个转场播放器承载（不计 `MAX_VOICES`、不计 `active_count`、日志 `voice_id` 记哨兵 `10`、不参与抢占与 `pool_full`、单条硬上限 250 ms、同一时刻只有一个），其中**只有 `pause` 在冻结的同一帧起播**（`PLAY_THROUGH_FREEZE`），其余三个在解冻之后播放（ADR-0009 D3/D4）。
+15. **静音是丢弃，不是静默播放**：主音量静音或有效增益到达 `-80 dB` 时，请求记为 `dropped:muted`，不分配 voice、不推进冷却；已在播放的 voice 按 ADR-0009 D6 的 `TEARDOWN_FADE_MS = 40` 手动淡出后停止（≤ 3 帧可听，不产生咔哒）。解除静音后不补播，下一条新请求正常发声。这样“静音”有唯一可观测的行为，测试不必区分“在放但听不见”和“没放”。
+16. **内容缺陷在启动期阻断，播放失败才静默降级**：cue 目录的内容缺陷——缺流、流引用为空、id 重复、总线非法、字段越界、时长与素材不符、把 `PLAY_THROUGH_FREEZE` 授予 `sfx.flow.pause` 以外的 cue——属于数据门，由 `DataConfig` 的 cue 清单在启动校验中拦下并整份不发布 → `Boot → Error`（ADR-0009 D7/D8）。事件映射与目录的**双向不一致**（`CueMap` 里的孤儿 id、或目录里有映射悬空的 id）同样在 `bind_catalog()` 时判定失败，走同一条 `Boot → Error`（ADR-0009 D7/D14）。只有**已发布**的流在运行期起播或解码失败，才是不播放、不替代、按 cue id 每次会话记一条 WARN 并记 `dropped:no_stream`。静默失败必须留下痕迹，否则“少了一声”永远查不到原因。
 17. **无设备也运行**：无音频设备（headless 测试、设备被拔出）时置 `device_available = false`：照常接收与记录请求，不播放、不报错、不阻塞。cue 请求日志是本系统的可观测接口，也是验收测试的主要证据。
 18. **音乐不在本系统内**：MVP 与 Vertical Slice 不含背景音乐；若未来加入音乐，本系统只负责在结算结果 cue（`settlement_started` / `broke_even` / `loss`）活跃时对 `Music` 总线做闪避（ducking，ADR-0009 D10），音乐内容与混音仍归 audio-director。**没有 `Ambience` 总线**：环境声在 VS/MVP 不做，未来若加入并入 `SFX` 或另立 ADR。
 19. **没有焦点音**：焦点移动不发声。它会奖励“快速扫视”，与支柱 3「时间在走，手不用快」相反，也是切换刷屏时最大的噪声源；输入 GDD 已要求可见的描边 / 高亮，声音不是焦点的唯一指示。
 20. **无效操作无声**：点击空白、无焦点时按确认、对非交互元素的操作——没有 cue。错误反馈只给“玩家做了合法但失败的动作”（如菜品放不下），用低闷短音，不用警示蜂鸣；具体音色由声音规范决定。
-21. **场景态 cue 随状态退出而取消**：由某个界面状态拥有的 cue（暂停 / 恢复 / 菜单 / 点击）在该状态退出时停止；这与“抢占”是两件事——抢占按优先级，取消按生命周期。结算结果 cue 不属于任何界面状态，只由 `run_id`、故障与丢弃约束。
+21. **场景态 cue 随状态退出而取消**：由某个界面状态拥有的 cue（暂停 / 恢复 / 菜单 / 点击）在该状态退出时停止——按 ADR-0009 D6 的 `STATE_BOUND_EXIT` 用 `TEARDOWN_FADE_MS = 40` 手动淡出后停止；这与“抢占”是两件事——抢占按优先级（即时 `stop()`）、不淡出，取消按生命周期（40 ms 淡出）。结算结果 cue 不属于任何界面状态，只由 `run_id`、故障与丢弃约束。
+
+### 运行形态与组合（ADR-0009）
+
+规则 1–21 是行为契约，本节把它们落成实现形状；两者冲突时以本节为准，因为形状由 ADR-0009 裁定，行为不得偏离规则。
+
+| 约束 | 裁定 |
+|---|---|
+| 组合位置 | `AudioDirector`（`Node`）与其子节点 `VoicePoolHost`（`Node`）由组合根在构造步骤创建；**零 autoload**，不被 `UIRoot`、任何屏幕、HUD 或 `SceneFlow` 持有（ADR-0009 D1） |
+| `process_mode` | `AudioDirector` / `VoicePoolHost` / 转场播放器均 `PROCESS_MODE_ALWAYS`；项目内**不出现** `PROCESS_MODE_WHEN_PAUSED`（ADR-0009 D3） |
+| 暂停静默 | 由进入 `Paused` 的同一帧**显式 `stop()`** 实现（0 ms，无淡出）；**不依赖**引擎自动暂停、`process_mode` 冻结或总线静音（ADR-0009 D3） |
+| 停止与淡出 | 抢占与 `Quit` 是 0 ms 硬停；`RUN_TEARDOWN`（结束 / 故障 / 丢弃后收尾）、`STATE_BOUND_EXIT`（规则 21）、`MUTE_TOGGLE`（规则 15）用 `TEARDOWN_FADE_MS = 40` 的手动分贝斜坡，**不用 `Tween`**（ADR-0009 D6） |
+| voice 池 | 构造期一次性预分配 10 个 `AudioStreamPlayer`，永不释放；`sfx.flow.*` 走池外的单个转场播放器（ADR-0009 D4/D5） |
+| 总线 | 只建 `Master / Music / SFX / UI` 四条；`Master` / `SFX` / `UI` 音量恒为 0 dB 且运行期永不写入，全部增益在每次起播的 voice 上按 `cue_volume_db` 算一次。只有 `Music` 会被闪避包络写入（ADR-0009 D2/D9） |
+| 逻辑与引擎分离 | 准入、抢占、冷却、去重、变体轮换与闪避包络是纯逻辑策略（不读场景树、不读 `AudioServer`、不读系统时钟）；引擎适配层只起播、停止与写日志。无头测试与生产共用同一条决策路径（ADR-0009 D13） |
+| 零随机源 | 音频不创建 `RandomNumberGenerator`、不持有或消耗 `SessionRng`；MVP 没有任何随机播放参数（规则 10、ADR-0009 D11） |
 
 ### 音效事件目录
 
@@ -69,10 +84,12 @@
 | `sfx.flow.quit` | 顶层进入 `Quit` | 状态生效同帧 | 退出 | UI | — | 1 / 会话 |
 | `sfx.ui.click` | 界面流程 `ui_button_activated`（#16 契约） | 激活同帧 | 控件按下 | UI | 30 ms | 不限 |
 | `sfx.num.tick` | HUD / 收据的数字滚动（#15 / #16 契约） | 滚动时间表 | 数字上涨的颗粒 | Gameplay | —（由滚动时间表限速） | ≤ 10 / 次滚动（每次 `number_roll_started` 独立计） |
-| `sfx.record.broken` | `record_broken`（#14） | 收据打开时 | 新纪录图章 | UI | — | 1 |
+| `sfx.record.broken` | `record_broken`（#14） | 事件同帧 | 新纪录图章 | UI | — | 1 |
 | `sfx.milestone` | `milestone_earned`（#14） | 达成同帧 | 翻页 / 勾选 | UI | 120 ms | 不限 |
 | `sfx.career.complete` | `career_completed`（#14） | 完成同帧 | 一次性收尾 | Lifecycle | — | 1 / 会话 |
 | `sfx.num.land` | 数字滚动结束 / 跳过 | 落定同帧 | 数字停住 | Gameplay | — | 1 / 次滚动 |
+
+**池外转场 cue**：`sfx.flow.pause` / `resume` / `menu` / `quit` 属于 `TRANSITION` 类，由池外唯一的转场播放器承载——不计 `MAX_VOICES`、不进 `active_count`、日志 `voice_id` 记哨兵 `10`、不参与抢占与 `pool_full`、单条硬上限 250 ms、同一时刻只有一个（新请求先停旧的）。四者中只有 `pause` 是 `PLAY_THROUGH_FREEZE`，其余在解冻之后播放（ADR-0009 D4）。它们仍是 `UI` 优先级，遵守上表自己的冷却与每会话上限。
 
 **同帧多事件的裁定顺序**（仅用于同一帧内多个 cue 竞争同一 voice 的情形）：`run_faulted` > 结算结果（`loss` 优先于 `broke_even`）> `settlement_started` > `career_completed` > `record_broken` > `milestone_earned` > `run_ended` > `run_discarded` > `run_started`。低优先级 cue 不因裁定顺序而跳过冷却或去重检查。
 
@@ -86,20 +103,20 @@
 
 | 状态 | 进入条件 | 允许的行为 | 离开 |
 |---|---|---|---|
-| `Uninitialized` | 应用启动 | 建立 `Master / Music / SFX / UI` 四条总线（MVP 的 `Music` 为空总线、无播放器，只为闪避公式留出对象），预分配 voice 池，预载 cue 流；不播放 | 启动校验结束（`Boot → Menu` 或 `Boot → Error`）→ `Ready` |
+| `Uninitialized` | 应用启动 | 建立 `Master / Music / SFX / UI` 四条总线（总音量恒 0 dB；MVP 的 `Music` 为空总线、无播放器，只为闪避公式留出对象），预分配 10 个池内 voice 与 1 个池外转场播放器；cue 目录随 `DataConfig` 一次加载（不自行扫描、不自行加载流）；不播放 | 启动校验结束（`Boot → Menu` 或 `Boot → Error`）→ `Ready`；校验失败则不进 `Ready` |
 | `Ready` | 启动校验结束 | 接收全部 cue 请求并按策略播放 | 顶层进入 `Paused` → `Frozen`；顶层进入 `Quit` → `Shutdown` |
-| `Frozen` | 顶层进入 `Paused` | 停止所有 voice、取消待播结果 cue；所有请求记 `dropped:paused` | 顶层离开 `Paused` → `Ready` |
-| `Shutdown` | 顶层进入 `Quit` | 同一帧只允许 `sfx.flow.quit` 一条；随后停止全部 voice、冲刷 cue 日志，不再接收请求 | 进程结束 |
+| `Frozen` | 顶层进入 `Paused` | 停止所有池内 voice、取消待播结果 cue；此后所有**池内**请求记 `dropped:paused`。唯一例外是规则 14 的 `sfx.flow.pause`：它在冻结的同帧由池外转场播放器起播（`PLAY_THROUGH_FREEZE`），冻结期间的其余转场 cue 同样记 `dropped:paused` | 顶层离开 `Paused` → `Ready` |
+| `Shutdown` | 顶层进入 `Quit` | 同一帧只允许 `sfx.flow.quit` 一条；随后停止全部 voice、冲刷 cue 日志，不再接收请求（后续请求记 `dropped:not_ready`） | 进程结束 |
 
 | 标志 | 取值 | 影响 |
 |---|---|---|
 | `device_available` | `true` / `false` | `false` 时不播放、不报错，请求记 `dropped:no_device`，不推进冷却；状态仍为 `Ready`。设备恢复后只影响后续请求，不补播 |
 | `muted` | `true` / `false` | `true` 时请求记 `dropped:muted`，不分配 voice、不推进冷却；解除后不补播 |
-| `pending_outcome` | `run_id` / `null` | 持有已收到但尚未起播的结算结果 cue（等待数字滚动结束或跳过）。开局、暂停、故障、丢弃、事务中止、收据关闭都清空它，且不补播 |
+| `pending_outcome` | `run_id` / `null` | 持有已收到但尚未起播的结算结果 cue（等待数字滚动结束或跳过）。开局、暂停、故障、丢弃、事务中止、`receipt_closed` 都清空它，且不补播 |
 
 **转移规则**：
 
-- `Frozen` 由场景与流程管理的顶层状态驱动，不由本系统自行判定；本系统的 audio 处理必须能在场景树暂停时继续接收暂停/恢复通知（`process_mode` 行为属于实现，见 Open Questions 的 ADR 候选）。
+- `Frozen` 由场景与流程管理的顶层状态驱动，不由本系统自行判定；`AudioDirector` 与 `VoicePoolHost` 常驻 `PROCESS_MODE_ALWAYS`，因此暂停期间仍能收到暂停 / 恢复通知，静默由显式 `stop()` 完成（ADR-0009 D1/D3，见「运行形态与组合」）。
 - 进入 `Frozen` 时，1 帧内停止所有 voice 并清空 `pending_outcome`；恢复后没有任何“迟到的声音”。
 - `device_available` 与 `muted` 都是**丢弃**语义，不改变 `Ready` 状态，也不改变冷却起点。静音或拔设备不是错误，不回退到占位音。
 - `Shutdown` 是终态；退出确认后不再播放新的 cue。
@@ -110,9 +127,10 @@
 |---|---|---|---|
 | 餐局流程 | 上游事件源 | 订阅 `run_started`、`action_committed(action, payload)`、`run_ended`、`run_faulted`、`run_discarded`；`run_settled` 只用于确认交接完成，**不映射独立 cue**（结算声音由 `settlement_started`〔界面流程发出〕与 `broke_even` / `loss`〔结算发出〕承载） | 硬（信号契约）；产品意义上软——音频失败不阻塞一局 |
 | 结算与入场费 | 上游事件源 | 订阅 `broke_even`、`loss`（结果语义只由结算发出；`settlement_started` 由界面流程在收据打开时发出）；只读事件语义，**不读 `RunResult`、不重算 `net_profit` 或 `broke_even`** | 硬（事件契约）；产品意义上软 |
-| 场景与流程管理 | 上游状态源 | 顶层状态转移（`Boot / Error / Menu / Run / Paused / Quit`）与冻结/恢复通知；用于 `Ready` / `Frozen` / `Shutdown` 与 `flow.*` cue | 硬（状态契约）；产品意义上软 |
+| 场景与流程管理 | 上游状态源 | 顶层状态转移（`Boot / Error / Menu / Run / Paused / Quit`）与 `state_changed(from, to)` 信号；用于 `Ready` / `Frozen` / `Shutdown` 与 `flow.*` cue | 硬（状态契约）；产品意义上软 |
+| 纪录与里程碑（#14） | 上游事件源 | 订阅 `record_broken` / `milestone_earned` / `career_completed`，映射为 `sfx.record.broken` / `sfx.milestone` / `sfx.career.complete`；同帧合并与收尾见事件目录 | 硬（事件契约）；产品意义上软 |
 | 局内 HUD（#15） | 下游请求方 | 必须发出 `dish_action_rejected(reason)`、`number_roll_started(field, from, to, duration_ms)`、`number_roll_finished(field, skipped: bool)`；不得直接调用音频内部接口；焦点移动、悬停与空白点击不发任何事件 | 软 |
-| 界面流程（#16） | 事件源 + 下游请求方 + 设置所有者 | 必须发出 `settlement_started(run_id)`（收据根创建时、任何收据动画之前同帧一次）、`settlement_aborted(run_id, code)`（事务中止）、`ui_button_activated(control_id)`、收据的 `number_roll_started/finished`；拥有主音量、音效音量、静音与“减少重复音效”设置，并在收据关闭时通知本系统 | 软 |
+| 界面流程（#16） | 事件源 + 下游请求方 + 设置所有者 | 必须发出 `settlement_started(run_id)`（收据根创建时、任何收据动画之前同帧一次）、`settlement_aborted(run_id, code)`（事务中止）、`ui_button_activated(control_id)`、收据的 `number_roll_started/finished`、`receipt_closed(run_id, reason: restart \| menu \| quit)`；拥有主音量、音效音量、静音与“减少重复音效”设置 | 软 |
 | 声音规范（audio-director / sound-designer，非系统） | 上游资产权威 | cue → 音频流与变体、`base_db`、时长、录音素材；本系统只消费映射，不改写 | 硬（内容）；不属于代码依赖 |
 | 数据配置 | 只读消费（cue 目录） | cue 目录是 `DataConfig` 的第六个清单（`res://data/audio/cue_catalog.tres`），与其它记录同一次校验、同一次发布，任一错误整份不发布；本系统经只读适配器访问，不自行扫描或加载文件（ADR-0009 D7/D8） | 硬（数据门） |
 | 输入 | 无直接调用 | 本系统**不订阅**原始输入动作；只消费界面流程与 HUD 发出的语义事件，避免把焦点移动、长按与非提交操作误当点击 | 无 |
@@ -135,8 +153,8 @@
 | `decision` | enum | `admitted` / `deferred` / `dropped` / `suppressed` |
 | `reason` | enum / null | `admitted` 时为空；`deferred` 也带原因（目前只有 `pending_outcome`）；其余见下方封闭词表 |
 | `stolen_voice_id` | int / null | `admitted` 且发生抢占时，被停止的 voice |
-| `voice_id` | int / null | 本次分配的 voice |
-| `active_count` | int | 决策后的活跃 voice 数（0 … 10） |
+| `voice_id` | int / null | 本次分配的池内 voice（0 … 9）；池外转场记哨兵 `10` |
+| `active_count` | int | 决策后的活跃 voice 数（0 … 10，**只计池内**；池外转场不计入） |
 | `variant` | int | 使用的变体序号（从 0 起） |
 | `volume_db` | float | 按 `cue_volume_db` 计算的结果 |
 | `pitch` | float | 本次播放的音高；MVP 除数字 tick 外恒为 `1.0`（抖动关闭，ADR-0009 D11） |
@@ -159,12 +177,12 @@ The `cue_volume_db` formula is defined as:
 | Variable | Type | Range | Source | Description |
 |----------|------|-------|--------|-------------|
 | `base_db[c]` | float | −40 … 0 dB | data file（声音规范） | 该 cue 相对结算结果的基准响度；结算结果为 0 dB 参考 |
-| `bus_offset_db` | float | −6 … 0 dB | data file（混音路由） | SFX 总线 0 dB、UI 总线 −3 dB |
+| `bus_offset_db` | float | −6 … 0 dB | constant（策略，非总线） | 混音路由偏移：SFX 0 dB、UI −3 dB。在**每次起播的 voice 上**应用，不写入总线音量（总线恒 0 dB，ADR-0009 D2） |
 | `master_gain_db` | float | −80 … 0 dB | settings（界面流程拥有） | 主音量；−80 表示静音 |
-| `sfx_gain_db` | float | −40 … 0 dB | settings（界面流程拥有） | 音效音量，同时作用于 SFX 与 UI 总线 |
+| `sfx_gain_db` | float | −40 … 0 dB | settings（界面流程拥有） | 音效音量，作用于 SFX 与 UI 两类 cue（在 voice 上应用，不写总线） |
 
-**Output Range:** −80 到 0 dB。结果等于 −80 时按 `muted` 丢弃，不分配 voice。系统永不输出正增益。
-**Example:** 吃菜 cue `base_db = −8`，SFX 总线 0，主音量 0，音效 −6 → `−14 dB`。同一设置下 UI 点击 `base_db = −18`、UI 总线 −3 → `−27 dB`。
+**Output Range:** −80 到 0 dB。结果等于 −80 时按 `muted` 丢弃，不分配 voice。系统永不输出正增益。响度**只有一个来源**：每次起播的 voice `volume_db`。`Master` / `SFX` / `UI` 三条总线音量恒为 0 dB、运行期永不写入；只有 `Music` 会被闪避包络写入（ADR-0009 D9）。
+**Example:** 吃菜 cue `base_db = −8`，SFX 的 `bus_offset_db = 0`，主音量 0，音效 −6 → `−14 dB`。同一设置下 UI 点击 `base_db = −18`、UI 的 `bus_offset_db = −3` → `−27 dB`。
 
 > 相对响度关系（进入 `base_db` 的默认值）：结算结果 0 dB 参考；吃菜 / 容量变化 −6 … −10 dB；数字滚动 −14 … −20 dB；错误 / 拒绝 −10 … −14 dB（不得响于吃菜）；UI 点击 −16 … −22 dB。绝对值与 LUFS 留给资产规范。
 
@@ -174,7 +192,7 @@ The `voice_admission` formula is defined as:
 
 `admit(r, t) = PLAY | PLAY_STEAL(v) | DROP(reason)`
 
-判定按顺序执行，先命中者生效：
+判定按顺序执行，先命中者生效。表前还有一条前置守卫：本系统状态不是 `Ready`（`Uninitialized` / `Shutdown`）时一律 `DROP(not_ready)`，不排队、不延后（ADR-0009 D5 第 1 步把这条写成准入的第 1 步，行为相同）。
 
 | 顺序 | 条件 | 结果 |
 |---|---|---|
@@ -196,6 +214,10 @@ The `voice_admission` formula is defined as:
 | `MIN_STEAL_AGE_MS` | int | 50 ms | constant（固定） | 起播不足 50 ms 的 voice 不可被抢占，避免截断咔哒声 |
 | `p(r)` | int | 1 … 4 | 事件目录 | 请求的优先级 |
 | `voices_used(p)` | int | 0 … cap[p] | runtime | 该级正在发声的 voice 数 |
+
+**池外转场不走第 6–9 步**：`sfx.flow.*` 在第 1–5 步照常判定（设备、静音、暂停策略、去重、冷却），命中后直接交给唯一的转场播放器（先停旧的再起新的），**不参与** `MAX_VOICES`、抢占与 `pool_full` 判定，也不进入 `active_count`（ADR-0009 D4）。
+
+**准入表之外的两处 `dropped:priority`**：结果 cue 正在播放时，`run_discarded` 与其它 Lifecycle cue 不得截断它（Edge Cases 两条），拒绝理由记 `dropped:priority`。这两条守卫在准入表**之前**判定，也是 `priority` 这个原因码在 v1 的唯一来源；ADR-0009 D5 的十步表只覆盖 voice 仲裁，其中不会产生 `priority`，实现以本文件为准补这两个守卫（ADR 的注释待下次修订同步，本文件不改 ADR）。
 
 **Output Range:** `PLAY` 或 `PLAY_STEAL` 时活跃 voice 数 0 … 10；`DROP` 时不变。`run_faulted` 属于**取消**而非抢占：它取消待播或正在播放的结果 cue，不受 `MIN_STEAL_AGE_MS` 限制。
 **Example:** 8 个 voice 正在播放（UI 3 + Gameplay 3 + Lifecycle 2），Critical 未使用、全局还剩 2 个空位 → 结算结果直接 `PLAY`，不抢占任何声音。若 10 个 voice 全满且最低级最旧 voice 已起播 120 ms → `PLAY_STEAL(该 voice)`。
@@ -306,7 +328,7 @@ The `duck_db` formula is defined as:
 - **If `settlement_aborted(run_id, code)` 到达**：不映射 cue；取消同一 `run_id` 待播或正在播放的结果 cue，记 `suppressed:transaction_aborted`。此后再到达的同一 `run_id` 的 `broke_even` / `loss` 记 `dropped:invalid` 并记一条 WARN——事务未提交、收据标记未记录，不允许任何结果声音。
 - **If `settlement_started` 与 `settlement_aborted` 在同一帧到达**：打印 cue 仍按 Lifecycle 正常起播（收据确实打开），但结果 cue 不得进入 `pending_outcome`；若已进入则立即以 `suppressed:transaction_aborted` 取消。
 - **If 玩家跳过数字滚动**：`number_roll_finished(skipped = true)` 立即起播结果 cue，停止尚未派发的 tick；已起的 `sfx.num.land` 不再重复。
-- **If 玩家在结果 cue 起播前关闭收据 / 返回菜单 / 开始新一局**：取消 `pending_outcome`，不补播。结算结果只在收据还开着的时候有意义。
+- **If 玩家在结果 cue 起播前关闭收据 / 返回菜单 / 开始新一局**（`receipt_closed(run_id, reason)`）：取消 `pending_outcome`，不补播。结算结果只在收据还开着的时候有意义。
 - **If `broke_even` 与 `loss` 在同一帧都到达**：`loss` 生效，`broke_even` 记 `suppressed:duplicate_outcome`。宁可少一次庆祝，也不把亏损听成回本。
 - **If `run_faulted` 到达时结果 cue 待播或正在播放**：取消结果 cue（不走抢占，不受 50 ms 下限约束），播放 `sfx.run.fault`。故障使结果失效，声音必须先说“出错了”。
 - **If `run_discarded` 到达时结果 cue 仍在待播**：取消结果 cue，记 `suppressed:preempted`，播放丢弃 cue。
@@ -317,7 +339,7 @@ The `duck_db` formula is defined as:
 **数字滚动**
 
 - **If 滚动时长 `d = 0` 或起终点相同**：不产生 tick、不产生 `sfx.num.land`，只记一条 `dropped:zero_duration`（每次滚动）。局内即时变化由吃菜 cue 承载，不叠加第二层声音。
-- **If `d < 60 ms`**：0 个 tick，只在结束时播放 `sfx.num.land`。
+- **If `0 < d < 60 ms`**：0 个 tick，只在结束时播放 `sfx.num.land`。
 - **If 滚动跨过零点或起点为 0**：使用 `max(|start|, |end|, 1)` 作分母；音高公式不除零、不反向。
 - **If 滚动进行中暂停**：停止全部 tick 与 land，`pending_outcome` 一并清空；恢复后不重放这次滚动的声音（数字本身由界面恢复，音频不补）。
 - **If 滚动进行中静音**：立即停止正在播放的 cue，不再派发后续 tick；解除静音后不补播。
@@ -329,23 +351,23 @@ The `duck_db` formula is defined as:
 - **If 第二个 Critical 到达且第一个已起播 ≥ 50 ms**：新 Critical 替换旧 Critical，旧 voice 停止并在新记录中记 `stolen_voice_id`。结算结果每局一次，实际只会发生在“结果 cue 被更新结果替换”的 bug 场景。
 - **If 设备在启动时不存在**（headless 测试、容器）：`device_available = false`，状态仍为 `Ready`；所有请求照常记录、不播放、不弹窗、不报 ERROR。
 - **If 设备在运行中被拔出**：立即停止全部 voice，置 `device_available = false`；本次会话不重试、不补播；设备恢复后只影响后续请求。
-- **If cue 没有对应音频流**：不播放、不替代；每个 cue id 每次会话记一条 WARN，后续请求记 `dropped:no_stream`。静默失败必须留下痕迹。
-- **If 主音量被静音或有效增益为 −80 dB**：立即停止全部 voice；请求记 `dropped:muted`；解除静音后不补播。
+- **If 已发布的 cue 流在运行期起播或解码失败**：不播放、不替代；每个 cue id 每次会话记一条 WARN，后续请求记 `dropped:no_stream`。静默失败必须留下痕迹。**目录里缺流不是这一条**——那是启动期数据缺陷，整份不发布并 `Boot → Error`（规则 16、ADR-0009 D7/D8）。
+- **If 主音量被静音或有效增益为 −80 dB**：已在播放的 voice 以 40 ms 手动淡出后停止；请求记 `dropped:muted`；解除静音后不补播。
 - **If 窗口失去焦点**：不自动暂停，音频继续；操作系统的音频挂起不视为本系统的错误。
 
 **状态与生命周期**
 
-- **If 顶层进入 `Paused`**：1 帧内停止所有 voice、清空 `pending_outcome`；暂停期间的请求全部 `dropped:paused`。恢复后不补播。
+- **If 顶层进入 `Paused`**：1 帧内停止所有 voice（0 ms，无淡出）、清空 `pending_outcome`；暂停期间的池内请求全部 `dropped:paused`（`sfx.flow.pause` 例外，见规则 14）。恢复后不补播。
 - **If 顶层进入 `Quit`**：停止全部 voice，冲刷 cue 日志，不再接收请求。
-- **If 场景态 cue 所属的状态退出**（点击声还在播时进入 `Run`，暂停声还在播时恢复）：停止该 cue；这是生命周期取消，不是抢占，不受优先级约束。
-- **If 一局结束并立刻重开**：新 `run_id` 重置“每局一次”的去重；变体轮换游标**不重置**，避免每局第一声都相同。
+- **If 场景态 cue 所属的状态退出**（点击声还在播时进入 `Run`，暂停声还在播时恢复）：以 40 ms 淡出后停止该 cue；这是生命周期取消，不是抢占，不受优先级约束。
+- **If 一局结束并立刻重开**：新 `run_id` 重置“每局一次”的去重；每 `run_id` 一次与结果 cue 的变体游标在 `run_started` 重置（同一事件序列单局可复现），UI 与会话级 cue 的游标继续累加——见规则 10 与 Open Question 14。
 - **If 连续两局使用相同 `run_id`**（上游 bug）：第二局的生命周期 cue 全部 `dropped:dedupe`；记一条 ERROR，不崩溃。
 
 **输入与设置**
 
 - **If 玩家点击空白处 / 无焦点按确认**：上游不发送 `ui_button_activated`，本系统无声；即使误发，`control_id` 为空或未知时记 `dropped:invalid`。
 - **If 玩家快速连续点击同一按钮**：30 ms 内只响一次；被丢弃的请求不刷新冷却，因此持续按住不会无限延长静默。
-- **If 玩家开启“减少重复音效”**：只影响重复型 cue 的冷却与变体策略（由设置读取），不改变优先级、并发上限、结算结果与吃菜确认音；该选项不得让结算变轻，也不得让确认反馈消失。
+- **If 玩家开启“减少重复音效”**：只把数字滚动的 `TICK_MS` × 2（`d = 600` → 5 个 tick、间隔 120 ms）；**不改**任何 cue 的冷却、变体轮换序列与音量，不改变优先级、并发上限、结算结果与吃菜确认音（ADR-0009 D9 / OQ13，见 UI Requirements）。该选项不得让结算变轻，也不得让确认反馈消失。
 - **If 玩家把音效音量调到 0 后又调回**：调回后的下一条新请求正常发声；不补播调低期间的任何 cue。
 
 ## Dependencies
@@ -358,6 +380,7 @@ The `duck_db` formula is defined as:
 | 结算与入场费 | 硬（事件契约）；产品意义上软 | 订阅 `broke_even`、`loss`（`settlement_started` 由界面流程在收据打开时发出）；只读事件语义，不读 `RunResult`、不重算 `net_profit` / `broke_even` | GDD 已写（`design/gdd/settlement-and-entry-fee.md`） |
 | 场景与流程管理 | 硬（状态契约）；产品意义上软 | 顶级状态转移（`Boot / Error / Menu / Run / Paused / Quit`）与 `state_changed(from, to)` 信号；驱动 `Ready` / `Frozen` / `Shutdown` 与 `flow.*` cue | GDD 已写（`design/gdd/scene-flow.md`） |
 | 纪录与里程碑 | 硬（事件契约） | 订阅 `record_broken` / `milestone_earned` / `career_completed` | GDD 已写（`design/gdd/records-and-milestones.md`） |
+| 数据配置 | 硬（数据门） | cue 目录是 `DataConfig` 的第六个清单（`res://data/audio/cue_catalog.tres`）：与其它记录同一次校验、同一次发布，任一错误整份不发布、启动期 `Boot → Error`；本系统经只读适配器访问，不自行扫描或加载文件（ADR-0009 D7/D8） | GDD 已写（`design/gdd/data-config.md`）；其清单表尚未列入 audio，缺口归该文件的复审 |
 | 声音规范（audio-director / sound-designer，非代码系统） | 硬（内容） | cue → 音频流与变体、`base_db`、时长、录音素材；本系统只消费映射 | **未建立**（尚无 `design/audio/` 或 sound bible；见 Open Question 2） |
 
 **下游依赖方（它们把事件交给本系统，或消费本系统的行为）：**
@@ -365,30 +388,29 @@ The `duck_db` formula is defined as:
 | 系统 | 硬 / 软 | 接口 | 状态 |
 |---|---|---|---|
 | 局内 HUD（#15） | 软 | 必须发出 `dish_action_rejected(reason)`、`number_roll_started(field, from, to, duration_ms)`、`number_roll_finished(field, skipped: bool)`；不得直接调用音频内部接口 | GDD 已写（`design/gdd/in-game-hud.md`） |
-| 界面流程（#16） | 软 | 必须发出 `settlement_started(run_id)`、`settlement_aborted(run_id, code)`、`ui_button_activated(control_id)`、收据的 `number_roll_started/finished`、收据关闭通知；拥有主音量 / 音效音量 / 静音 / “减少重复音效”设置 | GDD 已写（`design/gdd/ui-flow.md`） |
+| 界面流程（#16） | 软 | 必须发出 `settlement_started(run_id)`、`settlement_aborted(run_id, code)`、`ui_button_activated(control_id)`、收据的 `number_roll_started/finished`、`receipt_closed(run_id, reason)`；拥有主音量 / 音效音量 / 静音 / “减少重复音效”设置 | GDD 已写（`design/gdd/ui-flow.md`） |
 
 **对下游系统的接口前置契约：**
 
 | 系统 | 本系统要求的接口 | 若最终实现不同 |
 |---|---|---|
 | 局内 HUD | 只在**合法但失败**的菜品操作上发 `dish_action_rejected`（如放不下）；点击空白、悬停、焦点移动不发。只有**动画滚动**的数字才发 `number_roll_*`；局内即时变化不发，避免与吃菜 cue 叠层 | 若 HUD 不发拒绝事件，拒绝反馈静音（`sfx.eat.reject` 成为死 cue）；若对即时变化也发滚动事件，同一动作会出现两层声音，必须由 HUD 关闭 |
-| 界面流程 | `ui_button_activated` 只在**已提交的控件激活**上发（`ui_accept` 按下或鼠标点击有效控件），不在焦点移动、悬停、点击空白时发；收据根创建时、任何收据动画之前同帧发一次 `settlement_started(run_id)`；`records.prepare_run` 致命失败、事务未提交时发 `settlement_aborted(run_id, code)`；收据跳过滚动时发 `number_roll_finished(skipped = true)`；收据关闭 / 返回菜单 / 开始新一局时通知本系统取消待播结果 | 若界面流程用原始 `ui_accept` 代替语义事件，焦点移动和长按会被误当点击；本 GDD 明确不订阅原始输入 |
-| 场景与流程管理 | 顶层状态变化可被订阅或读取，且音频处理在场景树暂停时仍能收到进入 / 离开 `Paused` 的通知 | 若暂停时音频处理也被冻结，暂停音与恢复音会迟到；实现上需要 `process_mode` 常驻（见 Open Question 6） |
-| 声音规范 | 每个 cue id 至少一个音频流与变体；`base_db` 落在音量映射的范围内；结算结果 cue ≤ 0.4 s | 缺流时静音 + WARN，不替代；超时只在 debug 报错，不截断 |
+| 界面流程 | `ui_button_activated` 只在**已提交的控件激活**上发（`ui_accept` 按下或鼠标点击有效控件），不在焦点移动、悬停、点击空白时发；收据根创建时、任何收据动画之前同帧发一次 `settlement_started(run_id)`；`records.prepare_run` 致命失败、事务未提交时发 `settlement_aborted(run_id, code)`；收据跳过滚动时发 `number_roll_finished(skipped = true)`；收据关闭 / 返回菜单 / 开始新一局时发 `receipt_closed(run_id, reason)` 供本系统取消待播结果 | 若界面流程用原始 `ui_accept` 代替语义事件，焦点移动和长按会被误当点击；本 GDD 明确不订阅原始输入 |
+| 场景与流程管理 | 顶层状态变化可被订阅或读取（`state_changed(from, to)`），且音频节点常驻 `PROCESS_MODE_ALWAYS`，所以暂停期间仍能收到进入 / 离开 `Paused` 的通知 | 若 `state_changed` 不覆盖暂停转移，暂停音与恢复音会迟到或丢失；形状由 ADR-0009 D1/D3 固定（见「运行形态与组合」） |
+| 声音规范 | 每个 cue id 至少一个音频流与变体；`base_db` 落在音量映射的范围内；结算结果 cue ≤ 0.4 s | 目录里的缺流 / 空引用是启动期数据缺陷（`Boot → Error`，规则 16）；运行期解码失败才静音 + `dropped:no_stream` + WARN；超时只在 debug 报错，不截断 |
 
 **不属于依赖的关系：**
 
 - **输入**：本系统不订阅任何原始输入动作。它消费的是界面流程与 HUD 发出的语义事件；把输入列为依赖会把焦点移动、悬停与“按下但未提交”混进 cue 目录。
-- **数据配置**：cue 目录作为 `DataConfig` 的第六个清单（`res://data/audio/cue_catalog.tres`）与其它记录同一次校验、同一次发布。声音规范仍拥有音频素材与音色，本系统只读消费已发布的 cue 记录（ADR-0009 D7/D8）。
 - **存档**：音量、静音与“减少重复音效”属于设置，存档 GDD 已明确设置文件独立于生涯档；本系统不读写存档。
 - **局外升级 / 解锁与档口**：无直接调用。局外升级虽发出 `purchase_succeeded` / `purchase_failed` / `run_result_applied`，MVP 不把它们映射为 cue；结算声音只由 `settlement_started`、`broke_even`、`loss` 三个语义承载（`settlement_started` 由界面流程在收据打开时发出）。纪录与里程碑的 `record_broken` / `milestone_earned` / `career_completed` 已在上表映射为 `sfx.record.broken` / `sfx.milestone` / `sfx.career.complete`。
 
-**双向一致核对（2026-11-04 已完成，无待办）：**
+**双向一致核对（2026-11-04 复审）：**
 
-- 上游三份 GDD（`design/gdd/run-flow.md`、`design/gdd/settlement-and-entry-fee.md`、`design/gdd/scene-flow.md`）的下游表均已把「音效反馈」记为 `GDD 已写（design/gdd/audio-feedback.md）`；`run-flow.md` 已注明 `run_settled` 不产生独立 cue。
-- `局内 HUD`（`design/gdd/in-game-hud.md`）与`界面流程`（`design/gdd/ui-flow.md`）均已写完，并已在依赖 / 交叉引用表中列出「音效反馈」、采纳本文件的事件契约（含 `settlement_started` 与 `settlement_aborted`）。
-- `design/gdd/systems-index.md` 第 17 行已为 `Approved`、`Design Doc` 指向本文件，无需再改。
-- **W10（同层回路）**：界面流程 ⇄ 音效反馈 是同一 `Presentation` 层内的事件 / 设置回路——界面流程发语义事件并拥有音频设置，音效反馈只消费事件、不反向驱动界面流程状态，因此不是跨层循环依赖。索引 §Circular Dependencies 现写作「No circular dependencies」，建议改为「无跨层环；界面流程 ⇄ 音效反馈 为同层事件 / 设置回路」；索引不在本文件修改范围内，由编排会话落实。
+- 上游四份 GDD（`run-flow.md`、`settlement-and-entry-fee.md`、`scene-flow.md`、`records-and-milestones.md`）与下游两份（`in-game-hud.md`、`ui-flow.md`）均已写出，并在各自的依赖 / 交叉引用表中列出「音效反馈」、采纳本文件的事件契约（含 `settlement_started` / `settlement_aborted` / `receipt_closed` / record 三信号）。`run-flow.md` 已注明 `run_settled` 不产生独立 cue。
+- `data-config.md` 尚未把 cue 目录写进它的清单表：本文件按 ADR-0009 D8 把它记为第六个清单并作为硬数据门，缺口转给该文件的复审（本文件不改外部文件）。
+- `systems-index.md` 第 17 行当前为 `In Review`，依赖已含「数据配置（cue 目录）」；索引与范围信号的编辑不在本文件范围内。
+- **W10（同层回路）**：界面流程 ⇄ 音效反馈 是同一 `Presentation` 层内的事件 / 设置回路——界面流程发语义事件并拥有音频设置，音效反馈只消费事件、不反向驱动界面流程状态，因此不是跨层循环依赖；索引 §Circular Dependencies 已按此改写，无需再改。
 
 ## Visual/Audio Requirements
 
@@ -452,10 +474,10 @@ The `duck_db` formula is defined as:
 
 | 设置项 | 取值 | 行为 |
 |---|---|---|
-| 主音量 | −80 … 0 dB，滑杆 | 作用于 Master 总线；拉到 −80 视为静音，按 `dropped:muted` 处理 |
-| 音效音量 | −40 … 0 dB，滑杆 | 作用于 SFX 与 UI 总线；不影响音乐（若未来加入） |
-| 静音 | 开 / 关 | 立即停止全部 voice；解除后不补播 |
-| 减少重复音效 | 开 / 关，默认关 | 开启时：可重复 cue 的 `cooldown_ms` × 2（`ui.click`、`eat.reject`、`wave.skip`、`meal.end`）；`TICK_MS` × 2（每次滚动最多 5 个 tick）；变体轮换避免立即重复。**不影响**结算结果、生命周期 cue 与 `eat.commit`——确认与结果是信息，不是噪声 |
+| 主音量 | −80 … 0 dB，滑杆 | 作为 `master_gain_db` 参与每次起播的 `cue_volume_db`；**不写 `Master` 总线音量**（总线恒 0 dB）。拉到 −80 视为静音，按 `dropped:muted` 处理 |
+| 音效音量 | −40 … 0 dB，滑杆 | 作为 `sfx_gain_db` 参与每次起播的 `cue_volume_db`，同时作用于 SFX 与 UI 两类 cue；不影响音乐（若未来加入）；**不写总线音量** |
+| 静音 | 开 / 关 | 停止全部 voice（池内与转场；按 ADR-0009 D6 的 `TEARDOWN_FADE_MS = 40` 手动淡出后 `stop()`）；请求记 `dropped:muted`；解除后不补播 |
+| 减少重复音效 | 开 / 关，默认关 | 只降低数字滚动 tick 的密度：`TICK_MS` × 2（`d = 600` 时 5 个 tick、间隔 120 ms）。**不改**冷却、变体轮换序列与音量，也不影响结算结果、生命周期 cue 与 `eat.commit`——确认与结果是信息，不是噪声（ADR-0009 D9 / Open Question 13） |
 
 **无障碍**：
 
@@ -477,7 +499,9 @@ The `duck_db` formula is defined as:
 | 场景与流程管理 | `design/gdd/scene-flow.md` | 顶层状态与暂停 / 恢复 / 退出；驱动本系统的 `Ready` / `Frozen` / `Shutdown` |
 | 输入 | `design/gdd/input.md` | 本系统不订阅原始输入；焦点必须有可见指示，声音不是唯一通道 |
 | 局内 HUD | `design/gdd/in-game-hud.md` | 前置契约：`dish_action_rejected`、`number_roll_started/finished`；焦点、悬停与空白点击无声 |
-| 界面流程 | `design/gdd/ui-flow.md` | 事件源：`settlement_started`、`settlement_aborted`；前置契约：`ui_button_activated`、收据滚动事件、音频设置 |
+| 界面流程 | `design/gdd/ui-flow.md` | 事件源：`settlement_started`、`settlement_aborted`、`receipt_closed`；前置契约：`ui_button_activated`、收据滚动事件、音频设置 |
+| 纪录与里程碑 | `design/gdd/records-and-milestones.md` | 事件源：`record_broken`、`milestone_earned`、`career_completed`；同帧 `career_completed` 收尾、里程碑合并 |
+| 数据配置 | `design/gdd/data-config.md` | 数据门：cue 目录是第六个清单（`res://data/audio/cue_catalog.tres`），同一次校验、同一次发布（ADR-0009 D7/D8） |
 | 游戏概念 | `design/gdd/game-concept.md` | 支柱 4「数字看得见地涨」、支柱 2「没有白吃的菜」、视觉锚点「食堂价目板」、MDA Sensation |
 | 存档 | `design/gdd/save-system.md` | 音频设置属于设置文件，不属于生涯存档 |
 | 声音规范（未来） | `design/audio/`（待建） | cue → 音频流、`base_db`、时长、变体与录音素材的所有者 |
@@ -511,14 +535,14 @@ The `duck_db` formula is defined as:
 
 **暂停、静音与设备**
 
-15. **GIVEN** 顶层进入 `Paused`，**WHEN** 任何 cue 请求到达，**THEN** 无 voice 分配、记 `dropped:paused`；**WHEN** 恢复后的 60 帧内，**THEN** 没有任何来源时间早于恢复时刻的 cue 被 `admitted`。
+15. **GIVEN** 顶层进入 `Paused`，**WHEN** 任何池内 cue 请求到达，**THEN** 无 voice 分配、`active_count = 0`、记 `dropped:paused`；**WHEN** 恢复后的 60 帧内，**THEN** 没有任何来源时间早于恢复时刻的 cue 被 `admitted`。
 16. **GIVEN** 主音量静音，**WHEN** cue 请求到达，**THEN** 记 `dropped:muted`、零 voice；**WHEN** 解除静音，**THEN** 60 帧内无补播，且一条新 cue 正常 `admitted`。
-17. **GIVEN** 无音频设备（headless），**WHEN** 任意 cue 请求，**THEN** 日志照常记录、零 voice、无 ERROR 条目、派发时间在预算内。
-18. **GIVEN** 某 cue id 没有音频流，**WHEN** 请求两次，**THEN** 零 voice、该 id 恰好一条 WARN、第二条记 `dropped:no_stream`、无替代 cue。
+17. **GIVEN** 无音频设备（headless），**WHEN** 任意 cue 请求，**THEN** 日志照常记录、零 voice、无 ERROR 条目、派发耗时符合 AC 25 的中位数 ≤ 0.25 ms / 峰值 ≤ 1.0 ms。
+18. **GIVEN** 某条已发布的 cue 的音频流在运行期起播失败（解码失败），**WHEN** 请求两次，**THEN** 零 voice、该 id 恰好一条 WARN、第二次记 `dropped:no_stream`、无替代 cue。
 
 **公式**
 
-19. **GIVEN** `base_db=−8`、SFX 总线 0、主音量 0、音效音量 −6，**WHEN** 请求该 cue，**THEN** 日志 `volume_db = −14.0`；**GIVEN** 主音量为 −80，**THEN** 该请求 `dropped:muted`。
+19. **GIVEN** `base_db=−8`、SFX 的 `bus_offset_db = 0`、主音量 0、音效音量 −6，**WHEN** 请求该 cue，**THEN** 日志 `volume_db = −14.0`；**GIVEN** 主音量为 −80，**THEN** 该请求 `dropped:muted`。
 20. **GIVEN** 滚动 `start=−85`、`end=19`、`duration=600 ms`，**WHEN** 滚动执行，**THEN** 恰好 10 条 `sfx.num.tick`，`time_ms` 为 0、60 … 540，音高严格递增且最后一个等于 `2^(7/12)=1.498`（容差 ±0.001），t=600 ms 后没有 tick；**WHEN** `duration=0`，**THEN** 0 条 tick、0 条 `sfx.num.land`、一条 `dropped:zero_duration`。
 21. **GIVEN** 滚动 `start=0`、`end=−31`，**WHEN** 执行，**THEN** 音高严格递减，最后一个为 `2^(−5/12)=0.749`；跨零的 `start=−31`、`end=19` 不产生除零，最后一个为 `2^(7/12)=1.498`。
 22. **DEFERRED（MVP 无音乐，无法听感验收；改用总线写入断言）**：**GIVEN** `Music` 总线在基准音量、**WHEN** 结算结果 cue 起播，**THEN** 50 ms 内 `Music` 总线写入下降 12 dB，cue 结束后 120 ms 内回到基准；连续两条结果 cue 不叠加闪避深度。本 AC 在加入背景音乐后升级为听感验收（ADR-0009 D10）。
@@ -530,12 +554,15 @@ The `duck_db` formula is defined as:
 25. **GIVEN** 60 FPS 最低规格设备，**WHEN** 连续请求 100 条 cue，**THEN** 每次决策在同一帧内写入日志，派发耗时中位数 ≤ 0.25 ms、峰值 ≤ 1.0 ms；运行期间 AudioStreamPlayer 节点数不增长，派发路径无 `load()` / `instantiate()`。
 26. **GIVEN** 任意一轮测试，**WHEN** 读取日志，**THEN** 每条记录的 `decision` 与 `reason` 都落在封闭词表内，`active_count` 在 0 … 10 之间且从不因抢占而增加。
 27. **GIVEN** `settlement_started` 已到、结果 cue 待播，**WHEN** `settlement_aborted(run_id, code)` 到达，**THEN** 没有任何结果 cue 被 `admitted`，待播结果 cue 为 `suppressed:transaction_aborted` 且 `voice_id` 为空；**WHEN** 此后再到达同一 `run_id` 的 `broke_even` / `loss`，**THEN** 记 `dropped:invalid`，日志中没有任何成功结果 cue。
+28. **GIVEN** 顶层 `Run → Paused`，**WHEN** 该帧处理完，**THEN** `sfx.flow.pause` 记 `admitted` 且 `voice_id = 10`、`active_count = 0`（池内全部停止、转场不计入）；**WHEN** 暂停期间 `ui_button_activated` 到达，**THEN** `sfx.ui.click` 记 `dropped:paused`；**WHEN** `Paused → Run`，**THEN** 恰好一条 `sfx.flow.resume` 为 `admitted`、`voice_id = 10`，且它与 `sfx.flow.pause` 的播放区间不重叠。
+29. **GIVEN** cue 目录含一条 `streams` 为空的记录（或一条指向缺失 `AudioStream` 的记录），**WHEN** 启动，**THEN** `DataConfig` 停在 `Failed`、没有任何 cue 被发布、`Boot → Error`、不进入 `Menu`；cue 日志中不存在任何 `admitted` 条目。
+30. **GIVEN** “减少重复音效”开启，**WHEN** 滚动 `d = 600 ms`，**THEN** 恰好 5 条 `sfx.num.tick`（`time_ms` 为 0、120 … 480）；**WHEN** 同一按钮在 30 ms 内被激活两次，**THEN** 第二条仍为 `dropped:cooldown`（冷却不因该选项翻倍）。
 
 ### 证据要求
 
 | 证据 | 位置 | 门禁 |
 |---|---|---|
-| 自动化单元测试（headless、注入时钟，覆盖 1–27） | `tests/unit/audio_feedback/` | **BLOCKING** |
+| 自动化单元测试（headless、注入时钟，覆盖 1–30） | `tests/unit/audio_feedback/` | **BLOCKING** |
 | 同一轮测试保留的 cue 日志 | `production/qa/evidence/audio-feedback-[date]-cuelog.txt` | **BLOCKING** |
 | 真机脚本场景录音 + 对应时间戳日志 | `production/qa/evidence/audio-feedback-[date].wav` 与 `…-cuelog.txt` | **BLOCKING** |
 | audio-director 试听签核（混音、优先级、闪避、手感） | `production/qa/evidence/audio-feedback-[date]-listening.md` | **BLOCKING** |
@@ -548,14 +575,16 @@ The `duck_db` formula is defined as:
 | # | 问题 | 当前假设 | 决策者 | 目标时间 |
 |---|---|---|---|---|
 | 1 | `settlement_started` / `broke_even` / `loss` 由谁在什么时刻广播？ | **已回答（2026-11-04 交叉复审）**：`settlement_started` 由界面流程在收据根创建时、任何收据动画之前同帧发出一次；`broke_even` / `loss` 由结算发出，本系统把结果 cue 延后到滚动结束；`settlement_aborted` 同样由界面流程在事务中止时发出 | 已关闭 | — |
-| 2 | 声音规范（sound bible）尚不存在：cue → 流、`base_db`、时长、变体都没有归属 | 由 audio-director / sound-designer 在 Vertical Slice 音频制作前建立；本 GDD 只固定 cue 目录与相对响度 | audio-director | Vertical Slice 音频里程碑前 |
+| 2 | 声音规范（sound bible）尚不存在：cue → 流、`base_db`、时长、变体都没有归属 | **目录形状已回答（ADR-0009 D7）**：`res://data/audio/cue_catalog.tres` 的类型化 Resource，`AudioCueData` 逐条持有流与 `base_db`；仍缺的是声音规范本身（录音、时长、变体素材） | audio-director | Vertical Slice 音频里程碑前 |
 | 3 | `number_roll_started/finished`、`dish_action_rejected`、`ui_button_activated` 是强加给 #15 / #16 的新契约 | **已回答（2026-11-04 交叉复审）**：两份 GDD 均已写完并采纳这些事件；若未来改变滚动实现，需回来改本 GDD 的事件目录 | 已关闭 | — |
 | 4 | 是否需要“时间将尽”的离散提示音？ | **MVP 与 VS 不做**。它需要 #6 / #15 先提供 `turn_warning(remaining)` 事件；在没有事件前不发明声音 | game-designer / 时间与回合 | 首次可玩性测试后 |
 | 5 | 焦点音是否完全不做？ | **不做**。它会奖励手快并制造噪声；若键盘玩家反馈“找不到焦点”，先改视觉焦点，不加声音 | ux-designer | 可访问性测试后 |
-| 6 | 暂停时音频处理必须继续运行（否则收不到 `Paused` / 恢复通知）；具体用 `process_mode = ALWAYS` 还是独立单例属于实现选择 | 行为要求已写进 States；实现方式留给 ADR | lead-programmer | 技术设计阶段 |
+| 6 | 暂停时音频处理必须继续运行（否则收不到 `Paused` / 恢复通知）；具体用 `process_mode = ALWAYS` 还是独立单例？ | **已回答（ADR-0009 D1/D3）**：`AudioDirector` + `VoicePoolHost` 由组合根构造、两者 `PROCESS_MODE_ALWAYS`、**零 autoload**、不使用 `WHEN_PAUSED`；暂停静默由同帧显式 `stop()` 实现，不依赖引擎自动暂停 | 已关闭 | — |
 | 7 | cue 目录是否需要进 `design/registry/entities.yaml`？注册表目前只有 entities / items / formulas / constants，没有 cue 类型 | 暂不注册；cue id 是本 GDD 与声音规范之间的契约，等声音规范建立后再决定是否扩展注册表 | 编排会话 / 工具链 | 声音规范建立时 |
-| 8 | Godot 4.7 下音频设备热插拔的行为（拔出后 `AudioServer` 是否报错、恢复后是否自动重连）未在引擎参考中覆盖 | 假设可以轮询 / 订阅设备变化并置 `device_available`；若引擎行为不同，静默降级分支需要改写 | godot-specialist | 原型阶段验证 |
-| 9 | “减少重复音效”默认关闭是否合适？ | 默认关；开启后只降低重复 cue 密度，不影响结算与确认反馈 | ux-designer / 可访问性测试 | VS 试玩后 |
+| 8 | Godot 4.7 下音频设备热插拔的行为（拔出后 `AudioServer` 是否报错、恢复后是否自动重连）未在引擎参考中覆盖 | 已登记为 ADR-0009 的实测项：假设可以轮询（周期 ≤ 1 s）并置 `device_available`；若引擎行为不同，静默降级分支需要改写 | godot-specialist | 原型阶段验证（ADR-0009 Verification ③） |
+| 9 | “减少重复音效”默认关闭是否合适？ | 默认关；开启后只把数字滚动 `TICK_MS` × 2，不改冷却、变体与音量，不影响结算与确认反馈 | ux-designer / 可访问性测试 | VS 试玩后 |
 | 10 | 背景音乐与环境声是否永远不做？ | VS 不做；若未来加入，`duck_db` 生效，音乐内容归 audio-director | creative-director / audio-director | Full Vision 规划时 |
 | 11 | cue 日志在 release 构建是否保留？环形缓冲有内存成本，但对玩家 bug 报告有价值 | 保留 10,000 条环形缓冲；debug 浮层只在 debug 构建显示 | lead-programmer | 技术设计阶段 |
 | 12 | 音频延迟预算（设备输出延迟）是否需要在设置中提供校准？ | VS 不需要；本作是回合制，没有对音画同步的硬要求 | audio-director | VS 试玩后 |
+| 13 | “减少重复音效”是否应同时降低音频侧冷却（`ui.click` / `eat.reject` / `wave.skip` / `meal.end` 的 `cooldown_ms` × 2）？ | **按 ADR-0009 D9 / OQ4**：音频侧不改冷却、不改音量，该选项只降低数字 tick 密度（`TICK_MS` × 2）。若产品要求音频侧降密度，必须先改 ADR-0009 再改本 GDD 与 AC 30 | audio-director / ux-designer | VS 试玩后 |
+| 14 | 每局一次的 cue 是否应在每局开头换变体（避免每局第一声都相同）？ | **按 ADR-0009 D11**：`once_per_run` / 结果 cue 的变体游标在 `run_started` 重置（单局可复现）；因此这几条 cue 每局都从变体 0 起。若要“每局第一声不同”，需先改 ADR-0009 D11 为会话累加 | audio-director | 声音规范建立时 |

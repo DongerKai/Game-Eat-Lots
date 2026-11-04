@@ -769,3 +769,159 @@ Reviewed-Content-Hash: design/gdd/records-and-milestones.md 84e5c38fc40fb2a75d8e
 Reviewed-Content-Hash: design/gdd/input.md 9432d857ed18dc216dc5a038f81608ae9e10d975
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
 Reviewed-Content-Hash: design/gdd/systems-index.md 75098fd56028b3ec1b1abb5cb53da81e0eccaf6d
+---
+
+## Review — 2026-11-04 — Verdict: APPROVED
+Review mode: lean · Workflow: standard
+Scope signal: M
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 0 | Recommended: 8
+Summary: The prior APPROVED receipt was voided by construction, not by a defect: the GDD was realigned to ADR-0009 after that entry, so the hash no longer matched and this pass re-read all 590 lines and every ADR decision instead of trusting the log. The alignment holds. All nine contradictions ADR-0009 registered against this GDD are now closed inside the document: four buses (`Master / Music / SFX / UI`, idle `Music`, no `Ambience`); rule 18's ducking set equal to the formula's three cues; the `sfx.flow.pause` freeze exception written into the admission table, the `Frozen` row and the cue catalogue (pool-external transition voice, `voice_id = 10`, 250 ms cap, never in `active_count`); content defects gated at boot (`Boot → Error`) while only runtime stream failures degrade; the data-config sixth-manifest dependency; `pitch` log semantics; AC 22 deferred; and the `cap[p]` hard-ceiling guard on both steal steps. Determinism matches D11 (per-run cursor reset for `once_per_run` / outcome cues, zero RNG, future jitter only via ADR-0006 `SeedHash`), teardown matches D6 (0 ms hard stop on pause/steal/quit, 40 ms manual ramp on teardown / state-bound exit / mute), and the closed vocabulary matches D12 (11 `dropped`, 3 `suppressed`, 1 `deferred`, with `priority` documented as the two pre-admission guards that protect an established result). Three ACs were added for behaviour that had none (pause transition, catalog boot gate, reduce-repetitive) and the reduce-repetitive option was narrowed to `TICK_MS × 2` so it no longer contradicts D9. No blocking defect remains; the eight recommended items are cross-document edits this file may not make, plus two wording polish items.
+Prior verdict resolved: Yes — the prior APPROVED was voided by its own receipt (hash mismatch after the ADR-0009 edit), not by a new design defect; no blocking item survives this full pass.
+
+Findings:
+- [RECOMMENDED] Out of scope — `design/gdd/data-config.md` still validates only dish / upgrade / station / balance. The cue catalog appears in no record table and no `AUDIO_CUE_*` validator exists. ADR-0009 D7/D8 already binds it as the sixth manifest and this GDD declares the dependency (`:135`, `:383`, `:504`), so the gap is one-sided and must be closed by that file's next review; this file cannot add it.
+- [RECOMMENDED] Out of scope — `systems-index.md:223` still records scope `S` for #17 while `:74` lists five dependencies including 数据配置. Four hard upstream contracts, two downstream contracts and six formula blocks put the honest signal at `M`.
+- [RECOMMENDED] Out of scope — `run-flow.md:128` lists the audio downstream as subscribing to `run_started / run_ended / run_settled / run_discarded / run_faulted` and omits `action_committed`, which is the source of three cues here (`sfx.eat.commit`, `sfx.wave.skip`, `sfx.meal.end`). The signal itself is defined (`run-flow.md:133`), so this is a dependency-row omission, not a behavioural gap.
+- [RECOMMENDED] Out of scope — ADR-0009 D5's note 「`priority` 这个原因码在 v1 不会被发出」 is narrower than the implementation must be: this GDD emits it from two pre-admission guards (result cue already playing; `run_discarded` / Lifecycle arrival, `:220`). The GDD now states this explicitly and the vocabulary is unchanged, so the ADR note wants a one-line correction at its next revision.
+- [RECOMMENDED] AC 10 (`:530`): "两条 cue 的播放区间不重叠" depends on the print cue's duration, which belongs to the sound spec and is unbounded here, while `ui-flow.md` permits a 0.3 s roll. Either bound `sfx.settle.print` below 0.3 s in the sound spec, or assert only that the result cue starts at or after the last `number_roll_finished`.
+- [RECOMMENDED] Formulas, `voice_admission`: ADR-0009 D5 adds a per-cue `max_voices` (default 1, `eat.commit` = 3) that only tightens `cap[p]`. The GDD never mentions a per-cue cap, so a reader of this file alone cannot tell that two concurrent `eat.commit` voices require a catalog field. One sentence in the Variables table would close it.
+- [RECOMMENDED] `roll_ticks` (`:267`): the `MAX_TICKS` justification still reads "1500 / 150 = 10", mixing the cap with the derived interval; the derivation is `min(floor(d / TICK_MS), 10)` and already appears in the formula itself.
+- [RECOMMENDED] Advisory at `standard`: Player Fantasy and Tuning Knobs remain absent as headings. `## Game Feel` and the six Formulas tables carry both, so this is structural polish only.
+
+Advisory (not counted): `sfx.milestone` is still the one cue id that departs from `sfx.<域>.<事件>`; the closed vocabulary and the table are otherwise consistent. The state header still reads `In Design` while `systems-index.md` reads `In Review` — both are pre-approval labels, harmless. The `双向一致核对` block now matches the files on disk (data-config gap routed, W10 loop recorded in the index, run-flow's `run_settled` note).
+
+---
+
+## Design Review: 音效反馈（Audio Feedback）
+
+Specialists consulted: none (lean mode)
+Re-review: Yes — fourth receipt voided by the ADR-0009 realignment; this is a full-document pass, not a delta.
+
+### Completeness: 6/6 required sections present
+
+`modes.workflow: standard`. Required: Overview, Detailed Design (accepted as
+Detailed Rules), Edge Cases, Dependencies, Acceptance Criteria — plus Formulas,
+because this system defines numeric rules (volume mapping, admission, cooldown,
+tick count, pitch, ducking). All six are present.
+
+Advisory at `standard`:
+- **Player Fantasy** — absent as a heading; `## Game Feel` states the intended
+  feel ("声音是数字的影子，不是数字的前奏") and every failure tone.
+- **Tuning Knobs** — absent as a heading; every constant carries a range and a
+  source inside Formulas, and `TICK_MS` / `K` / `DUCK_DB` / the caps are the
+  only knobs a balance pass would touch.
+
+### ADR-0009 Conformance
+
+| Decision | Requirement | Where it lands here | Status |
+|---|---|---|---|
+| D1 | `AudioDirector` + `VoicePoolHost`, constructed by the composition root, zero autoloads | 运行形态表「组合位置」; OQ6 closed | ✓ |
+| D2 | Buses `Master / Music / SFX / UI`, no `Ambience` | 运行形态表「总线」; States `Uninitialized`; rule 18; `duck_db` Output Range | ✓ |
+| D3 | `PROCESS_MODE_ALWAYS`, no `WHEN_PAUSED`, pause = explicit same-frame `stop()` | 运行形态表「`process_mode`」「暂停静默」; rule 14; 转移规则 | ✓ |
+| D4 | Only `sfx.flow.pause` is `PLAY_THROUGH_FREEZE`; all four `sfx.flow.*` pool-external, `voice_id = 10`, 250 ms | rule 14; 池外转场 cue 段; admission step 3 note; AC 28 | ✓ |
+| D5 | 10 voices, caps 1/3/3/3, nine-step order, `cap[p]` hard ceiling, `not_ready` precondition | `voice_admission` table (steps 7 and 8 carry the guard; `not_ready` stated as the pre-guard) | ✓ |
+| D6 | 0 ms hard stop on pause/steal/quit; 40 ms manual ramp on teardown / state-bound exit / mute; no `Tween` | 运行形态表「停止与淡出」; rules 15, 21; 静音 UI row; two Edge Cases | ✓ |
+| D7 | Catalog at `res://data/audio/cue_catalog.tres`; `CueMap` bidirectional validation → boot failure | rules 10, 16; Interactions 数据配置 row; Dependencies; Cross-References | ✓ |
+| D8 | Sixth `DataConfig` manifest, same validation, same publish, all-or-nothing | rule 16; States `Uninitialized`; AC 29 | ✓ (data-config side outstanding) |
+| D9 | Volume computed once per voice, buses at 0 dB and never written; mute = drop | rule 11; `cue_volume_db` Output Range; UI Requirements two gain rows; AC 19 | ✓ |
+| D10 | Ducking writes only `Music`; three-cue envelope; dormant in VS | rule 18; `duck_db`; AC 22 `DEFERRED` | ✓ |
+| D11 | Deterministic round-robin, per-run cursor reset, zero RNG, jitter only via `SeedHash` | rule 10; OQ14; 日志 `pitch` | ✓ |
+| D12 | 10,000-entry ring, 14 fields, closed reason vocabulary | 日志表; 封闭原因词表; AC 26 | ✓ |
+| D13 | Pure policy with ports; headless and production share one decision path | 运行形态表「逻辑与引擎分离」; AC 25 (no `load()` / `instantiate()`) | ✓ |
+| D14 | Construct → bind → Ready; degrade without changing `SceneFlow`; idempotent shutdown | States table; rules 16, 17; `Shutdown` row | ✓ |
+
+### Dependency Graph
+
+Every declared dependency has a GDD on disk.
+
+Upstream:
+- ✓ run-flow.md — exists; `run_*` and `action_committed` present, `run_settled` documented as pre-notification only
+- ✓ settlement-and-entry-fee.md — exists; `broke_even` / `loss` owned by settlement, `settlement_started` / `settlement_aborted` by ui-flow
+- ✓ scene-flow.md — exists; `state_changed(from, to)` defined (`:41`)
+- ✓ records-and-milestones.md — exists; `record_broken` / `milestone_earned` / `career_completed` defined, merge policy matches
+- ✓ data-config.md — exists; the cue manifest is **not** listed yet (routed to that file's review)
+- ✗ sound bible (`design/audio/`) — does not exist; Open Question 2 covers it
+
+Downstream:
+- ✓ in-game-hud.md — exists; now emits `dish_action_rejected` and `number_roll_*`, and states that focus / hover / empty clicks produce no audio event
+- ✓ ui-flow.md — exists; `settlement_started`, `settlement_aborted`, `ui_button_activated`, `receipt_closed(run_id, reason)`, four audio settings
+
+Cited but not dependencies (correctly declared as such): input.md, save-system.md,
+game-concept.md — all exist; input explicitly denies any audio event.
+
+### Registry Values
+
+`design/registry/entities.yaml` carries no audio, cue, voice or SFX entry
+(searched `audio`, `Audio`, `音效`, `sfx`, `AudioCue`, `cue_catalog`), so this
+system owns no registered values and no value can conflict.
+
+- `net_profit` appears only as an example range (`start = −85`, `end = 19`); the
+  GDD never restates its formula.
+- `run_id` is typed `int64`, matching the registry.
+- `broke_even` is consumed as an event and never derived — the correct boundary.
+
+Gaps: the cue namespace is unregistered (Open Question 7); the signal
+`broke_even` shares an identifier with the registered formula (advisory only).
+
+### Required Before Implementation
+
+- none — no blocking defect; every ADR decision has a corresponding contract,
+  every contract has at least one acceptance criterion, and every logged
+  `decision:reason` token resolves into the closed vocabulary.
+
+### Recommended Revisions
+
+1. **data-config must adopt the sixth manifest** — add the cue catalog to its
+   record table with `AUDIO_CUE_*` validators. Out of scope here.
+2. **systems-index scope** — `:223` `S` → `M`.
+3. **run-flow's audio row** — `run-flow.md:128` should add `action_committed`.
+4. **ADR-0009 D5 note** — narrow the `priority` claim to the admission table.
+5. **AC 10** — bound the print cue, or assert ordering instead of non-overlap.
+6. **Per-cue `max_voices`** — one line in the admission Variables table.
+7. **`MAX_TICKS` justification** — restate as the formula's `min(floor(d / TICK_MS), 10)`.
+8. **Optional headings** — Player Fantasy / Tuning Knobs, if the template wants
+   them literally present.
+
+### Specialist Disagreements
+
+None — Lean mode runs no specialists (Phase 3b skipped).
+
+### Nice-to-Have
+
+- `sfx.milestone` is the only cue id off the `sfx.<域>.<事件>` pattern.
+- The header line `Status: In Design` and the index's `In Review` could be
+  reconciled on the next orchestration pass.
+
+### Scope Signal
+
+Rough scope signal: **M** — four hard upstream contracts, two downstream
+contracts, one data gate, six formula blocks, and one accepted ADR whose
+implementation shape is now fully reflected in the document. The index still
+records `S`.
+
+### Verdict: APPROVED
+
+No blocking items. The ADR-0009 realignment is complete and self-consistent:
+the pause exception, the bus topology, the single-source loudness, the boot data
+gate, the deterministic cursor rules and the closed vocabulary all agree with
+the ADR and with each other, and the three new criteria make the newly specified
+behaviour testable. The remaining work is in files this review may not edit
+(data-config manifest, index scope, one run-flow dependency row, one ADR note)
+plus two wording polish items.
+
+---
+
+Reviewed-Content-Hash: design/gdd/audio-feedback.md 0d6aad0b163bffe972683c0b41db50c8ef468dd3
+Reviewed-Content-Hash: design/registry/entities.yaml ac9dd64cdbbf756d272d52dd8d27bed6bf7a5b27
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md 56f6f4866e1b5ab7c8a5a8f04d22078e7d05e1cb
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 9bf45c1ead7e161599186ca5724fa460b044e314
+Reviewed-Content-Hash: design/gdd/scene-flow.md 07753accfc002be7257cbcdd17323c73c2b6845a
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 7cb99488fee8beeba202523848adecd3c06c2c7c
+Reviewed-Content-Hash: design/gdd/in-game-hud.md f81ce0c2348338cd8bd3858ed659e2b13c882a06
+Reviewed-Content-Hash: design/gdd/ui-flow.md cf471d2d45476ff8e1db0a5fa4a7fae9a4e146ea
+Reviewed-Content-Hash: design/gdd/input.md 27c9d885eb2ba1f8d4b3df72ff6640fed0a5dd36
+Reviewed-Content-Hash: design/gdd/data-config.md 89626e0d680a97b2887e2d2e76f07a4e3126ec2a
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+Reviewed-Content-Hash: design/gdd/systems-index.md e0174253c2b36603edfef7b4d00d005380530feb
