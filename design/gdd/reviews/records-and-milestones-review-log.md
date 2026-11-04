@@ -292,3 +292,114 @@ checked 累加、存在量词防「空目录自动通关」、锁存后不回退
 
 `systems-index.md` 第 14 行：**`Designed` → `Needs Revision`**。
 三项阻塞修复并复审通过后再改为 `Approved`。（本轮不修改索引文件，按并行评审约束。）
+
+---
+
+## Review — 2026-11-04 — Verdict: APPROVED
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none（lean 模式，Phase 3b 未运行）
+Blocking items: 0 | Recommended: 14
+Summary: 上一轮三条 blocking 的实质均已落地：音效反馈在 cue 表与依赖表中接下了三个纪录信号；VS 基线目录补上必需的 `ms_banquet_return_1000`，AC 32 增加「每个档口至少一条必需过本里程碑」的反向校验；`MilestoneData` 归属在 OQ2 关闭后统一为「纪录自带只读加载器」，全文不再出现「第四类 / 第五类」的序数矛盾。设计本体未变，严格比较、冻结语义、checked 累加、完成条件的锁存与存在量词仍然一致，数值与注册表无冲突。剩余 14 条都是文档同步与可测性：本轮修复留下的两处陈旧回指、反向校验挂错错误码、截图夹具仍用产品中不存在的档口、编排者接口名 `apply_run` / `prepare_run` 分裂，以及上一轮未处理的跨文档口径。
+Prior verdict resolved: Yes
+
+### 上一轮 blocking 复核（逐条）
+
+| 上一轮 blocking | 修法落地情况 | 结论 |
+|---|---|---|
+| ① 音效反馈依赖单向、双方给出相反事实 | `audio-feedback.md:72-74` 新增 `sfx.record.broken` / `sfx.milestone` / `sfx.career.complete` 三行并标注 `record_broken` / `milestone_earned` / `career_completed`（#14）；`:356` 新增「纪录与里程碑」下游行；`:380` 把本系统从「无直接调用」排除段移出并指向映射表 | ✓ 已解决 |
+| ② VS 基线目录不覆盖第二档口，通关 ≠ 吃遍所有档口 | `:246` 新增 `ms_banquet_return_1000`（`RETURN_RATIO_X10`、`station_banquet`、1000、**完成必需**）；`:429` 的 AC 32 增加「每个档口至少一条 `*_return_1000` 且标记为完成必需」。两个 VS 档口各有必需里程碑，概念文档的「完成全部档口挑战即视为通关」重新成立 | ✓ 实质已解决（两处残留见 Recommended 2、3） |
+| ③ `MilestoneData` 归属未定、序数自相矛盾 | `:292` 依赖行改为「里程碑目录由本系统自带的只读加载器提供，不进入数据配置 schema（OQ2 已定）」；`:314` 把「要求新增第四类记录」改为「数据配置当前是四类记录……不含 `MilestoneData`；本系统自带只读加载器」；`:326` 明确「不进入 data-config schema」；`:444` OQ2 标为已回答（2026-11-04）；全文已无「第四类 / 第五类」并存的表述 | ✓ 已解决（`:379` / `:384` 两处陈旧回指见 Recommended 1） |
+
+补充核对：`unlocks-and-stations.md:151` 已写明 `station_banquet` 是 Vertical Slice 第二个档口的**暂定 id**。新里程碑绑定该暂定 id，属于发布前可改的命名，不构成 id 稳定性问题；但若最终改名，里程碑 id 必须同步改（见 Nice-to-have）。
+
+### 完整性（standard 层：5 节必需 + 有数值规则时的 Formulas）
+
+必需 6/6 齐全：Overview、Detailed Design（= Detailed Rules）、Formulas、Edge Cases、Dependencies、Acceptance Criteria。Formulas 仍然必需：本系统定义纪录比较、checked 累加、四种里程碑指标与完成条件四条数值规则。
+
+Advisory 缺口与上一轮相同：Player Fantasy 由 `## Game Feel`（`:351-357`）承担实质内容；**Tuning Knobs 仍无独立小节**。阈值全部落在 `MilestoneData` 数据里是对的，但缺「安全范围」与「影响哪个玩法面」两列（见 Recommended 14）。
+
+### Dependency Graph
+
+| 依赖 | 方向 | 文件 | 状态 |
+|---|---|---|---|
+| 结算与入场费 | 上游（硬） | `design/gdd/settlement-and-entry-fee.md` | ✓ 存在；`:103` / `:336` 回指本系统 |
+| 存档 | 上游（硬） | `design/gdd/save-system.md` | ✓ 存在；`:90` / `:272` / `:294` 回指本系统 |
+| 数据配置 | 上游（硬） | `design/gdd/data-config.md` | ✓ 存在；`:186` 回指本系统，且已改为「里程碑目录由纪录系统自带只读加载器提供，不进入本 schema」 |
+| 餐局流程 | 间接上游（软） | `design/gdd/run-flow.md` | ✓ 存在 |
+| 界面流程 | 下游（硬） | `design/gdd/ui-flow.md` | ✓ 存在；`:158` / `:432` / `:527` 回指本系统。`:61` 仍称本系统调用 `prepare_run`，与 `:158` / `:432` 的 `apply_run` 并存 |
+| 音效反馈 | 下游（软） | `design/gdd/audio-feedback.md` | ✓ 存在；`:72-74` / `:356` / `:380` 已回指本系统（上一轮 blocking ① 已闭合） |
+| 在线挑战 | 下游（软，未来） | — | ✓ 本文件已正确标注「GDD 未写」 |
+
+无断链。索引侧仍有两处不一致：`systems-index.md:17`（音效反馈行）的 `Depends On` 未加入「纪录与里程碑」，尽管 `audio-feedback.md:356` 已把它列为硬事件依赖；第 14 行状态仍为 `In Review`（见「建议状态」）。
+
+### Registry Values
+
+对注册表条目名与本文档数值做全文检索（`total_value`、`net_profit`、`return_ratio`、`end_reason`、`run_id_alloc`、`save_bytes`、`save_bytes_max`、`station_canteen_entry_fee`、`opt_value`、`calibration_ratio`、`save_schema_version`，以及数值 85 / 104 / 1223 / 500 / 2000 / 1100 / 1200 / 24 / 262144）：
+
+- 入场费 85、`opt_value` 104、`calibration_ratio` 1.224 → 上限 1223、基准点 1100/1200：与注册表 `station_canteen_entry_fee`、`opt_value`、`calibration_ratio` 一致。
+- `SAVE_BYTES_MAX` 262144（`:430`）：与注册表一致。
+- `record_is_better`、`milestone_met`：名称、表达式与注册表一致。
+- 新增的 `ms_banquet_return_1000` 阈值 1000 属于数据，不是注册表条目；不引入冲突。
+- **无值冲突**。注册表本身的缺口见 Recommended 11。
+
+### Findings
+
+- [RECOMMENDED] **Cross-References 的两处陈旧回指与本轮修复正相反。** `:379` 仍写数据配置「需新增 `MilestoneData`」，`:384` 仍写「数据配置的 `MilestoneData` 仍待其 Open Question 2 定归属」；而 `:292` / `:314` / `:326` / `:444` 与 `data-config.md:186` 都已按「纪录自带只读加载器、不进 schema」定案。读者从 Cross-References 进入会重新得到「待扩展数据配置」的结论。修法：`:379` 改为「档口 `display_name`；里程碑目录由本系统自带加载器提供（OQ2 已定）」；`:384` 改为「数据配置的 `MilestoneData` 归属已回答（OQ2）；其 GDD 第 28 行待回填」。Owner：本文件 + #1。
+- [RECOMMENDED] **反向校验挂错了错误码，且校验本身未在规则中定义。** AC 32（`:429`）把「每个档口至少一条 `*_return_1000` 且完成必需」标为「否则 `REQUIRED_MILESTONE_UNREACHABLE`」；该码在 `:276` 的定义是「必需里程碑指向已被移除的档口」，是反向情形（有里程碑、没档口）。上一轮建议的 `STATION_WITHOUT_REQUIRED_MILESTONE` 全文未出现，`MilestoneData` 校验表（`:316-324`）也没有这一行，实现者不知道加载器该发什么码。修法：在校验表补一行「每个已定义档口至少一条 `required_for_completion = true` 且绑定该档口的里程碑，否则 `STATION_WITHOUT_REQUIRED_MILESTONE`」，AC 32 拆成两条并列断言，各自挂对应错误码。Owner：本文件。
+- [RECOMMENDED] **AC 32 的「每个档口一条 `*_return_1000`」与免单档口互斥。** `:194` / `:260` 禁止「回本率指标 + 零入场费档口」（`INVALID_MILESTONE_FOR_ZERO_FEE`），而 AC 11 的 F6 夹具确认免单档口合法。若未来出现免单档口，AC 32 的新断言必然失败——它要求一件规则禁止的事。修法：把通用约束改为「每个档口至少一条必需里程碑」，再按 `entry_fee > 0` 指定 `*_return_1000`、按 `entry_fee = 0` 指定 `NET_PROFIT` 或 `RUNS_SETTLED` 的替代项。VS 两档口都收费，因此本轮不阻塞。Owner：本文件。
+- [RECOMMENDED] **运行时截图夹具仍用产品中不存在的档口。** 夹具定义（`:388`）、AC 5（`:396`）与 AC 16（`:410`）仍用 `station_noodle`；VS 的第二个档口是 `station_banquet`。作为单测夹具虚构 id 可以，但 AC 5 是「玩家可见行为 + 截图留存」的运行时验收，截图里的档口在产品中不存在。修法：AC 5 改用 `station_banquet`（阈值与夹具数值另定）；AC 16 可保留虚构 id，但注明「仅测试数据集，不要求截图」。Owner：本文件。
+- [RECOMMENDED] **编排者 OQ1 仍标未决，且接口名已分裂为两个。** `ui-flow.md:61` 与 `:622` 已把界面流程定为结算事务编排者，并调用 `纪录与里程碑.prepare_run(result)`；本 GDD `:120` 仍写「编排者身份尚未指定」，`:443` OQ1 仍未闭合，AC 23（`:417`）与 AC 28（`:422`）仍带「编排者指定后可执行」的括号注。同时本 GDD 的接口表（`:111`）只有 `apply_run`，而 `ui-flow.md` 自身也不一致：`:158` / `:432` / AC 12 正文（`:565`）与夹具（`:540`）写 `apply_run`，规则 10 写 `prepare_run`。两个名字指同一次「只算内存、不写盘」的调用，集成时必然有一方调用失败。修法：本 GDD 选一个动词（建议 `prepare_run`，与编排者「先 prepare、后一次 commit」的语义一致），更新接口表与 AC；同时把 OQ1 标为已回答（界面流程，2026-11-04），删去两条 AC 的括号注，并保留一句「若架构阶段改由场景流程编排，则…」的条件句。#16 侧需同步把 `:158` / `:432` / AC 12 / 夹具改为同一动词。Owner：本文件 + #16。
+- [RECOMMENDED] **硬/软口径与音效反馈相反。** 本 GDD `:103` / `:299` 把音效反馈记为「软」；`audio-feedback.md:356` 把本系统记为「硬（事件契约）」。实质是「事件契约硬、缺少音效不致命」，建议本文件改为「硬（事件契约）；产品意义上软」，与音效反馈的写法对齐。Owner：本文件。
+- [RECOMMENDED] **`unlocks` 仍被写成结算事务的必合并命名空间。** `:120` 要求编排者把 `progression`、`records`、`unlocks` 合并为一次提交，`:328` 也把三者的失败策略绑在一起。但 `unlocks-and-stations.md:55`（规则 15）明确 MVP/VS 不在结算中产生解锁，`ui-flow.md:61` 的措辞是「（以及未来存在的 `unlocks`）」。修法：改为「若该次结算产生 `unlocks`（当前 MVP/VS 不产生），一并提交」。Owner：本文件。
+- [RECOMMENDED] **完成条件的评估时点仍不唯一。** `:116`（接口表）写 `career_completed()`「载入时补齐状态不发」，暗示载入会补写 `completed_at`；`:271`（边界用例）写移除必需里程碑后「下一次结算可能立即通关」，即载入不评估。两处对「载入是否写入 `completed_at`」给出不同答案，AC 也未覆盖。修法：定一条并写进规则 14 和 AC 21，建议「`completed_at` 只在 `apply_run` 的锁存步骤写入；载入只读」。Owner：本文件。
+- [RECOMMENDED] **去重键仍未落在 schema 或状态表里。** `:28` 只与「上一次已应用的 `run_id`」比较，`:262` 说与结算的 `last_settled_run_id` 同口径；但命名空间 schema（`:65-72`）、状态表（`:53-61`）与两个子结构都没有 `last_applied_run_id`。实现者仍需猜它是内存字段还是持久化字段、重载后是否失效、更早 `run_id` 的重放会不会被重复累计。修法：加一行说明「`last_applied_run_id` 为会话内内存字段、不持久化、只挡住连续重放；更早结果的重放由结算的 exactly-once 保证兜底」。Owner：本文件。
+- [RECOMMENDED] **空局的 `return_ratio` 取值与上游声明的范围仍然冲突。** 本 GDD `:29` 要求 `entry_fee > 0` 时 `return_percent_x10 = floor(1000 × total / fee)` 且 `return_ratio` 非空；空局（`settlement:297`：`total_value = 0`）因此必然得到 `return_ratio = 0`、`return_percent_x10 = 0`。`settlement:180` / `:183` 仍声明 `return_ratio` 范围为 `(0, +∞)` 且「`return_ratio > 0`」。修法：本 GDD 在规则 3 与边界用例明确「空局 `return_ratio = 0` 是合法结果」，并请 `settlement` 修订为 `[0, +∞)`。Owner：本文件 + #11。
+- [RECOMMENDED] **`upgrade_snapshot` 的语义三方仍未统一。** 本 GDD `:84` 写「已解析的本局修正值，语义归局外升级」，`run-flow.md:70` 同意；直接上游 `settlement-and-entry-fee.md:70` 仍写「本局的局外升级**等级快照**」。修法：`:84` 加一句「其语义以 `run-flow` 为准；`settlement` 的『等级快照』措辞待其修订时统一」。Owner：本文件 + #11。
+- [RECOMMENDED] **注册表回指与条目缺口仍在。** `design/registry/entities.yaml` 只有 `record_is_better` 与 `milestone_met`；本 GDD 定义的 `career_accumulate`、`career_complete` 未登记。`record_is_better.referenced_by` 仍列 `settlement-and-entry-fee.md`，但该文件全文没有出现这个名字（`grep` 无命中）。`save_bytes`、`total_value`、`net_profit`、`return_ratio`、`end_reason`、`run_id_alloc` 的 `referenced_by` 也未加本文件。本轮按并行约束不修改注册表；建议由注册表维护会话统一补登并删去错误回指。Owner：注册表维护。
+- [RECOMMENDED] **AC 33 的体积判据几乎恒真，`save_bytes` 单条常量也偏小。** `save-system.md:200-203` 仍是 `R = 128 B/条纪录`、`M = 48 B/个里程碑`；相对本 GDD 的 `StationRecord`（8 字段 + `upgrade_snapshot` 字典）与 `MilestoneEntry`（id + ISO 时间戳 + int64 阈值）偏小。而 AC 33（`:430`）只断言「不超过 `SAVE_BYTES_MAX`」（256 KiB），而存档自己的 Full Vision 估算只有约 8.5 KiB，判据失去预算意义。修法：AC 33 改为与 `save-system` AC 27 同量级的显式上界（如 ≤ 16 KiB），或直接引用 `save_bytes` 的 Full Vision 估算值。Owner：本文件 + #4。
+
+Nice-to-have：
+
+- **`MILESTONE_CATALOGUE_INVALID` 仍不在编排者的致命错误清单（`:120`）**，而 AC 27（`:421`）会返回它；`ui-flow.md:61` 的清单同样只有三个码。补进两处清单即可。
+- **AC 19（`:413`）的第二个 GIVEN 没有 WHEN**，「目录没有任何必需项」这一支无法按步骤执行；拆成独立 AC 即可。
+- **AC 6（`:397`）自标为观察项**，「重新进入纪录页不重复播放」已由 AC 21 覆盖；可收缩为可截图断言的部分。
+- **`threshold_at_earn` 在载入时缺失的处理仍未定义**（`:269` 只覆盖 `earned_at`）；建议明确「缺失时保留 id、`threshold_at_earn` 置 null 并写警告」。
+- **文件头元数据过期**：`:3` 仍为 `Status: In Design`、`:5-6` 仍为 `Last Updated / Last Verified: 2026-11-03`，而内容已在 2026-11-04 修订。复审通过后应一并更新。
+- **无档口过滤的 `NET_PROFIT` 里程碑与规则 4 仍轻微冲突**：`ms_first_break_even`（`:242`）与进度取值（`:207`）跨档口比较绝对净利；τ = 0 时无碍，τ > 0 时偏向低入场费档口。建议规定 `NET_PROFIT` 指标在 τ > 0 时必须带 `station_id`。
+- **`ms_banquet_return_1000` 依赖暂定档口 id**：`unlocks-and-stations.md:151` 明写 `station_banquet` 是暂定 id。若最终改名，里程碑 id 需同步改；发布后里程碑 id 不可改（规则 10），因此改名必须发生在锁版本前。
+- **索引侧两处回填**：`systems-index.md:17` 的 `Depends On` 应加入「纪录与里程碑」；`data-config.md:28` 仍写「`MilestoneData` 是否成为第五类由 OQ2 决定，当前不在 schema 内」，应记录 OQ2 的答案（保持四类，独立加载器）。均不在本轮可写范围。
+
+### Specialist Disagreements
+
+无（lean 模式未运行 specialist；主评审内部未出现需要裁决的分歧）。
+
+### Senior Verdict
+
+> N/A — lean 模式不运行 `creative-director` 综合评审；本结论由主评审给出。
+
+**结论：纪录模型依旧成立，三条阻塞的实质都已修复，可以进入 Approved。** 通关条件重新覆盖两个 VS 档口，`MilestoneData` 有了明确的归属与校验通道，三个奖励时刻也有了声音的主人；这些修复都没有改动机制本身，比较、冻结与锁存语义保持原样。剩下的是修复留下的文档毛刺与跨文档口径：`apply_run` / `prepare_run` 的名字分裂最值得在架构阶段前处理（两个下游已经各写一半），其余可在实现前随手抹平。
+
+### Scope Signal
+
+依赖 3 硬上游 + 3 下游、4 条公式、一个新存档命名空间、一个新数据类型（`MilestoneData`，归属已定为纪录自带加载器，按约定需要一条架构决策记录）、一个新 UI 屏幕（纪录页）。按本技能的分级仍为 **L**。`systems-index.md:212` 仍把本系统记为 **S**——该估计与本 GDD 的集成面不符，生产排期前应重新评估。
+
+### Verdict: APPROVED
+
+### 建议状态
+
+`systems-index.md` 第 14 行：**`In Review` → `Approved`**。三项阻塞已解决，本轮无新的 blocking；14 条 Recommended 可在实现前并入或后续单独处理。（本轮不修改索引文件，按并行评审约束。）
+`systems-index.md` 第 17 行：`Depends On` 建议补「纪录与里程碑」（与 `audio-feedback.md:356` 一致）。
+
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 9fe5183795ca3d47798510a1d00a040dabe3ca61
+Reviewed-Content-Hash: design/registry/entities.yaml f8361d463dc6172ce3c22a462bccce6d2037d35c
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 5734623b4a60d9072657ef631c8ae61f05359f21
+Reviewed-Content-Hash: design/gdd/save-system.md 772ed596d68eb5cbae207b7bac9a170ec55c1524
+Reviewed-Content-Hash: design/gdd/data-config.md 0be338a35d8e5fa9ded4c219b29801021835938a
+Reviewed-Content-Hash: design/gdd/run-flow.md ed8848ea7c41823db26e22fb7d5df5f998fc0234
+Reviewed-Content-Hash: design/gdd/ui-flow.md 21482b6d00538b95af113995e613b8df29985a8a
+Reviewed-Content-Hash: design/gdd/audio-feedback.md f6ac7fbd915341f63761529b664028eec6b216c0
+Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 5aafb0674e6a0bc5bd6a370c275e95a2f01ebfa9
+Reviewed-Content-Hash: design/gdd/systems-index.md 15e0bd3d307ed09738b74dd3c099816b497b69e8
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
