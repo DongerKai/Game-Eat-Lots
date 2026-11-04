@@ -252,3 +252,103 @@ Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 2ef73066ae97ea1591a4eb
 Reviewed-Content-Hash: design/gdd/audio-feedback.md 8ad91f894b044ae735d9c55d13606f8e17453900
 Reviewed-Content-Hash: design/gdd/systems-index.md 182d446c25ab8aa50ccf7d672bc2132eeb2b22d3
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+
+---
+
+## Review — 2026-11-04 — Verdict: APPROVED
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none（lean — Phase 3b 未运行）
+Blocking items: 0 | Recommended: 21
+Summary: 上一轮 7 条 blocking 全部关闭：两条分段公式用 `max(1, …)` 与 `fill_ratio` 三元分支消除了零分母；`action_seq` / `turns_used` / `running_net` / `shortfall` 已由 `run-flow.md:141-145` 的只读快照发布，不变式 2/5 与 AC 5/8 可验证；`hud_ui_scale` 明确 `W/H` 取窗口像素且 HUD 走不叠加拉伸的独立层，1080p 的 1.5 是终值；净利累加器归餐局流程（`run-flow.md:51`），HUD 只读快照；`Ending` 规定读最后一帧快照；双焦点改为同时绘制，与 `input.md:43,146` 一致；三个音效事件已写入接口表；`get_anchor_rect` 与三个受保护矩形已补。剩余 21 条均为文档同步与措辞问题，不阻断实现。
+Prior verdict resolved: Yes
+
+### Prior blocking — verified
+
+| Prior blocking | Current state | Result |
+|---|---|---|
+| 两条显示公式在 0 值上除零（`hud_capacity_cells` / `hud_turn_slots`） | `:235` `slots = max(1, min(turns_total, 12))`；`:252` `cells = max(1, min(capacity_total, 24))`；`:254` `fill_ratio = capacity_total > 0 ? … : 0`；`:248` 写明 `turns_total = 0` 不渲染槽位 | ✓ |
+| 不变式引用上游不发布的 `action_seq` / `turns_used` | `run-flow.md:141` 快照含 `turns_used`，`:144` 含 `action_seq`，`:145` 含 `running_net` / `shortfall`；不变式 2/5（`:328`、`:331`）与 AC 5/8 可验证 | ✓（HUD 侧字段清单待补，R2） |
+| `hud_ui_scale` 坐标空间未定义 | `:211` / `:215` 明确 `W/H` 为窗口像素、HUD 独立层不叠加 `canvas_items`，1080p `s = 1.5` 为最终缩放；AC 10 一致 | ✓（布局段与 OQ7 待同步，R1） |
+| [依赖 #11] 局内净利无可实现契约 | `run-flow.md:51` 规则 23 由餐局流程持有累加器（开局 `−entry_fee`、每次提交 `+price`）；快照 `:145` 发布读数；HUD `:170` 只读快照 | ✓ |
+| [依赖 #7] Ending 数值冻结与容量重置冲突 | `:166` 明写「`Ending` 期间读最后一帧快照，不实时查询（容量可能在 `run_ended` 重置）」；`:148` 数值冻结 | ✓（构帧时序仍建议写明，R15） |
+| [依赖 #2] 双焦点绘制规则相反 | `input.md:43` 规则 8「分开记录、分开绘制」，`:146` 「各自记录、同时绘制，最近一次输入决定主高亮但不隐藏另一种样式」；HUD `:425` 与 AC 37 已一致 | ✓ |
+| 音效三个事件缺失 | `:176` 列出 `dish_action_rejected(reason)` / `number_roll_started(field, from, to, duration_ms)` / `number_roll_finished(field, skipped: bool)`，与 `audio-feedback.md:112,363` 一致 | ✓（触发条件待补，R4） |
+
+### Completeness: 6/6 required sections present
+
+`modes.workflow: standard`。Overview、Detailed Design（= Detailed Rules）、Formulas、Edge Cases、Dependencies、Acceptance Criteria 全部存在；Formulas 为必需（八组呈现数值规则）。Advisory：无 `## Player Fantasy` 标题（`## Game Feel` `:418-425` 覆盖实质）；Tuning Knobs 以 `### 调参起点`（`:333-351`）表格形式存在。
+
+### Dependency Graph
+
+Dependencies 表 13 行、Interactions 表 15 行声明的 GDD 全部存在：`run-flow.md`、`time-and-turns.md`、`stomach-capacity.md`、`dish-values.md`、`cloying-and-taste.md`、`menu-waves.md`、`settlement-and-entry-fee.md`、`input.md`、`data-config.md`、`scene-flow.md`、`ui-flow.md`、`first-run-onboarding.md`、`audio-feedback.md`。UX 依赖 `design/ux/hud.md` 与 `design/accessibility-requirements.md` 不存在，文件已在 `:429`、`:462` 声明由 `/ux-design` 产出。
+
+### Registry Values
+
+用注册表词条名（`running_net` / `shortfall` / `capacity_used` / `capacity_total` / `can_fit` / `capacity_remaining` / `effective_satiety` / `extra_satiety` / `cleanse_target` / `preview_dishes` / `visible_dishes` / `unit_value` / `turns_total` / `entry_fee` 等）对全文做大小写不敏感搜索，68 行命中。无数值冲突：
+
+- `station_canteen_entry_fee = 85`（`entities.yaml:1183-1193`）与 AC 2 的 `−85` / `还差 85 元`一致；AC 1 的 16 + 5 + 18 − 85 = `−46` 一致。
+- `capacity_total` 20 / `capacity_used` 12 与公式例子（`:267`）、AC 15 一致；`can_fit` 的等号边界与 AC 18 的「需要 6 格，剩 4 格」一致。
+- `running_net` / `shortfall` 的表达式与 HUD 的显示口径一致；免单档口 `entry_fee = 0` 推出 `shortfall = 0`，与 Edge `:359` 一致。
+- `unit_value` 只以否定形式出现（`:45`、`:63`、`:131`、`:167`、`:386`、`:452`、AC 20），与「不在 HUD」一致。
+- 无 HUD 拥有的注册表词条，与「HUD 只持有呈现层规则」一致。
+
+缺口：`referenced_by` 未同步（R16）；`capacity_used` 归属仍写 settlement（R17）；金额位数 5 vs `999999`（R18）。
+
+### Required Before Implementation
+
+无。
+
+### Recommended Revisions
+
+1. **布局段与 `hud_ui_scale` 互相矛盾** —— `:75` 仍写「采用 `canvas_items` 拉伸…UI 整体随窗口等比放大」，OQ7（`:540`）也仍假设 `canvas_items`；而 `:211` / `:215` 明写 HUD 用不叠加拉伸的独立层。统一为一套说法并写明独立层的配置方式，否则实现者可能再次叠加出 2.25×。
+2. **快照字段清单不完整** —— Interactions `:164` 列出的快照字段没有 `turns_used`、`action_seq`、`running_net`、`shortfall`，但 Dependencies `:384`、不变式 2/5、`:170` 都在使用它们。按 `run-flow.md:136-148` 补齐。
+3. **`hud_capacity_cells` 的 Output Range 与公式不符** —— `:267` 写 `cells ∈ [0, 24]`，而 `cells = max(1, …)` 的值域是 [1, 24]；同时没有像 `hud_turn_slots`（`:248`）那样写明 `capacity_total = 0` 时「不渲染分段」。
+4. **音效事件的触发条件缺失** —— `:176` 只给了签名；规则 4（`:35`）与规则 11（`:49`）没有点名事件。写明 `dish_action_rejected` 只在规则 11 / AC 23 的拒绝上发、`number_roll_*` 只在真正的滚动动画上发（并说明滚动动画与规则 4「动画不得推迟数值」如何兼容），否则 `audio-feedback.md:370` 的「只有动画滚动才发」无法落实。
+5. **`can_fit(d)` 签名不符** —— `:47`、`:166`、`:300`、`:309`、`:330`、`:385` 应改为 `can_fit(e)`（`stomach-capacity.md:62`；注册表 expression 用 `e`），并补「HUD 先取 `effective_satiety(d)`，再把该整数交给 `can_fit`」。
+6. **`get_dish(id)` 签名不符** —— `:167`、`:386` 应为 `get_dish(id, caller)`（`dish-values.md:94`）。
+7. **`turns_total` 范围** —— `:242` 写 1–999，上游是 1–INT32_MAX，AC 17 又测 0；统一为 0–INT32_MAX（0 仅防御分支）。
+8. **下一波预览更新时机** —— 信息清单 `:125` 的「开局锁定」应改为「开局、跳波、自动推进」，与 `preview_dishes` 依赖 `wave_index`（`menu-waves.md:103`）一致。
+9. **规则 11 措辞自相矛盾** —— `:49` 「信任 `can_fit`，不提交动作」；按 AC 19 拆成「显示信任 `can_fit`；提交前复查剩余容量，矛盾则不提交并记 invariant 4」。
+10. **规则 3 的重绘触发清单** —— `:33` 仍只有上游信号与 `frozen`，而信息清单 `:127` 写明焦点变化也要更新；补「焦点/悬停变化用缓存的 `HudFrame` 重建，不重新读上游」。
+11. **`hud_area_usage` 的右栏高度无来源** —— 分区表 `:98-103` 只给右栏 x 与宽度；例子用 560，按图（顶栏下缘 108、内容下缘 684）应为 576，比值 26.9% 而非 AC 12 的 26.5%。补 y 范围，或改例子与 AC。
+12. **OQ1 前提已不成立** —— `input.md:35,151` 定义的是 `game_skip_wave`（跳过当前波 / 最后一波结束取餐），`:211` 断言无 `skip_dish`；HUD 规则 16 用的也是 `game_skip_wave`。关闭 OQ1。
+13. **删除过期的「双向一致性」段** —— `:397-402` 的三件事均已完成：`systems-index.md:71` 已列全 8 个依赖，八份上游 GDD 都已回指。删除或标为已完成。
+14. **锚点 id 词表** —— HUD 只写 `get_anchor_rect(anchor_id)`（`:175`、`:394`），未列 id；`first-run-onboarding.md:66` 定义了六个（`top:net` / `top:turns` / `bar:capacity` / `rail:cloy` / `card:<dish_id>` / `grid:first_card`）。在 HUD 接口表列出，或明确「id 词表由首局引导定义」。
+15. **Ending 帧的构帧时序** —— `:166` 说 Ending 读最后一帧快照，但规则 3（`:33`）在 `run_ended` 时仍「读取一次完整数据」，而胃容量在 `run_ended` 重置（`stomach-capacity.md:28`）。写明 Ending 帧复用 `run_ended` 之前缓存的快照，或请 #5 声明快照组装先于胃容量重置。
+16. **注册表 `referenced_by`** —— `running_net`、`shortfall`、`capacity_used`、`can_fit`、`effective_satiety`、`preview_dishes` 等仍未列本文件（仅 `onboarding_active` 有）。属编排会话写入范围。
+17. **`capacity_used` 归属** —— 注册表 `entities.yaml:696` 的 `source` 仍是 settlement，HUD/stomach-capacity/run-flow 都当作胃容量读数。路由 `/consistency-check`。
+18. **金额位数** —— `hud_number_format`（`:63`）「HUD 金额最多 5 位」与注册表 `running_net` 上界 `999999`（6 位，`entities.yaml:666-675`）差一位；确认取整/截断策略。
+19. **`scene-flow.md` 回指** —— `grep -c '局内 HUD' design/gdd/scene-flow.md` 仍为 0；补间接回指或说明只经 run-flow 的 `frozen` 到达。
+20. **`frozen` 在 Ending 之后** —— States 表（`:142-151`）仍只在 `Active` 下建模 `Frozen`；`run-flow.md:90` 说 `frozen` 与四个局内状态正交。补一行：暂停在 `Ending` / `Settling` / `Handoff` 到达时保持原状态，恢复后不重播。
+21. **空局文案** —— Edge `:360` 仍写「净利显示负数或 0（由结算给值）」；结算保证空局 `net_profit = −entry_fee`，直接写该值。
+
+### Specialist Disagreements
+
+无 —— Lean 模式不派生专家（Phase 3b 跳过）。
+
+### Nice-to-Have
+
+- `hud_safe_margin` 的下限 32 px 在最低支持分辨率下不可达（`round(0.05 × 720) = 36`），可标注为纯防御值。
+- `effective_satiety` 的变量范围写 1–999，注册表是 [1, 9]；放宽不冲突，但可对齐。
+- 「中央 40% 不得放 HUD」（`:101`、AC 16）的出处是 `.claude/docs/templates/hud-design.md:95`，可补一句引用。
+
+### Scope Signal
+
+Rough scope signal: **L**（8 个硬上游 + 5 个下游 / 同级系统，10 组呈现公式，无新增 ADR；producer 应在排期前复核）。
+
+### Verdict: APPROVED
+
+7 条 blocking 全部关闭，剩余 21 条为文档同步、签名与措辞问题，不阻断实现。建议 `systems-index.md` 第 15 行状态由 `In Review` 改为 `Approved`（本次不修改索引）。本 GDD 未被修改。
+
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 654e48d14dbf85fdbab3b923e590a4f356dd0218
+Reviewed-Content-Hash: design/registry/entities.yaml f8361d463dc6172ce3c22a462bccce6d2037d35c
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md ed8848ea7c41823db26e22fb7d5df5f998fc0234
+Reviewed-Content-Hash: design/gdd/input.md 9432d857ed18dc216dc5a038f81608ae9e10d975
+Reviewed-Content-Hash: design/gdd/audio-feedback.md f6ac7fbd915341f63761529b664028eec6b216c0
+Reviewed-Content-Hash: design/gdd/stomach-capacity.md 72584c8a3cc37bfd9c68d285c4223ae8425a63f0
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 3f99e25a3d35bd4922c0717adc033569a50abafb
+Reviewed-Content-Hash: design/gdd/menu-waves.md ce532d3265df1ed7555ba5aa46383be35bbee4a1
+Reviewed-Content-Hash: design/gdd/scene-flow.md 4efc24d198112aa612551f5b3e5bdeeac28cd52e
+Reviewed-Content-Hash: design/gdd/systems-index.md 15e0bd3d307ed09738b74dd3c099816b497b69e8
