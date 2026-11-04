@@ -1058,3 +1058,194 @@ Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md b033f0acd34e58fa43
 Reviewed-Content-Hash: design/gdd/cloying-and-taste.md 1c8fd48bbdff0e8d24e5e436a8d801545df4da0b
 Reviewed-Content-Hash: design/gdd/menu-waves.md 7edb32ad4c200e2b3a8e858adef8828afd74ce3a
 ```
+
+---
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION
+
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean mode — Phase 3b skipped)
+Blocking items: 1 | Recommended: 10 | Nice-to-have: 5
+Prior verdict resolved: Partially — prior blocking 2 (registry note) is fully resolved;
+prior blocking 3 was already resolved; prior blocking 1's version-axis half is now
+uniform, but its lock-aware-exit half is still absent from the load-result table, so one
+cell still authorises quarantining a live instance's file.
+
+Summary: The version axis is now consistent across every definition site. Rule 10 (line
+36), the load table (line 65), the formula (lines 137–139), the formula example (line
+163), Edge Case 251 and AC 24b (line 403) all agree that `ReadOnly` requires
+`version(P) ≤ V`, that `version(P) > V` is `Blocked` before the lock branches, and that
+the older-version browse path is an in-memory migration never written to disk. Rule 21
+(line 47) and UI 4 (lines 326–331) now state that any `L = live` `Blocked` offers only
+exit/retry. The registry `load_outcome` note has been rewritten to match. What remains
+is the one site the round-5 brief named explicitly: the load-result table's `Blocked`
+row (line 66) still maps "更新版本 / 无法读取" to "退出 / 新建生涯" with no lock
+condition, and the `ui-flow.md` copies of that mapping (lines 81, 402, 504, 586) carry
+the same unconditional exit set. For `L = live` that table answer authorises
+「新建生涯」, whose rule-12 rename would isolate a file the other instance is writing —
+the exact action rule 21, UI 4 (line 331) and AC 23 (line 401) forbid.
+
+### Prior Blocking Items — Status
+
+1. **PARTIALLY RESOLVED** — the version-axis defect is gone everywhere it was named in
+   round 5: load table line 65 now reads "版本 ≤ 当前", rule 10 (line 36) and Edge Case
+   251 carry the same qualifier, UI 3 (line 325) is reached only for a `ReadOnly`
+   outcome whose definition already carries `≤ V`, and formula lines 137–139 plus AC 24b
+   (line 403) give `version(P) > V` precedence over the lock. The lock-aware exit half is
+   applied in rule 21 (line 47: "任何 `L = live` 的 `Blocked` 出口只有「退出」与「重试」")
+   and UI 4 (line 331: same sentence, "即使原因是「更新版本」或「无法读取」"), but **not**
+   in the load-result table:
+   - Line 66: "按原因给出口：更新版本 / 无法读取 → 退出 / 新建生涯；迁移失败 / 持锁不可读
+     → 退出 / 重试" — reason-keyed only. For `L = live ∧ readable(P) ∧ version(P) > V`
+     and `L = live ∧ ¬readable(P)` it still offers 「新建生涯」.
+   - `ui-flow.md:81` (rule 20), `:402` (Edge Case), `:504` (table) and `:586` (AC 26) all
+     repeat the reason-keyed mapping with no live-lock override; `:419` still says the
+     `Blocked` modal accepts "其两个出口".
+   - Edge Case 239 authorises the rename "只有当玩家在界面明确选择「新建生涯」时" without a
+     lock condition, so it implies the offer exists in every unreadable case.
+   **Fix:** make the load table's `Blocked` row lock-aware — e.g. "无存活锁：更新版本 /
+   无法读取 → 退出 / 新建生涯；迁移失败 → 退出 / 重试；任何 `L = live` → 退出 / 重试，
+   不提供新建生涯" — and add the same qualifier to Edge Case 239. The `ui-flow.md` copies
+   are a follow-on fix in that file.
+
+2. **RESOLVED** — `entities.yaml:783` now reads "ReadOnly = a live lock over a readable
+   primary with version(P) <= V (browse, never write; an older version renders via
+   in-memory read-only migration and is not migrated on disk). A higher-than-current
+   version is Blocked before the lock branches; a live-lock Blocked offers only
+   exit/retry, never a new career." This matches rule 10 (line 36), the formula (lines
+   137–139), UI 4 (line 331) and AC 24b (line 403); the `expression` (line 782) was
+   already correct. The note still needs its `revised` field set, which is housekeeping,
+   not a finding.
+
+3. **RESOLVED** — unchanged from round 5: `retry_load()` at interface line 103,
+   transition line 79, AC 30 (line 413), rule 21 (line 47).
+
+### Completeness: 6/6 required sections present (standard tier)
+
+Required at `standard`: Overview, Detailed Rules (`## Detailed Design`), Formulas, Edge
+Cases, Dependencies, Acceptance Criteria — all present. Formulas is required because the
+system defines four numeric rules.
+
+Advisory gaps (do not block at `standard`):
+- **Player Fantasy** — absent as a heading; `## Game Feel` covers the intent.
+- **Tuning Knobs** — absent as a section; constants (lines 33, 35, 207) remain scattered.
+
+### Dependency Graph
+
+- ✓ `design/gdd/data-config.md` — exists (upstream, hard)
+- ✓ `design/gdd/meta-upgrades.md` — exists (downstream, hard)
+- ✓ `design/gdd/unlocks-and-stations.md` — exists (downstream, hard)
+- ✓ `design/gdd/records-and-milestones.md` — exists (downstream, hard)
+- ✓ `design/gdd/ui-flow.md` — exists (downstream, hard/UI)
+- ✗ `design/gdd/online-challenges.md` — NOT FOUND (downstream, soft; declared "GDD 未写",
+  line 275 — acceptable for a future system)
+
+`scene-flow` and `settlement-and-entry-fee` are explicitly declared non-dependencies
+(lines 280–281); both sibling GDDs agree.
+
+### Registry Values
+
+Search terms: `load_outcome`, `migrate`, `save_bytes`, `slots_available`,
+`save_schema_version`, `save_bytes_max`, `save_max_slots`, `save_backup_count`,
+`milestone_met`, `effective_unlocks`, `base_capacity`, `entry_fee`, `max_level`,
+`wallet`. No numeric conflict: `SAVE_BYTES_MAX = 262144` matches registry line 1214,
+`MAX_SLOTS = 1` matches line 1226, `SAVE_SCHEMA_VERSION = 1` matches line 1203. The
+`load_outcome` note conflict is resolved (prior blocking 2). Two carried registry gaps
+remain: no `save_backup_count` entry for `SAVE_BACKUP_COUNT = 1`, and `save_bytes`
+`output_range: [0, 262144]` still claims a 0 lower bound although `B_base = 1024`.
+
+### Required Before Implementation
+
+1. **[BLOCKING — GDD] `Blocked` exit row is not lock-aware** (line 66; Edge Case 239
+   line 239). Rule 21 (line 47) and UI 4 (line 331) say a live-lock `Blocked` offers only
+   exit/retry for every reason; the load-result table and Edge Case 239 still offer
+   「新建生涯」 for "更新版本 / 无法读取" with no lock condition. Under `L = live` that
+   choice runs rule 12's rename against a file another live instance may be mid-write on,
+   which rule 21 ("绝不覆盖对方的文件") and AC 23 (line 401) forbid. One table row plus one
+   edge-case bullet; no schema, formula or state-model change.
+
+### Recommended Revisions
+
+1. `ReadOnly` branch still has no outcome for `readable(P) ∧ ¬valid(P)`, and no outcome
+   for an in-memory migration that fails (formula line 138 tests `readable(P)` only,
+   while lines 36/65/163 promise a rendered browse). Give the branch a defined failure
+   result (fall through to `Blocked` 迁移失败) or state that `ReadOnly` implies
+   `valid(P)` and a successful in-memory migration. Carried.
+2. `ui-flow.md:81` (rule 20), `:402` (Edge), `:504` (table) and `:586` (AC 26) still
+   carry the reason-keyed `Blocked` mapping without the live-lock override; `:419` says
+   the modal accepts "其两个出口". Update after blocking 1 so the two GDDs agree for
+   `L = live`. Fix in `ui-flow.md`. Carried, narrowed.
+3. `registry` has no `save_backup_count` entry although rule 9 (line 35) defines
+   `SAVE_BACKUP_COUNT = 1`. Carried.
+4. `save_bytes` lower bound is 0 (GDD line 208; registry `output_range`) but
+   `B_base = 1024`. Carried.
+5. Rule 2's example list (line 28) omits `base_capacity`, the same class of
+   config-derived runtime value as `dish_pool`. Carried.
+6. Edge Case 240 says only "纪录类事务保留内存", while rule 18 (line 44) and the state
+   table (line 76) also cover 结算入账 and 解锁. Carried.
+7. AC 1 (line 368) still asserts an empty unlock set at `Fresh` with no mention of the
+   `normalize()` backfill Edge Case 234 requires before the baseline write. Carried.
+8. The interface table (lines 100–109) still omits the outbound `normalize()` call and
+   the startup order (data `Ready` → `load()` → `normalize()` → baseline), stated only in
+   Edge Case 234 and Dependencies line 273. Carried.
+9. Cross-References "待回改" items 1–4 (lines 356–359) contradict Dependencies lines
+   285–288, which record those same documents as already 回改; item 5 (line 360) still
+   asks for index `#4 = Designed` while `systems-index.md:60` reads `In Review`.
+   Carried.
+10. `ReadOnly` session behaviour for a run is still undefined: UI 3 (line 325) hides
+    purchase/unlock entry points but does not forbid 「开始营业」, and every write is
+    disabled in `ReadOnly`, so a played run's settlement can never commit. Either forbid
+    starting a run or show an explicit "本局结果不会保存" notice. Carried.
+
+### Nice-to-Have
+
+1. AC 24b (line 403) is numbered before AC 24 (line 404). Renumber if the section is
+   touched again. (Carried.)
+2. The retry transition (line 79) uses `Unloaded` → `Loading`, two states the
+   load-outcome model never defines. (Carried.)
+3. `retry_load()` on a 迁移失败 reason re-runs a pure function and must fail again (AC 30
+   defines this honestly); consider suppressing 「重试」 for that reason in the UI.
+   (Carried.)
+4. `menu-waves.md:215` says a missing id makes the load fail and return to the menu;
+   save rule 14 (line 40) preserves unknown ids instead. Unreachable in MVP (no mid-run
+   save), but the two must agree if Open Question 1 is enabled. (Carried.)
+5. UI 3 (line 325) describes `ReadOnly` as "另一实例持锁但文件可读时" without repeating
+   `version ≤ 当前`; the outcome definition already implies it, so this is wording only.
+
+### Scope Signal
+
+**Rough scope signal: L** — four formula blocks, one upstream + four hard downstream
+systems, and four architecture-stage decisions (serialization format OQ 2, save path and
+loader OQ 3, write-lock implementation OQ 9; Steam Cloud OQ 4 later).
+`systems-index.md:200` rates the design effort `S`; this review retains **L**.
+
+### Verdict: NEEDS REVISION
+
+Suggested systems-index status: **Needs Revision** (`systems-index.md:60` currently
+reads `In Review`). Per the parallel constraint this review did not modify the index, the
+GDD, the registry or `ui-flow.md`; the orchestration session applies the status. The
+blocking set is now a single cell: the load-result table's `Blocked` row (and its Edge
+Case 239 counterpart) needs the live-lock qualifier already present in rule 21 and UI 4.
+The envelope, state model, atomic-write and migration design remain consistently
+specified; one small edit should clear the way for re-review.
+
+---
+
+Receipt (files this review read for cross-document facts):
+```
+Reviewed-Content-Hash: design/gdd/save-system.md 0d0edcdeed2612058390f2a0da75dab9cc15e1da
+Reviewed-Content-Hash: design/registry/entities.yaml 5e3b667c300bdf6b9daad9b294aecf224b502b8e
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/ui-flow.md 35a3291d40d49cf1b6f35190ed231112462f0bc6
+Reviewed-Content-Hash: design/gdd/systems-index.md b59ef2478102399659f8ae8b533c98a63a1c90b0
+Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
+Reviewed-Content-Hash: design/gdd/scene-flow.md 4efc24d198112aa612551f5b3e5bdeeac28cd52e
+Reviewed-Content-Hash: design/gdd/data-config.md 0be338a35d8e5fa9ded4c219b29801021835938a
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md b033f0acd34e58fa436fd583230335ee143196ae
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md 1c8fd48bbdff0e8d24e5e436a8d801545df4da0b
+Reviewed-Content-Hash: design/gdd/menu-waves.md 90754805044963eef29e76a1a031a706e0c30a2f
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md b9b9235e9a4ad7d8739ad778e98dd147b1c72f94
+Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 5aafb0674e6a0bc5bd6a370c275e95a2f01ebfa9
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 84e5c38fc40fb2a75d8ee608c911bdebf369c5a1
+```
