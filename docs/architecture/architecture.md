@@ -6,8 +6,8 @@
 - Last Updated: 2026-11-04
 - Engine: Godot 4.7 (pinned; installed version NOT DETERMINED — no editor on this machine)
 - GDDs Covered: 18 (all designed systems; #19 在线挑战 and #20 同屏合作 are Not Started)
-- ADRs Referenced: ADR-0001 内容数据格式；ADR-0002 持久化格式；ADR-0003 场景与屏幕架构；ADR-0004 服务组合与信号；ADR-0005 输入上下文栈；ADR-0006 确定性随机；ADR-0007 局内状态与结算事务；ADR-0008 设置与本地化；ADR-0009 音频播放与暂停（均为 Proposed）
-- Architecture Review: 2026-11-04 — FAIL — 56 covered / 4 partial / 44 gaps。机械修复已应用（2026-11-04）：ADR-0005 `Depends On: None` 解除 0003↔0005↔0004 依赖环；ADR-0001 补入 ADR-0009 的第六清单；ADR-0009 补 `## GDD Requirements Addressed`。44 gaps 与 9 份 ADR 的接受仍待处理（见 `docs/architecture/architecture-review-2026-11-04.md`）
+- ADRs Referenced: ADR-0001 内容数据格式；ADR-0002 持久化格式；ADR-0003 场景与屏幕架构；ADR-0004 服务组合与信号；ADR-0005 输入上下文栈；ADR-0006 确定性随机；ADR-0007 局内状态与结算事务；ADR-0008 设置与本地化；ADR-0009 音频播放与暂停（均为 Accepted，2026-11-04）
+- Architecture Review: 2026-11-04 — FAIL — 56 covered / 4 partial / 44 gaps。机械修复已应用（2026-11-04）：ADR-0005 `Depends On: None` 解除 0003↔0005↔0004 依赖环；ADR-0001 补入 ADR-0009 的第六清单；ADR-0009 补 `## GDD Requirements Addressed`。9 份 ADR 已于 2026-11-04 全部接受（Accepted），但评审报告的 `Reviewed-Content-Hash` 早于该状态变更；依赖报告结论前需重跑 `/architecture-review full`。44 gaps 仍待处理（见 `docs/architecture/architecture-review-2026-11-04.md`）
 - TD-ARCHITECTURE: 2026-11-04 — skipped — lean mode
 - LP-FEASIBILITY: 2026-11-04 — skipped — lean mode
 
@@ -348,25 +348,26 @@ class Records:
 
 ## ADR Audit
 
-Nine Foundation/Feature ADRs are written and `Proposed`; none of the Required
+Nine Foundation/Feature ADRs are written and `Accepted`; none of the Required
 ADRs remains unwritten. The TR registry holds all 104 table requirements; ADR
 linkage below is authoritative.
 
 | ADR | Engine Compat | Version | GDD Linkage | Conflicts | Valid |
 |---|---|---|---|---|---|
-| ADR-0001 内容数据格式、校验与启动门 | ✅ | ✅ 4.7 | ✅ TR-data-config-001..006, TR-records-004 | None | ⚠️ Proposed — engine verification pending |
-| ADR-0002 持久化格式、原子写入与跨平台写锁 | ✅ | ✅ 4.7 | ✅ TR-save-system-001..007, TR-ui-flow-005, TR-records-001 | None | ⚠️ Proposed — engine verification pending |
-| ADR-0003 场景与屏幕架构 | ✅ | ✅ 4.7 | ✅ TR-scene-flow-001..005, TR-ui-flow-001..003, TR-in-game-hud-002 | None | ⚠️ Proposed — engine verification pending |
-| ADR-0004 服务组合与信号机制 | ✅ | ✅ 4.7 | ✅ TR-audio-feedback-001/005, TR-run-flow-006, TR-save-system-006, TR-scene-flow-003/005, TR-ui-flow-004 | None | ⚠️ Proposed — engine verification pending |
-| ADR-0005 输入上下文栈语义 | ✅ | ✅ 4.7 | ✅ TR-input-001..006, TR-first-run-onboarding-002, TR-in-game-hud-004, TR-scene-flow-002, TR-ui-flow-001 | None | ⚠️ Proposed — engine verification pending |
-| ADR-0006 确定性随机、种子派生与健康校验预算 | ✅ | ✅ 4.7 | ✅ TR-menu-waves-001..006, TR-dish-values-003, TR-run-flow-002/003 | None | ⚠️ Proposed — engine verification pending |
-| ADR-0008 机器级设置与本地化管线 | ✅ | ✅ 4.7 | ✅ TR-ui-flow-006, TR-ui-flow-003（呈现侧） | None | ⚠️ Proposed — engine verification pending |
-| ADR-0007 局内状态所有权与结算事务边界 | ✅ | ✅ 4.7 | ✅ TR-run-flow-001/002/005, TR-settlement-001/004, TR-ui-flow-004, TR-meta-upgrades-005, TR-records-002 | None | ⚠️ Proposed — engine verification pending |
-| ADR-0009 音频播放、池化与暂停语义 | ✅ | ✅ 4.7 | ✅ TR-audio-feedback-001..007, TR-ui-flow-007 | None | ⚠️ Proposed — engine verification pending |
+| ADR-0001 内容数据格式、校验与启动门 | ✅ | ✅ 4.7 | ✅ TR-data-config-001..006, TR-records-004 | None | ✅ Accepted — engine verification pending |
+| ADR-0002 持久化格式、原子写入与跨平台写锁 | ✅ | ✅ 4.7 | ✅ TR-save-system-001..007, TR-ui-flow-005, TR-records-001 | None | ✅ Accepted — engine verification pending |
+| ADR-0003 场景与屏幕架构 | ✅ | ✅ 4.7 | ✅ TR-scene-flow-001..005, TR-ui-flow-001..003, TR-in-game-hud-002 | None | ✅ Accepted — engine verification pending |
+| ADR-0004 服务组合与信号机制 | ✅ | ✅ 4.7 | ✅ TR-audio-feedback-001/005, TR-run-flow-006, TR-save-system-006, TR-scene-flow-003/005, TR-ui-flow-004 | None | ✅ Accepted — engine verification pending |
+| ADR-0005 输入上下文栈语义 | ✅ | ✅ 4.7 | ✅ TR-input-001..006, TR-first-run-onboarding-002, TR-in-game-hud-004, TR-scene-flow-002, TR-ui-flow-001 | None | ✅ Accepted — engine verification pending |
+| ADR-0006 确定性随机、种子派生与健康校验预算 | ✅ | ✅ 4.7 | ✅ TR-menu-waves-001..006, TR-dish-values-003, TR-run-flow-002/003 | None | ✅ Accepted — engine verification pending |
+| ADR-0008 机器级设置与本地化管线 | ✅ | ✅ 4.7 | ✅ TR-ui-flow-006, TR-ui-flow-003（呈现侧） | None | ✅ Accepted — engine verification pending |
+| ADR-0007 局内状态所有权与结算事务边界 | ✅ | ✅ 4.7 | ✅ TR-run-flow-001/002/005, TR-settlement-001/004, TR-ui-flow-004, TR-meta-upgrades-005, TR-records-002 | None | ✅ Accepted — engine verification pending |
+| ADR-0009 音频播放、池化与暂停语义 | ✅ | ✅ 4.7 | ✅ TR-audio-feedback-001..007, TR-ui-flow-007 | None | ✅ Accepted — engine verification pending |
 
-**Traceability coverage:** 56 of 104 requirements covered by a Proposed ADR,
-4 partial, 44 gaps. No requirement is covered by an Accepted ADR — all nine
-ADRs remain `Proposed`. The per-requirement matrix is authoritative:
+**Traceability coverage:** 56 of 104 requirements covered by an Accepted ADR,
+4 partial, 44 gaps. All nine ADRs were accepted on 2026-11-04; the coverage
+mapping is unchanged from the review, which predates acceptance. The
+per-requirement matrix is authoritative:
 `docs/architecture/requirements-traceability.md` (review:
 `docs/architecture/architecture-review-2026-11-04.md`).
 
@@ -377,18 +378,18 @@ Grouped by layer, Foundation first. Each group lists the TR areas it must cover;
 
 **Foundation — must exist before coding starts**
 
-1. **Content data format, validation and boot gate** — `Resource` vs JSON/CSV, id rules, `DataConfig` state machine, milestone catalog loader. Covers `TR-data-config-*`, `TR-records-004`. **Written: ADR-0001 (Proposed).**
-2. **Persistence format, atomic write and cross-platform lock** — JSON vs `store_var` vs binary, int64 encoding, path/naming, lock mechanism, migration harness. Covers `TR-save-system-001..007`. **Written: ADR-0002 (Proposed).**
-3. **Scene and screen architecture** — one root controller vs one scene per screen; screen stack, modal stack, focus neighbours, dual-focus presentation. Covers `TR-scene-flow-*`, `TR-ui-flow-001..003`, `TR-in-game-hud-002`. **Written: ADR-0003 (Proposed).**
-4. **Service composition and signal mechanism** — composition root vs autoloads, dependency injection, signal ordering/reentrancy, paused `process_mode`. Covers the cross-cutting lifecycle contracts and `TR-audio-feedback-005`. **Written: ADR-0004 (Proposed).**
-5. **Input context stack semantics** — `push_context` on a same-value top, `Blocked` allow-lists, action consumption, nav repeat. Covers `TR-input-001..006`. **Written: ADR-0005 (Proposed).**
+1. **Content data format, validation and boot gate** — `Resource` vs JSON/CSV, id rules, `DataConfig` state machine, milestone catalog loader. Covers `TR-data-config-*`, `TR-records-004`. **Written: ADR-0001 (Accepted).**
+2. **Persistence format, atomic write and cross-platform lock** — JSON vs `store_var` vs binary, int64 encoding, path/naming, lock mechanism, migration harness. Covers `TR-save-system-001..007`. **Written: ADR-0002 (Accepted).**
+3. **Scene and screen architecture** — one root controller vs one scene per screen; screen stack, modal stack, focus neighbours, dual-focus presentation. Covers `TR-scene-flow-*`, `TR-ui-flow-001..003`, `TR-in-game-hud-002`. **Written: ADR-0003 (Accepted).**
+4. **Service composition and signal mechanism** — composition root vs autoloads, dependency injection, signal ordering/reentrancy, paused `process_mode`. Covers the cross-cutting lifecycle contracts and `TR-audio-feedback-005`. **Written: ADR-0004 (Accepted).**
+5. **Input context stack semantics** — `push_context` on a same-value top, `Blocked` allow-lists, action consumption, nav repeat. Covers `TR-input-001..006`. **Written: ADR-0005 (Accepted).**
 
 **Core / Feature — before the relevant system is built**
 
-6. **Deterministic RNG and seeded generation** — `RandomNumberGenerator` seeding, partition stability, health-check DP budget. Covers `TR-menu-waves-001..006`. **Written: ADR-0006 (Proposed).**
-7. **Run state ownership and settlement transaction boundary** — who owns `run_id`, `RunLog`, the single `Save.commit`, and the receipt orchestration order. Covers `TR-run-flow-*`, `TR-settlement-*`, `TR-ui-flow-004`. **Written: ADR-0007 (Proposed).**
-8. **Settings persistence and localization pipeline** — machine-level file format/path/write timing, `tr()` key strategy, CJK font fallback, 150% scaling. Covers `TR-ui-flow-006`, `TR-ui-flow-003` presentation aspects. **Written: ADR-0008 (Proposed).**
-9. **Audio playback, pooling and pause semantics** — bus graph, voice pool, cue catalog location, pause behaviour. Covers `TR-audio-feedback-001..007`. **Written: ADR-0009 (Proposed).**
+6. **Deterministic RNG and seeded generation** — `RandomNumberGenerator` seeding, partition stability, health-check DP budget. Covers `TR-menu-waves-001..006`. **Written: ADR-0006 (Accepted).**
+7. **Run state ownership and settlement transaction boundary** — who owns `run_id`, `RunLog`, the single `Save.commit`, and the receipt orchestration order. Covers `TR-run-flow-*`, `TR-settlement-*`, `TR-ui-flow-004`. **Written: ADR-0007 (Accepted).**
+8. **Settings persistence and localization pipeline** — machine-level file format/path/write timing, `tr()` key strategy, CJK font fallback, 150% scaling. Covers `TR-ui-flow-006`, `TR-ui-flow-003` presentation aspects. **Written: ADR-0008 (Accepted).**
+9. **Audio playback, pooling and pause semantics** — bus graph, voice pool, cue catalog location, pause behaviour. Covers `TR-audio-feedback-001..007`. **Written: ADR-0009 (Accepted).**
 
 **Can defer to implementation**
 
@@ -548,7 +549,7 @@ Extracted from 18 GDDs | 104 requirements | 104 registered in
 
 ## Appendix B — Traceability Summary
 
-| Area | Requirements | Covered (Proposed) | Partial | Gaps |
+| Area | Requirements | Covered (Accepted) | Partial | Gaps |
 |---|---|---|---|---|
 | Foundation (data, input, scene, save) | 24 | 23 | 1 | 0 |
 | Core (run, turns, capacity, dish values) | 21 | 4 | 2 | 15 |

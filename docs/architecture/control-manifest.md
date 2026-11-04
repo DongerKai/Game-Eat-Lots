@@ -1,16 +1,15 @@
 # Control Manifest
 
-> ⚠️ **ALL SOURCE ADRs ARE `Proposed` — NONE IS `Accepted`.**
-> 本清单的每一条规则都出自 **Proposed** ADR：它们仍是待接受的决定，**在接受之前都可能改变**。
-> `accepted = 0`，因此本文件不是「已决编码规则」，而是「当前提案的编码规则」。
-> 任何 ADR 被修订或被接受后，必须重新运行 `/create-control-manifest update`；
-> `/story-readiness` 的版本比对只能证明 story 写在同一天的规则上，不能证明规则已被接受。
-> 解除这条限制的唯一办法：`/architecture-decision accept ADR-NNNN`（逐份）。
+> ✅ **ALL SOURCE ADRs ARE `Accepted` — 9/9（2026-11-04 用户决定）。**
+> 本清单的每一条规则都出自 **Accepted** ADR：规则内容已定，可作为已决编码规则使用。
+> `accepted = 9`、`proposed = 0`；本次接受只改状态、未改规则内容，Manifest Version 保持不变。
+> 任何 ADR 被修订后，必须重新运行 `/create-control-manifest update`；
+> `/story-readiness` 的版本比对只能证明 story 写在同一天的规则上，不能证明规则此后未被修订。
 
 > **Engine**: Godot 4.7（pin 4.7.x；latest patch 4.7.2；`Installed at pin time = NOT DETERMINED`）
 > **Last Updated**: 2026-11-04
 > **Manifest Version**: 2026-11-04
-> **ADRs Covered**: ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009（**全部 `Proposed`**）
+> **ADRs Covered**: ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009（**全部 `Accepted`**）
 > **Status**: Active — regenerate with `/create-control-manifest update` when ADRs change
 > **Technical review**: `TD-MANIFEST skipped — Lean mode`（`review_gate: skill-gates=skip`；无 technical-director 门）
 
