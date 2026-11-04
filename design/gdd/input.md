@@ -59,7 +59,7 @@ Godot 4.6 起鼠标焦点与键盘/手柄焦点分离，因此输入层负责分
 
 | 上下文 | 何时进入 | 响应动作 | 屏蔽 |
 |---|---|---|---|
-| Blocked | 加载、首局引导、结算动画 | `ui_pause` 始终允许；`allow` 追加的动作 | 其余全部 |
+| Blocked | 加载、首局引导 | `ui_pause` 始终允许；`allow` 追加的动作 | 其余全部 |
 | Menu | 主菜单、结算、升级、设置 | 导航、`ui_accept`、`ui_cancel` | `game_skip_wave`、`ui_pause` |
 | Run | 一局进行中且无弹窗 | 导航、`ui_accept`、`game_skip_wave`、`ui_pause` | — |
 | Paused | Run 中按 `ui_pause` | `ui_pause`（恢复）、`ui_accept`（激活焦点控件，默认「继续」）、`ui_cancel`（打开退出确认） | `game_skip_wave` |
@@ -67,13 +67,15 @@ Godot 4.6 起鼠标焦点与键盘/手柄焦点分离，因此输入层负责分
 
 **转换**：Run → Paused（`ui_pause`）；Paused → Run（`ui_pause`，或界面流程消费 `ui_accept` 后请求）；任意 → Modal（界面请求）；Modal → 来源上下文（`ui_accept` 确认或 `ui_cancel` 关闭）；Run → Menu（结算完成）；Menu → Run（开始一局）。
 
+**Blocked 的两类请求方（无第三方）**：`Blocked` 只由场景与流程管理（加载）和首局引导（引导段）请求。`Ending` / `Settling` / `Handoff` 阶段保持 `Run` 上下文——结算动画、收据与局内确认面板都不请求 `Blocked`（局内面板只限制焦点与吞掉动作，见 `design/gdd/in-game-hud.md` 规则 16）。除这两类请求方外，任何系统都不得请求 `Blocked`。
+
 ### Interactions with Other Systems
 
 | 系统 | 方向 | 数据/接口 | 硬/软 |
 |---|---|---|---|
 | 场景与流程管理 | 下游读取 + 请求上下文 | `request_context(ctx, clear_stack := true)`；`context_changed(from, to)` | 硬 |
 | 界面流程 | 下游读取 + 请求上下文 | 焦点、导航、`ui_accept`、`ui_cancel`；`push_context(Modal)` / `pop_context()` | 硬 |
-| 餐局流程 | 下游读取 | 每回合的 `ui_accept`、`game_skip_wave`（`ui_pause` 由场景与流程管理消费，本系统不为它读取） | 硬 |
+| 餐局流程 | 下游读取 | 每回合的 `ui_accept`、`game_skip_wave`；**餐局流程不读 `ui_pause`**（该动作由场景与流程管理消费，输入只向它提供动作） | 硬 |
 | 局内 HUD | 下游读取 | 菜品卡的悬停、点击、右键 | 硬 |
 | 首局引导 | 下游读取 + 请求上下文 | `push_context(Blocked)` / `pop_context()`；`ui_pause` 始终允许，`allow` 追加引导需要的动作 | 软 |
 | 音效反馈 | 无直接依赖 | 本系统**不**向音效发送任何事件。音效只订阅界面流程与 HUD 发出的语义事件（`ui_button_activated`、`dish_action_rejected` 等），不读原始输入动作——见 `design/gdd/audio-feedback.md` | — |
@@ -165,13 +167,13 @@ The `stick_engaged` formula is defined as:
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
 | 界面流程 | 硬 | 导航、`ui_accept`、`ui_cancel`、初始焦点、双焦点状态 | GDD 已写（`design/gdd/ui-flow.md`） |
-| 餐局流程 | 硬 | 每回合的 `ui_accept`、`game_skip_wave`、`ui_pause` | GDD 已写（`design/gdd/run-flow.md`） |
+| 餐局流程 | 硬 | 每回合的 `ui_accept`、`game_skip_wave`（**不含 `ui_pause`**：该动作由场景与流程管理消费） | GDD 已写（`design/gdd/run-flow.md`） |
 | 局内 HUD | 硬 | 菜品卡的悬停、点击、右键 | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 首局引导 | 软 | 请求 Blocked 上下文；`ui_pause` 始终允许，`allow` 追加指定动作 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 | 音效反馈 | 无 | 无直接依赖；音效只消费界面流程与 HUD 的语义事件，不订阅原始输入 | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 场景与流程管理 | 硬 | 顶层状态切换时调用 `request_context(default_ctx, clear_stack := true)`；订阅 `context_changed`；由它订阅 `ui_pause` 驱动 `Run ⇄ Paused` | GDD 已写 |
 
-**双向一致（已完成）**：索引第 5、15、16 行的 `Depends On` 已分别记录「输入」；场景与流程管理的 GDD 也已完成并把「输入」列为上游依赖，索引第 3 行已记为「数据配置, 输入」。以上系统编写各自 GDD 时必须同样列出「输入」为上游依赖。
+**双向一致（已完成）**：索引第 5、15、16 行的 `Depends On` 已分别记录「输入」；场景与流程管理的 GDD 也已完成并把「输入」列为上游依赖，索引第 3 行已记为「数据配置, 输入」。以上系统的 GDD 均已同样把「输入」列为上游依赖。
 
 ## Visual/Audio Requirements
 
@@ -203,7 +205,7 @@ The `stick_engaged` formula is defined as:
 
 ## Cross-References
 
-**None — this system references no other GDD.** 输入不依赖数据配置或其他已写文档；它被界面流程、餐局流程、局内 HUD 引用。场景与流程管理的 GDD 已完成并已回指本系统；其余文档写好后需要在本表补充反向链接。
+**None — this system references no other GDD.** 输入不依赖数据配置或其他已写文档；它被界面流程、餐局流程、局内 HUD 引用。场景与流程管理的 GDD 已完成并已回指本系统；上述被引用系统的 GDD 均已写完并已在本表完成反向链接。
 
 ## Acceptance Criteria
 

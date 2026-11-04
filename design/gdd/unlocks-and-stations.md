@@ -2,7 +2,7 @@
 
 > **Status**: In Design
 > **Author**: user + agents
-> **Last Updated**: 2026-11-03
+> **Last Updated**: 2026-11-04
 > **Last Verified**: 2026-11-03
 > **Implements Pillar**: 数字看得见地涨（局外进度可见）；承载概念文档的 Curiosity 留存钩子（未解锁的档口和菜谱）
 
@@ -40,7 +40,7 @@ Vertical Slice 加入第二个付费档口后，玩家在菜单里用钱包买�
 
 8. **解锁只在菜单发生** — 局内、收据未完成、场景切换中一律返回 `NOT_IN_MENU`。同一时刻只允许一笔解锁在途（`BUSY`）；不排队、不合并。解锁不消耗回合、不改当前局。
 
-9. **校验顺序固定** — `DATA_NOT_READY` → `NOT_WRITABLE` → `NOT_IN_MENU` → `UNKNOWN_STATION` → `INVALID_STATION_DATA` → `BUSY` → `ALREADY_UNLOCKED` → `PREREQUISITE_LOCKED` → `INSUFFICIENT_FUNDS`。这一串是**成交前**的校验；`OK` 与 `COMMIT_FAILED` 是事务结果，排在校验之后，不再回到上面任何一条。`INVALID_STATION_DATA` 只用于 `unlock_cost < 0` 这类已越过启动校验的单条记录损坏——它不能落进 `INSUFFICIENT_FUNDS`，否则负价格会让玩家「花 −1 元」反而加钱。同一状态下永远返回同一个错误，界面可以稳定地显示同一个原因。
+9. **校验顺序固定** — `DATA_NOT_READY` → `NOT_WRITABLE` → `NOT_IN_MENU` → `UNKNOWN_STATION` → `INVALID_STATION_DATA` → `FEATURE_GATED` → `BUSY` → `ALREADY_UNLOCKED` → `PREREQUISITE_LOCKED` → `INSUFFICIENT_FUNDS`。这一串是**成交前**的校验；`OK` 与 `COMMIT_FAILED` 是事务结果，排在校验之后，不再回到上面任何一条。`INVALID_STATION_DATA` 只用于 `unlock_cost < 0` 这类已越过启动校验的单条记录损坏——它不能落进 `INSUFFICIENT_FUNDS`，否则负价格会让玩家「花 −1 元」反而加钱；它也必须先于 `FEATURE_GATED`，否则损坏数据会被门禁掩盖成「功能未开放」。`FEATURE_GATED` 先于 `BUSY` 与 `ALREADY_UNLOCKED`：被门禁的档口连「已解锁」状态都不对外表达（规则 17）。同一状态下永远返回同一个错误，界面可以稳定地显示同一个原因。
 
 10. **价格就是记录上的 `unlock_cost`** — 本系统不发明价格曲线。一次解锁固定花 `unlock_cost`，不随已解锁数量、钱包余额或已玩局数浮动。调价只改 `.tres`。已解锁的档口不退款、不补差价。`unlock_cost` 是**一次性**价格，与每局都收的 `entry_fee` 是两回事。
 
@@ -55,6 +55,14 @@ Vertical Slice 加入第二个付费档口后，玩家在菜单里用钱包买�
 15. **不参与结算事务** — 一局结束不改变解锁（MVP 与 Vertical Slice 都不存在局内奖励解锁）。若未来某一局要奖励解锁，必须并入结算事务（存档规则 80 与纪录 GDD 的编排契约），不得让解锁单独写盘。**这是对纪录与里程碑 Open Question 4 的回答：完成条件在 MVP 与 Vertical Slice 只展示，不发放解锁。**
 
 16. **确定性、无副作用** — 可用性、规范化、进度只依赖数据记录与 `unlocks` 集合，不读时钟、不用随机数、不做 I/O。所有集合输出按 id 升序，便于比对、写测试与存档 diff。
+
+17. **付费档口受「档口选择器」能力门禁（S8）** — 第二个档口在**主菜单档口选择器存在之前**不可买、不可见、不可进：本系统查询界面流程的能力开关 `supports_station_selection() -> bool`（由界面流程拥有；当前实现返回 `false`，因为主菜单还没有档口选择器，只能从固定入口进免费档口）。门禁生效时，称一个档口**被门禁**：`gated(s) = ¬supports_station_selection() ∧ s.unlock_cost > 0`。被门禁的档口：
+    - 不出现在 `get_station_catalog()` 与 `get_available_stations()` 中（**隐藏**，不是显示为锁定）；
+    - 不计入 `get_unlock_progress()` 的分子与分母（MVP 显示 `1/1`、`12/12`，而不是 `1/2`、`12/24`）；
+    - `is_station_available(s) = false`、`get_available_dishes(s) = []`；
+    - `can_unlock(s) = {ok: false, reason: FEATURE_GATED, cost: null}`；`unlock(s)` 返回 `FEATURE_GATED`，**不调用 `spend`、不扣款、不 commit**（免费档口 `unlock_cost = 0`，不受门禁影响）。
+
+    门禁是**能力开关，不是价格或数据改动**：`station_banquet.unlock_cost` 仍为 120，`StationData` 不新增字段，`unlocks` 账本仍单调保留已写入的 id。能力开关一旦变 `true`（选择器上线），被门禁的档口立刻按原规则恢复：未解锁的按 120 正常购买，已在账本里的（例如来自带选择器的旧构建存档）立刻可用——**不丢解锁，只是暂时不生效**，与规则 5「数据里消失的档口保留在集合中、只是不再生效」同一处理方式。界面流程必须用同一开关决定是否绘制档口列表、以及是否允许 `RunConfig.station_id` 取非免费档口；餐局流程不会替它做授权。门禁解除不属于本系统的发布条件，本系统只保证两种开关值下行为确定。
 
 ### States and Transitions
 
@@ -89,7 +97,7 @@ Vertical Slice 加入第二个付费档口后，玩家在菜单里用钱包买�
 | 数据配置 | 上游 | `get_station(id)` → `id`、`display_name`、`unlock_cost`、`dish_pool`；`get_dish(id)` 存在性；前提 `Ready` | 硬 |
 | 存档 | 上游 | 读 `unlocks.stations` / `unlocks.dishes`；`commit`（经局外升级的 `spend`）、`mark_dirty('unlocks')`、`SaveStatus`、`LoadReport.writable` | 硬 |
 | 局外升级 | 上游 | `spend(amount, reason, extra)`（新增接口，见下）、`get_wallet()`、`get_level(id)`、`progression_changed` | 硬 |
-| 界面流程 | 下游 | 档口目录、可解锁性与原因、`unlock(id)`、解锁进度；档口选择只在菜单 | 硬（UI） |
+| 界面流程 | 下游 | 档口目录、可解锁性与原因、`unlock(id)`、解锁进度；档口选择只在菜单；**上游能力开关** `supports_station_selection() -> bool`（主菜单档口选择器是否存在，当前 `false`；门禁见规则 17） | 硬（UI） |
 | 餐局流程 | 下游（协调） | 界面流程只把**可用**档口放进 `RunConfig.station_id`；餐局流程现有的存在性校验不是授权校验 | 软（协调） |
 | 菜单波次 | 下游（间接） | 只读所选档口的 `dish_pool`；本设计下无需过滤。若未来做逐菜解锁，必须改读 `get_available_dishes(station_id)` | 软（间接） |
 | 纪录与里程碑 | 下游 | 读取解锁进度做展示；按 `station_id` 归档。**不发放解锁**（回答其 Open Question 4） | 软 |
@@ -105,17 +113,17 @@ Vertical Slice 加入第二个付费档口后，玩家在菜单里用钱包买�
 | 接口 | 输入 | 输出 | 说明 |
 |---|---|---|---|
 | `get_load_outcome()` | — | `Playable` \| `Backfilled` \| `NoPlayableStation` \| `Unavailable` | 载入后一次确定；供菜单决定是否禁用「开始」 |
-| `get_station_catalog()` | — | `StationView[]` | 每个档口的 id、名称、是否可用、解锁价、锁定原因、菜数；升序 |
-| `get_available_stations()` | — | `StringName[]` | 可用档口 id，升序；`NoPlayableStation` 时为空 |
-| `is_station_available(id)` | 档口 id | `bool` | 未知 id 返回 `false` |
-| `get_available_dishes(station_id)` | 档口 id | `StringName[]` | 该档口可用菜的 id；不可用档口返回空 |
-| `can_unlock(id)` | 档口 id | `{ok, reason, cost}` | 只校验，不改状态、不扣款；`ALREADY_UNLOCKED` 时 `cost = null` |
+| `get_station_catalog()` | — | `StationView[]` | 每个**未门禁**档口的 id、名称、是否可用、解锁价、锁定原因、菜数；升序；被门禁的付费档口不出现 |
+| `get_available_stations()` | — | `StringName[]` | 可用档口 id，升序；`NoPlayableStation` 或全部被门禁时为空 |
+| `is_station_available(id)` | 档口 id | `bool` | 未知 id 或 被门禁 → `false` |
+| `get_available_dishes(station_id)` | 档口 id | `StringName[]` | 该档口可用菜的 id；不可用或被门禁的档口返回空 |
+| `can_unlock(id)` | 档口 id | `{ok, reason, cost}` | 只校验，不改状态、不扣款；`ALREADY_UNLOCKED` 或 `FEATURE_GATED` 时 `cost = null` |
 | `unlock(id)` | 档口 id | `UnlockResult` | 事务；成功后磁盘已更新 |
 | `get_unlock_progress()` | — | `{stations, stations_total, dishes, dishes_total}` | 只统计数据中存在的记录 |
 | `get_effective_unlocks()` | — | `{stations, dishes}` | 规范化后的集合（含免费档口）；新副本 |
 | `unlocks_changed` | — | 信号 | 携带进度；成功解锁或回填改变集合后发一次；被拒绝的解锁不发 |
 
-`get_station_catalog()` 总是列出数据中存在的全部档口（升序），包括锁定的；`NoPlayableStation` 时它是界面唯一还能显示的东西。只有 `Unavailable`（数据未 `Ready`）才返回空。
+`get_station_catalog()` 列出数据中**未被门禁**的全部档口（升序），包括未解锁但可见的；被门禁的付费档口**不出现**（规则 17：选择器未上线时隐藏，而不是显示为锁定）。`NoPlayableStation` 时它是界面唯一还能显示的东西。只有 `Unavailable`（数据未 `Ready`）才返回空数组；`NoPlayableStation` 且所有档口都被门禁时也返回空数组。
 
 **对局外升级的契约（新增 `spend`，需回写其 GDD）**：
 
@@ -154,7 +162,10 @@ Vertical Slice 加入第二个付费档口后，玩家在菜单里用钱包买�
 
 The `station_available` formula is defined as:
 
-`station_available(s, U) = (s.unlock_cost = 0) ∨ (s.id ∈ U.stations)`
+```
+gated(s) = ¬supports_station_selection() ∧ s.unlock_cost > 0
+station_available(s, U) = ¬gated(s) ∧ ( (s.unlock_cost = 0) ∨ (s.id ∈ U.stations) )
+```
 
 **Variables:**
 
@@ -164,11 +175,13 @@ The `station_available` formula is defined as:
 | `s.unlock_cost` | int | 0–INT32_MAX | data file | 一次性解锁价（元）；0 表示开局可用 |
 | `s.id` | `StringName` | `^[a-z][a-z0-9_]*$` | data file | 稳定的档口 id |
 | `U.stations` | `StringName[]` | 任意长度，元素唯一 | `unlocks.stations` | 已持久化的解锁档口 id |
+| `supports_station_selection()` | bool | {true, false} | 界面流程（能力开关） | 主菜单是否已有档口选择器；当前 `false`（规则 17） |
+| `gated(s)` | bool | {true, false} | calculated | 该档口是否被选择器能力门禁隐藏 |
 | `station_available(s, U)` | bool | {true, false} | calculated | 该档口当前是否可进入 |
 
-**Output Range:** `{true, false}`，无中间态。未知档口 id 不进入本公式（调用方先返回 `UNKNOWN_STATION` 或 `false`）。
+**Output Range:** `{true, false}`，无中间态。未知档口 id 不进入本公式（调用方先返回 `UNKNOWN_STATION` 或 `false`）。`supports_station_selection() = true` 时 `gated(s) ≡ false`，本式退化为 `unlock_cost = 0 ∨ id ∈ U.stations`。
 
-**Example:** `station_canteen.unlock_cost = 0`、`U.stations = []` → `station_available = true`。`station_banquet.unlock_cost = 120`、`U.stations = []` → `false`；把它写进 `U.stations` 后 → `true`。
+**Example:** `station_canteen.unlock_cost = 0`、`U.stations = []`、选择器未上线 → `gated = false` → `station_available = true`。`station_banquet.unlock_cost = 120`、`U.stations = []`、选择器未上线 → `gated = true` → `false`；选择器上线后 → `gated = false`，未解锁时为 `false`，把它写进 `U.stations` 后 → `true`。`U.stations = [station_banquet]` 但选择器下线（能力开关回 `false`）→ 被门禁，`station_available = false`，**id 仍留在账本里**，开关恢复后立即可用。
 
 ### 规范化与回填 `effective_unlocks`
 
@@ -177,7 +190,7 @@ The `effective_unlocks` formula is defined as:
 ```
 effective_unlocks(U, S) =
   let S_free = {s ∈ S : s.unlock_cost = 0}
-      S_eff  = S_free ∪ {s ∈ S : s.id ∈ U.stations}
+      S_eff  = S_free ∪ {s ∈ S : s.id ∈ U.stations ∧ ¬gated(s)}
   in (
       stations = sort( {s.id : s ∈ S_eff} ∪ (U.stations \ S_ids) ),
       dishes   = sort( U.dishes ∪ ⋃_{s ∈ S_eff} s.dish_pool )
@@ -192,12 +205,12 @@ effective_unlocks(U, S) =
 | `S` | `StationData[]` | ≥ 0 项 | data file | 全部档口记录 |
 | `S_ids` | `StringName[]` | = `{s.id : s ∈ S}` | calculated | 已知档口 id 集 |
 | `D_ids` | `StringName[]` | = `{d.id : d ∈ D}` | calculated | 已知菜品 id 集 |
-| `S_free` | `StationData[]` | 0–`|S|` | calculated | 免费档口 |
-| `S_eff` | `StationData[]` | 0–`|S|` | calculated | 当前可用的档口 |
+| `S_free` | `StationData[]` | 0–`|S|` | calculated | 免费档口（`gated` 恒为 `false`） |
+| `S_eff` | `StationData[]` | 0–`|S|` | calculated | 当前**生效**的档口（已排除被门禁的付费档口） |
 | `stations` | `StringName[]` | 0–`|S| + |U.stations|` | calculated | 写回 `unlocks.stations` 的集合 |
 | `dishes` | `StringName[]` | 0–`|D| + |U.dishes \ D_ids|` | calculated | 写回 `unlocks.dishes` 的集合 |
 
-**Output Range:** 两个升序、元素唯一的数组。只增不减：`stations ⊇ U.stations`、`dishes ⊇ U.dishes`。`U.stations \ S_ids` 与 `U.dishes \ D_ids` 即未知 id，原样保留。
+**Output Range:** 两个升序、元素唯一的数组。只增不减：`stations ⊇ U.stations`、`dishes ⊇ U.dishes`。`U.stations \ S_ids` 与 `U.dishes \ D_ids` 即未知 id，原样保留。**被门禁的付费档口**即使已在 `U.stations` 中，也不进入 `S_eff`、不把菜写进 `dishes`，但它的 id 仍经 `U.stations` 原样保留在 `stations` 中——门禁只让解锁「暂时不生效」，不删除账本（规则 17）。
 
 **Example:** 数据含 `station_canteen`（免费，12 道菜）与 `station_banquet`（120 元，12 道菜），`U = {[], []}` → `stations = [station_canteen]`、`dishes = [12 个 station_canteen 的菜 id]`。这是空集合的全部回填结果，不需要任何玩家操作。玩家买下 `station_banquet` 后 `U.stations = [station_banquet]`，`dishes` 增加 12 个 id。
 
@@ -208,6 +221,7 @@ The `unlock_decision` formula is defined as:
 ```
 unlock_decision(s, U, L, wallet) =
   INVALID_STATION_DATA if s.unlock_cost < 0
+  FEATURE_GATED        if gated(s)
   ALREADY_UNLOCKED     if station_available(s, U)
   PREREQUISITE_LOCKED  if ∃r ∈ requires(s) : L(r) < 1
   INSUFFICIENT_FUNDS   if wallet < s.unlock_cost
@@ -224,11 +238,12 @@ unlock_decision(s, U, L, wallet) =
 | `L` | `map<String, int>` | 等级 ≥ 0 | `progression.upgrade_levels` | 升级等级 |
 | `requires(s)` | `StringName[]` | 0–4 项 | data file | `StationData.unlock_requires`，**当前字段不存在，按 `[]` 处理** |
 | `wallet` | int64 | −9.22×10¹⁸ – 9.22×10¹⁸ | `progression.wallet` | 当前钱包，可为负 |
-| `unlock_decision` | 枚举 | 5 值 | calculated | 校验结果 |
+| `gated(s)` | bool | {true, false} | `station_available` 的辅助式 | 选择器能力门禁（规则 17） |
+| `unlock_decision` | 枚举 | 6 值 | calculated | 校验结果 |
 
-**Output Range:** `{OK, ALREADY_UNLOCKED, PREREQUISITE_LOCKED, INSUFFICIENT_FUNDS, INVALID_STATION_DATA}`。未知档口与数据/存档/菜单前提不进入本公式——它们在校验顺序中更早返回。`INVALID_STATION_DATA` 必须排在 `INSUFFICIENT_FUNDS` 之前：`wallet = 0 < unlock_cost = -1` 为假，否则负价格会被判成 `OK` 并被 `spend` 反向加钱。
+**Output Range:** `{OK, ALREADY_UNLOCKED, PREREQUISITE_LOCKED, INSUFFICIENT_FUNDS, INVALID_STATION_DATA, FEATURE_GATED}`。未知档口与数据/存档/菜单前提不进入本公式——它们在校验顺序中更早返回。`INVALID_STATION_DATA` 必须排在 `INSUFFICIENT_FUNDS` 之前：`wallet = 0 < unlock_cost = -1` 为假，否则负价格会被判成 `OK` 并被 `spend` 反向加钱；`INVALID_STATION_DATA` 也先于 `FEATURE_GATED`，避免损坏数据被门禁掩盖。`FEATURE_GATED` 先于 `ALREADY_UNLOCKED`：被门禁的付费档口不对外表达「已解锁」。
 
-**Example:** `station_banquet` 未解锁、无前置、`wallet = 119`、`unlock_cost = 120` → `INSUFFICIENT_FUNDS`；`wallet = 120` → `OK`，成交后钱包为 0。
+**Example:** `station_banquet` 未解锁、无前置、`wallet = 119`、`unlock_cost = 120`、选择器已上线 → `INSUFFICIENT_FUNDS`；`wallet = 120` → `OK`，成交后钱包为 0。选择器未上线时同样输入 → `FEATURE_GATED`，不扣款。
 
 ### 解锁成本 `station_unlock_cost`
 
@@ -272,18 +287,21 @@ runs_to_unlock(s, p) =
 
 **Example:** `station_banquet.unlock_cost = 120`、`opt_net_profit(station_canteen) = 19` → `ceil(120 / 19) = 7` 局。
 
+> **📌 决策记录（D4，不改价格与配速）**：`runs_to_unlock = 7` 的分母 `opt_net_profit = 19` 来自**最优菜单**（`opt_value = 104`、`entry_fee = 85`），它假设玩家每一局都打出设计最优解。跨 GDD 复核指出：中位玩家前三局的净利约为 +3 … +11，按中位净利算解锁 120 元需要**约 11–40 局**，远高于 4–8 局的目标带。本版**不修改 `unlock_cost = 120`、不修改 4–8 局目标带、不修改 `entry_fee` 或菜池**——这些是已冻结的平衡数值，且改任一项都会移动另一条依赖它的曲线。这里只登记风险与验证方式：`runs_to_unlock` 是**设计期最优配速量，不是对中位玩家的到达时间承诺**；`/prototype` 必须同时测「最优玩家局数」与「中位玩家局数」，并以中位到达时间为准决定是否调整。若原型确认中位玩家需 > 8 局才能解锁，优先在**第二个档口的 `entry_fee` / 菜池 / 升级预算**上找空间，最后才考虑降价 120（降价会同时压缩升级树的购买窗口）。见 Open Question 11。
+
 ### 解锁进度 `unlock_progress`
 
 The `unlock_progress` formula is defined as:
 
 ```
 unlock_progress(U, S) =
-  let S_eff = {s ∈ S : s.unlock_cost = 0 ∨ s.id ∈ U.stations}
+  let S_vis = {s ∈ S : ¬gated(s)}
+      S_eff = {s ∈ S_vis : s.unlock_cost = 0 ∨ s.id ∈ U.stations}
   in (
       stations       = |S_eff|,
-      stations_total = |S|,
+      stations_total = |S_vis|,
       dishes         = Σ_{s ∈ S_eff} |s.dish_pool|,
-      dishes_total   = |D|
+      dishes_total   = Σ_{s ∈ S_vis} |s.dish_pool|
   )
 ```
 
@@ -291,14 +309,14 @@ unlock_progress(U, S) =
 
 | Variable | Type | Range | Source | Description |
 |---|---|---|---|---|
-| `S_eff` | `StationData[]` | 0–`|S|` | calculated | 当前可用档口 |
-| `D` | `DishData[]` | ≥ 0 项 | data file | 全部菜品记录 |
+| `S_vis` | `StationData[]` | 0–`|S|` | calculated | 未被门禁的档口（选择器未上线时只含免费档口） |
+| `S_eff` | `StationData[]` | 0–`|S_vis|` | calculated | 当前可用档口 |
 | `stations` / `dishes` | int | 0–`|S|` / 0–`|D|` | calculated | 已解锁计数 |
-| `stations_total` / `dishes_total` | int | ≥ 0 | calculated | 数据中的总数 |
+| `stations_total` / `dishes_total` | int | ≥ 0 | calculated | **可见**档口与菜的总数（不含被门禁的付费档口） |
 
-**Output Range:** 计数与总量都用 int64 承载，`dishes ≥ dishes_total` 不可能发生（每个菜属于恰好一个档口，由数据配置双向校验保证）。未知 id 不计入分子，也不计入分母。**若数据里没有任何档口（`S = ∅`）**，四个计数全为 0，载入结果为 `NoPlayableStation`；界面显示该错误，不显示 `0/0` 比值，也不做除法。
+**Output Range:** 计数与总量都用 int64 承载，`dishes ≥ dishes_total` 不可能发生（每个菜属于恰好一个档口，由数据配置双向校验保证）。未知 id 不计入分子，也不计入分母。**若数据里没有任何档口（`S = ∅`）**，四个计数全为 0，载入结果为 `NoPlayableStation`；界面显示该错误，不显示 `0/0` 比值，也不做除法。**若所有档口都被门禁**（选择器未上线且没有免费档口），`S_vis = ∅`，同样落入 `NoPlayableStation`——不会显示 `0/0`。
 
-**Example:** MVP 只有 `station_canteen`（12 道菜）→ `1/1`、`12/12`。Vertical Slice 两档口各 12 道、只解锁免费档口 → `1/2`、`12/24`。
+**Example:** MVP 只有 `station_canteen`（12 道菜）、选择器未上线 → `1/1`、`12/12`（`station_banquet` 被门禁，不进分母）。Vertical Slice 两档口各 12 道、选择器上线、只解锁免费档口 → `1/2`、`12/24`。
 
 ## Edge Cases
 
@@ -319,6 +337,9 @@ unlock_progress(U, S) =
 - **If 目标是免费档口（`unlock_cost = 0`）**：`ALREADY_UNLOCKED`；界面不应显示购买按钮，也不存在「0 元成交」路径。
 - **If 档口已在集合中**：`ALREADY_UNLOCKED`，不重复扣款。
 - **If 档口 id 不存在于数据**：`UNKNOWN_STATION`；不读钱包、不写盘。
+- **If 主菜单还没有档口选择器（`supports_station_selection() = false`）且目标是付费档口**：`gated(s) = true`；目录与可用列表里看不到它，进度分母也不含它（MVP 显示 `1/1`、`12/12`）；`unlock` 返回 `FEATURE_GATED`，`spend` 与 commit 各调用 0 次。不扣款、不写盘、不把「功能未开放」伪装成「钱不够」。
+- **If 已解锁的付费档口遇到选择器下线**（例如从带选择器的构建回退，能力开关变 `false`）：被门禁、`station_available = false`、目录不显示；它的 id **仍留在 `unlocks.stations` 中**，不删除、不退款；开关恢复后立即可用，无需重新购买。这是「暂时不生效」而非「失去解锁」。
+- **If 目标是免费档口且选择器未上线**：`gated = false`，行为完全不变（`ALREADY_UNLOCKED` / 可直接进入）；门禁只作用于 `unlock_cost > 0` 的档口。
 - **If 前置升级未满足**：`PREREQUISITE_LOCKED`；不扣款，界面显示缺哪一项（字段启用后）。
 - **If 上一笔解锁仍在等待 `commit`**：`BUSY`；不排队、不合并，界面禁用按钮直到回调。
 - **If 当前不在 `Menu`**（局内、收据未完成、场景切换中）：`NOT_IN_MENU`。
@@ -357,7 +378,7 @@ unlock_progress(U, S) =
 |---|---|---|---|
 | 数据配置 | 硬 | `get_station(id)` → `id`、`display_name`、`unlock_cost`、`dish_pool`；`get_dish(id)` 存在性；前提 `Ready` | GDD 已写（`design/gdd/data-config.md`）；`unlock_requires` 为可选扩展字段，当前不存在 |
 | 存档 | 硬 | `unlocks.stations` / `unlocks.dishes`；`commit` / `mark_dirty` / `flush`；`SaveStatus`；`LoadReport.writable` | GDD 已写（`design/gdd/save-system.md`） |
-| 局外升级 | 硬 | `spend(amount, reason, extra)`（新增）；`get_wallet()`；`get_level(id)`；`progression_changed` | GDD 已写（`design/gdd/meta-upgrades.md`）；`spend` 待回写 |
+| 局外升级 | 硬 | `spend(amount, reason, extra)`；`get_wallet()`；`get_level(id)`；`progression_changed` | GDD 已写（`design/gdd/meta-upgrades.md`）；`spend` 已回写 |
 
 **下游依赖方：**
 
@@ -375,15 +396,11 @@ unlock_progress(U, S) =
 
 **待回改（不在本文件执行，交由编排会话统一处理）**：
 
-1. `systems-index.md` — #13 行改为 `Designed` / `design/gdd/unlocks-and-stations.md`，`Depends On` 补上 **数据配置**（本系统直接读 `get_station` / `get_dish`，现行依赖表漏记）；「Dependency Map → Feature Layer」第 5 条的 depends on 同样补 数据配置；进度计数 `Design docs started` +1、`Vertical Slice systems designed` +1。
-2. `design/registry/entities.yaml` — 新增 `station_available`、`effective_unlocks`、`unlock_decision`、`station_unlock_cost`、`runs_to_unlock`、`unlock_progress` 六条公式；不要新增档口解锁价常量（它是 `StationData.unlock_cost` 记录字段）；`opt_value`、`net_profit` 的 `referenced_by` 追加本文件（`runs_to_unlock` 使用它们）；`save_schema_version` 无需变化。
-3. `data-config.md` — 下游表补「解锁与档口」行（`get_station(id)` → `unlock_cost`、`dish_pool`；`get_dish(id)` 存在性），状态 `GDD 已写`；建议新增启动校验「至少一个 `unlock_cost = 0` 的档口」；可选新增 `StationData.unlock_requires: Array[StringName]`（默认空，元素必须是存在的升级 id），若不加则本 GDD 规则 11 恒为空集。
-4. `meta-upgrades.md` — Core Rule 2 的钱包流水从两条改为三条（净利入账、升级购买、档口解锁）；对外接口表新增 `spend(amount, reason, extra)`；状态表的 `Purchasing` 语义扩为「一笔在途事务」；Open Question 11 标记已回答（接口在本 GDD 定义，MVP 不触发，Vertical Slice 启用）。
-5. `save-system.md` — 下游表「解锁与档口」状态改为 `GDD 已写`；补一句「空集合由解锁与档口在载入后回填，标记 dirty，下一次写入时点落盘」（与存档 AC 20 一致）；**修正** Edge Case「同一帧内先结算、后解锁」与 AC 13：合并为同一事务只适用于**结算本身产生解锁变化**的情形；MVP/VS 中解锁只在菜单购买、且收据在结算 commit 之后才显示，因此两笔事务串行，不合并。
-6. `run-flow.md` — 建议（非强制）在 `RunConfig` 解析时增加一道 `is_station_available(station_id)` 兜底：不可用则 `init_failed`。当前契约把授权责任放在界面流程；这道校验是纵深防御，避免绕过进度直接开局。
-7. `records-and-milestones.md` — Open Question 4 标记已回答（MVP/VS 完成条件不发放解锁）；若未来发放，必须并入结算事务。
-8. `menu-waves.md` — 无需改动；若未来启用逐菜解锁，其输入必须从 `dish_pool` 改为 `get_available_dishes(station_id)`。
-9. UX 备注（写入 `systems-index.md` 的 UX note 区）— 解锁与档口对界面流程有 UI 需求（档口选择页的锁定态、价格与差额、解锁确认、`COMMIT_FAILED` 提示、进度计数）；`/ux-design` 需覆盖，story 引用对应 UX 规格。
+1. `data-config.md` — 下游表「解锁与档口」行已补、状态已是 `GDD 已写`；仍可选的增强有两项：① 新增启动校验「至少存在一个 `unlock_cost = 0` 的档口」（当前由本系统运行期兜底 `NoPlayableStation`）；② 可选新增 `StationData.unlock_requires: Array[StringName]`（默认空，元素必须是存在的升级 id）。两项都不影响本系统现行行为：不加则规则 11 恒为空集。
+2. `run-flow.md` — 建议（非强制）在 `RunConfig` 解析时增加一道 `is_station_available(station_id)` 兜底：不可用则 `init_failed`。当前契约把授权责任放在界面流程；这道校验是纵深防御，避免绕过进度直接开局。当前 `run-flow.md` 未采纳，属可选项，不是阻塞项。
+3. UX 备注（写入 `systems-index.md` 的 UX note 区）— 解锁与档口对界面流程有 UI 需求（档口选择页的锁定态、价格与差额、解锁确认、`COMMIT_FAILED` 提示、进度计数，以及 S8 的档口选择器门禁）；`/ux-design` 需覆盖，story 引用对应 UX 规格。
+
+> **已完成、无需再回改的条目（2026-11-04 复核）**：`systems-index.md` #13 已标 Approved 且 `Depends On` 已含数据配置；`entities.yaml` 六条公式已登记；`data-config.md` 下游行已补；`meta-upgrades.md` 已有 `spend` 与三条钱包流水；`save-system.md` 下游行、回填说明与「结算/解锁串行」修正已落地；`records-and-milestones.md` Open Question 4 已标记回答；`menu-waves.md` 确认无需改动（逐菜解锁未启用）。
 
 ## Tuning Knobs
 
@@ -396,6 +413,8 @@ unlock_progress(U, S) =
 | `unlock_requires` | `StationData`（可选字段） | 空 | 0–2 项 | 启用后为档口加等级门槛；不是消耗，只做前置校验 |
 
 **交互**：`unlock_cost` 与升级价格曲线（`upgrade_price`，总价 209）共享同一个钱包。调高解锁价会推迟升级购买，反之亦然；两者之和必须落在「首次会话能摸到一项成长」的预算内。`runs_to_unlock` 的比值以**前一个**档口的最优净利为分母，不以前一个档口的入场费为分母。
+
+**不是旋钮**：`supports_station_selection()` 是界面能力开关（选择器是否存在），不是平衡值；不要为它加 `StationData` 字段或调参项。它只决定付费档口是否可见/可买，不改变 120、入场费、菜池或目标带。`unlock_cost = 120` 本版**冻结**，D4 的验证结论出来之前不得改价。
 
 ## Visual/Audio Requirements
 
@@ -441,7 +460,7 @@ unlock_progress(U, S) =
 
 ## Acceptance Criteria
 
-**通用前提**：除用例中另有说明，初始状态均为：数据配置 `Ready`、存档载入完成且可写、顶层状态为 `Menu`、没有在途事务、钱包为用例给定值。
+**通用前提**：除用例中另有说明，初始状态均为：数据配置 `Ready`、存档载入完成且可写、顶层状态为 `Menu`、没有在途事务、钱包为用例给定值。**除门禁用例外，`supports_station_selection()` 默认返回 `true`**（假设主菜单档口选择器已上线），以便测试付费档口的解锁路径；门禁用例显式把它置为 `false`。
 
 **夹具**：测试夹具放在 `tests/fixtures/` 下，每条用例使用独立夹具；档口与菜的 id 使用稳定假名。`spend` 与 `commit` 可用 spy/double 记录调用次数与载荷，「写入 N 次」指 commit spy 的调用次数；需要暂停一笔在途事务时，使用可手动放行的 commit double。「持久化集合」指存档 `unlocks` 命名空间的当前值（可直接读取）。
 
@@ -507,6 +526,13 @@ unlock_progress(U, S) =
 40. **GIVEN** 一份合法但不含任何档口的数据（`S = ∅`、`D = ∅`），**WHEN** 载入，**THEN** `get_load_outcome() = NoPlayableStation`，`get_station_catalog()` 为空，`get_unlock_progress()` 四个计数全为 0，且不发生除零。
 41. **GIVEN** 一个已解锁的付费档口，**WHEN** 数据给它的菜池新增一道菜并重新载入，**THEN** `get_load_outcome() = Backfilled`（persisted ≠ effective），`unlocks_changed` 发一次；**WHEN** `flush()`，**THEN** 账本包含新菜 id。免费档口不是触发 `Backfilled` 的必要条件。
 
+**档口选择器门禁（S8）**
+
+42. **GIVEN** `supports_station_selection() = false`、数据含免费 `station_canteen` 与付费 `station_banquet`（120 元），**WHEN** 载入，**THEN** `get_station_catalog()` 只含 `station_canteen`（被门禁的付费档口隐藏）；`get_available_stations() = [station_canteen]`；`get_unlock_progress() = 1/1` 与 `12/12`（分母不含被门禁档口）；`is_station_available("station_banquet") = false`。
+43. **GIVEN** 同在门禁状态、`wallet = 500`，**WHEN** `can_unlock("station_banquet")`，**THEN** `{ok: false, reason: FEATURE_GATED, cost: null}`；**WHEN** `unlock("station_banquet")`，**THEN** `FEATURE_GATED`，`spend` 与 commit spy 各调用 0 次，`get_wallet() = 500`，`unlocks` 逐字段不变。
+44. **GIVEN** `unlocks.stations = [station_banquet]`（来自带选择器的旧构建）、`supports_station_selection() = false`，**WHEN** 载入，**THEN** `station_available("station_banquet") = false` 且目录不显示它，但 `get_effective_unlocks().stations` 仍含 `station_banquet`；**WHEN** 开关变 `true` 并重新查询，**THEN** 它立即可用（`station_available = true`），无需重新购买，`get_wallet()` 不变。
+45. **GIVEN** `supports_station_selection() = false`、免费档口不受影响，**WHEN** 查询免费档口与进度，**THEN** 行为与开关为 `true` 时逐字段相同（`gated = false`）；**AND** 若数据只有一个付费档口、无免费档口，**THEN** `get_load_outcome() = NoPlayableStation`、目录为空、进度四计数全为 0，不发生除零。
+
 **无法直接断言、已改写或转为开放问题的规则**：
 
 - UI 侧断言（菜单禁用「开始」、隐藏购买按钮、差额文案、换行与对比度）留给 `/ux-design` 与界面流程的集成测试；本文件的 AC 3、17 只断言数据侧可观测值。
@@ -527,3 +553,4 @@ unlock_progress(U, S) =
 | 8 | 免费档口需要几个？多于一个会稀释「按档口解锁」的进度感，少于一个会让空档不可玩。 | game-designer | 第二个档口设计时 |
 | 9 | 档口 id 改名的迁移策略：当前按「改名 = 删除 + 新增」处理，玩家会失去解锁。是否需要一次性别名表？ | 数据配置 + 存档 | 发布前 |
 | 10 | 在线挑战是否需要限定可用档口？若要，挑战配置必须读取本系统的可用集合。 | live-ops-designer | Full Vision 前 |
+| 11 | **`runs_to_unlock` 是按最优打法算的，不是中位玩家的到达时间。** 120 元 ÷ 最优净利 19 = 7 局，但中位玩家前三局净利约 +3 … +11，实际可能需 11–40 局。本版保留 120 与 4–8 局目标带不动，由 `/prototype` 同时测量「最优局数」与「中位局数」；若中位 > 8 局，先调第二个档口的 `entry_fee` / 菜池 / 升级预算，最后才考虑降价。 | economy-designer + 用户 | `/prototype` 后 |

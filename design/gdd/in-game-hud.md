@@ -16,7 +16,7 @@
 
 局内 HUD 是一块**只读仪表盘**。一局开始时它随着 `run_started` 亮起，把档口名、波次、回合槽位、容量条、净利与回本差额铺在屏幕边缘，把当前波的菜品卡放在中央的主操作区。玩家每提交一个动作，餐局流程广播 `action_committed`，HUD 在同一帧重新取一份完整快照并重绘；数字先变，动画后跟，动画永远不推迟数字。
 
-它不计算任何东西。剩余回合来自时间与回合，容量与可吃性来自胃容量，价格与饱腹来自菜品数值，额外饱腹与解腻来自腻度与口味，波次与预览来自菜单波次，净利与回本差额来自结算与入场费，档口与流程态来自餐局流程。HUD 唯一“合成”的是呈现层：把这几份只读投影拼成一张卡、一行字、一根条。这条边界不是洁癖——同一局里出现两份净利求和，玩家迟早会看到两个不同的数字，而支柱 1 的前提是“算得清”。
+它不计算任何东西。剩余回合来自时间与回合，容量与可吃性来自胃容量，价格与饱腹来自菜品数值，额外饱腹与解腻来自腻度与口味，波次与预览来自菜单波次；**实时净值与回本差额由餐局流程维护并随本局快照发布**（结算与入场费只定义 `running_net(k)` / `shortfall(k)` 两个纯函数并做最终复核），档口与流程态来自餐局流程。HUD 唯一“合成”的是呈现层：把这几份只读投影拼成一张卡、一行字、一根条。这条边界不是洁癖——同一局里出现两份净利求和，玩家迟早会看到两个不同的数字，而支柱 1 的前提是“算得清”。
 
 它同样不拥有任何动作语义。吃哪道菜由玩家通过焦点选择，判定由餐局流程执行；跳过与结束取餐的代价由菜单波次拥有；暂停菜单、收据屏、菜单与升级界面都不属于它。它只提供**局内这一屏**，以及与其它界面交接时的进入/退出规则。
 
@@ -36,7 +36,7 @@
 
 5. **不自推结束**：HUD 不判断“回合耗尽”“放不下任何菜”“最后一波吃完”。它只读 `run_state` 与 `end_reason`；进入 `Ending` 的唯一依据是餐局流程的快照，不是 `turns_remaining = 0` 这类派生条件。HUD 不得自行弹出“时间到”模态。
 
-6. **不自求和**：净利与回本差额只显示结算与入场费发布的 `running_net` / `shortfall`。计算口径、`entry_fee` 与取整都由结算拥有。**HUD 不得把菜品价格相加来得到净利**，即使结果在数学上相同——两份求和会在某个边界（空局、免单、错误局）漂移。
+6. **不自求和**：净利与回本差额只显示**餐局流程快照**中的 `running_net` / `shortfall`。该累加器由餐局流程维护，是本局运行期的唯一副本；计算口径由结算与入场费的纯函数 `running_net(k)` / `shortfall(k)` 定义，`entry_fee` 与取整由结算拥有。**HUD 不得把菜品价格相加来得到净利，也不得维护第三份累加器**，即使结果在数学上相同——两份求和会在某个边界（空局、免单、错误局）漂移。
 
 7. **不存在的数显示为 `—`，不显示 0**：快照未到达、上游返回错误、`run_state = Faulted` 时，受影响的数字显示 `—`，其余数字保持最后一次合法值并标为只读。把“不知道”画成 0 会让玩家把错误当成真实局面。
 
@@ -114,8 +114,8 @@
 | 回合槽位 | 时间与回合（经快照） | A 顶栏中 | 常驻（总数 ≤ 12 时） | 同上 |
 | 已用容量 / 总容量 | 胃容量（经快照） | A 顶栏下缘 | 常驻 | 同上 |
 | 剩余容量 | 胃容量（经快照） | A 容量条 + B 卡片 | 常驻 | 同上 |
-| 实时净利 `running_net` | 结算与入场费 | A 顶栏右 | 常驻 | 同上 |
-| 回本差额 `shortfall` | 结算与入场费 | A 顶栏右（净利下） | 常驻 | 同上 |
+| 实时净利 `running_net` | 餐局流程快照（口径：结算与入场费） | A 顶栏右 | 常驻 | 同上 |
+| 回本差额 `shortfall` | 餐局流程快照（口径：结算与入场费） | A 顶栏右（净利下） | 常驻 | 同上 |
 | 当前波索引 / 总波数 | 菜单波次 | A 顶栏左 | 常驻 | 开局、跳波、自动推进 |
 | 未揭晓波的 `?` 槽与数量 | 菜单波次 | A 顶栏左 | 常驻 | 同上 |
 | 当前波菜品卡（名称、图标、价格、基础饱腹、实际饱腹与 `+N`、口味标签） | 菜品数值 + 腻度与口味 + 菜单波次 | B 主区 | 常驻 | `action_committed`、开局 |
@@ -167,7 +167,7 @@ HUD 的状态是 `run_state` 的投影，加上一个独立的 `frozen` 维度�
 | 菜品数值 | 上游 | `get_dish(id)` → 名称、图标、`price`、`satiety`；**不请求 `unit_value`** | 硬 |
 | 腻度与口味 | 上游 | `effective_satiety(d)`、`extra_satiety(d)`、`taste_tags(d)`、`cloying_group(d)`、`cleanse_target(d)`、各组件计数 | 硬 |
 | 菜单波次 | 上游 | `wave_index` / 总波数、`visible_dishes`、`preview_dishes`、`?` 槽数量；跳过/结束取餐的可用性与代价 | 硬 |
-| 结算与入场费 | 上游 | 经快照读 `running_net` / `shortfall`；实时累加器由餐局流程维护；不自行求和、不读 `entry_fee` 自行计算 | 硬 |
+| 结算与入场费 | 上游 | 经快照读 `running_net` / `shortfall`（实时累加器由餐局流程维护，是本局唯一副本）；本系统另可调用结算的纯函数复核；不自行求和、不读 `entry_fee` 自行计算、不维护第三份累加器 | 硬 |
 | 输入 | 上游 | 焦点导航（`ui_up/down/left/right`）、`ui_accept`、`ui_cancel`、`game_skip_wave`；只查询，不监听原始事件、不改映射 | 硬 |
 | 场景与流程管理 | 间接上游 | `frozen` 经餐局流程快照到达；HUD 不直接读取顶层状态 | 软（间接） |
 | 数据配置 | 间接上游 | 菜品与档口记录由菜品数值/菜单波次解析后传入；HUD 不直接查询数据目录 | 软（间接） |
@@ -369,7 +369,7 @@ HUD 的状态是 `run_state` 的投影，加上一个独立的 `frozen` 维度�
 - **If 焦点菜在重绘后已不在可见集**（被吃掉或跳波）：焦点移到同一位置的下一张卡；若当前波为空且已自动推进，焦点落到新波第一张可吃菜。
 - **If 当前波全部不可吃**：卡片全部置灰并各自写出原因；焦点仍可移动，`ui_accept` 只给“放不下”反馈；跳过按钮保持可用——HUD 不自行结束本局，也不提示“无菜可吃”（那是菜单波次与餐局流程的判定）。
 - **If 最后一波点「结束取餐」**：打开确认面板，逐条列出当前波仍会失去的菜，并以「另有 N 道本局剩余」汇总不可见的部分；确认面板不假装知道未揭晓的内容。默认焦点在「取消」，`ui_cancel` 关闭并还原焦点。
-- **If 非最后一波点「跳过本波」**：立即提交，不弹确认；按钮文案已写明代价。若处于 `turns_remaining = 0` 的终局帧（餐局流程尚未切到 `Ending` 的那一帧），按钮置为不可用并写明“没有回合了”，不提交、不静默。
+- **If 非最后一波点「跳过本波」**：立即提交，不弹确认；按钮文案已写明代价。若 `turns_remaining ≤ 1`，按钮置为不可用且不提交：`turns_remaining = 0` 时写“没有回合了”；`turns_remaining = 1` 时写“最后一回合不能跳波”（跳过会花掉唯一剩下的回合，玩家将进入一波却无回合可吃，餐局流程会返回 `NO_TURNS`）。最后一波的「结束取餐（免费）」不受此限。
 - **If 跳过或吃菜被餐局流程拒绝**：HUD 不乐观更新任何数字；保持旧值，焦点详情行显示一行拒绝原因（来自 `run_flow` 的结构化错误），150 ms 后恢复常态文案。
 - **If `run_discarded` 在 `Frozen` 中到达**：直接回 `Hidden`，不播放收尾动画，不显示“本局结束”；被丢弃的局没有收据。
 - **If 首局引导压入 Blocked 上下文**：HUD 的回合、容量、净利数字仍然可见（餐局流程 UI Requirements 7）；引导层由首局引导绘制，HUD 通过 `get_anchor_rect(anchor_id)` 提供被讲解控件的屏幕矩形，不改变自己的布局。
@@ -386,20 +386,19 @@ HUD 的状态是 `run_state` 的投影，加上一个独立的 `frozen` 维度�
 | 菜品数值 | 上游 | `get_dish(id)` → 名称、图标、`price`、`satiety`；不请求 `unit_value` | 硬 | GDD 已写 |
 | 腻度与口味 | 上游 | `effective_satiety` / `extra_satiety` / `taste_tags` / `cloying_group` / `cleanse_target`；组计数 | 硬 | GDD 已写 |
 | 菜单波次 | 上游 | 波次索引与总数、`visible_dishes`、`preview_dishes`、`?` 数量、跳过/结束取餐可用性与代价 | 硬 | GDD 已写 |
-| 结算与入场费 | 上游 | `running_net` / `shortfall` | 硬 | GDD 已写 |
+| 结算与入场费 | 上游 | 定义纯函数 `running_net(k)` / `shortfall(k)` 并在结算时复核；实时值经餐局流程快照到达（餐局流程是运行期唯一累加器）；本系统不自推、不求和、不维护第三份累加器 | 硬 | GDD 已写 |
 | 输入 | 上游 | 导航、`ui_accept`、`ui_cancel`、`game_skip_wave`；焦点状态查询 | 硬 | GDD 已写 |
 | 数据配置 | 间接上游 | 菜品/档口记录经菜品数值与菜单波次解析后到达；HUD 不直接查询 | 软 | GDD 已写 |
-| 场景与流程管理 | 间接上游 | `frozen` 经餐局流程快照到达 | 软 | GDD 已写（In Review） |
+| 场景与流程管理 | 间接上游 | `frozen` 经餐局流程快照到达 | 软 | GDD 已写（`design/gdd/scene-flow.md`） |
 | 界面流程 | 同级协调 | 屏幕归属与 z 序：暂停菜单、收据、菜单、升级、设置不在 HUD 内绘制 | 协调 | GDD 已写（`design/gdd/ui-flow.md`） |
 | 首局引导 | 下游（软） | `get_anchor_rect(anchor_id) -> Rect2`、`get_protected_rects() -> Rect2[3]`（回合/容量/净利）与 Blocked 上下文；不得隐藏核心数字 | 软 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
-| 音效反馈 | 下游（软） | 订阅焦点移动、确认、拒绝、跳过意图 | 软 | GDD 已写（`design/gdd/audio-feedback.md`） |
+| 音效反馈 | 下游（软） | 本系统只发 `dish_action_rejected` 与 `number_roll_started` / `number_roll_finished`；音效另订阅餐局流程的 `action_committed` 与界面流程的 `ui_button_activated`。**焦点移动、悬停、点击空白不产生任何音频事件**（音效规则 19） | 软 | GDD 已写（`design/gdd/audio-feedback.md`） |
 
-**双向一致性（待编排会话处理，见最终报告）**：
+**双向一致性（已完成，2026-11-04）**：
 
-- `systems-index.md` 第 15 行当前只列了 `餐局流程, 时间与回合, 胃容量, 菜品数值, 输入, 结算与入场费`。本 GDD 实际还硬依赖 **腻度与口味** 与 **菜单波次**（菜品卡字段、腻度面板、波次条、预览、跳过/结束取餐文案）。索引行与依赖说明需补这两个系统。
-- 上游 GDD 的“待回指”清单都点名了「局内 HUD」：`run-flow.md`、`time-and-turns.md`、`stomach-capacity.md`、`dish-values.md`、`cloying-and-taste.md`、`menu-waves.md`、`settlement-and-entry-fee.md`、`data-config.md` 的下游表 / Cross-References 需要把本文件补上。
-- `input.md` 的 Cross-References 写的是“其余文档写好后需要在本表补充反向链接”，本文件已在 Dependencies 中列它，需在那边补齐反向条目。
-- 本文件不修改上述任何文件，依据并行约束由编排会话统一回改。
+- `systems-index.md` 第 15 行已列出本 GDD 的**八项硬依赖**：餐局流程、时间与回合、胃容量、菜品数值、输入、结算与入场费、腻度与口味、菜单波次；与本节一致，无需再补。该行的 `Design Doc`、`Status` 也已指向本文件与 `Approved`。
+- 上游 GDD 的下游表 / Cross-References 均已列出「局内 HUD」：`run-flow.md`、`time-and-turns.md`、`stomach-capacity.md`、`dish-values.md`、`cloying-and-taste.md`、`menu-waves.md`、`settlement-and-entry-fee.md`、`data-config.md`；`input.md` 的 Cross-References 也已改为已回指。
+- 本文件无待编排会话回改的条目。
 
 ## Visual/Audio Requirements
 
@@ -413,7 +412,7 @@ HUD 的状态是 `run_state` 的投影，加上一个独立的 `frozen` 维度�
 - **层级与遮挡**：主区卡片永远不被右栏或顶栏覆盖；确认面板居中并带 60% 暗底，但确认面板之外的 HUD 数字仍然可读（不能整屏糊掉，玩家需要看着数字决定是否结束）。
 - **无 VFX、无粒子、无屏幕震动**：本系统是信息层，不是反馈特效层；强调靠排版、对比与短促位移，不靠特效。
 
-**音频**：本系统不播放音频。焦点移动、确认、拒绝、跳过的音效由音效反馈系统订阅 HUD 事件后播放；HUD 只负责发出这些事件，不持有音频资源，也不决定音色。
+**音频**：本系统不播放音频。确认（界面流程）、拒绝与数字滚动（本系统）、跳过（餐局流程的动作事件）的音效由音效反馈订阅语义事件后播放；**焦点移动与悬停无声**（音效规则 19）。HUD 只负责发出 `dish_action_rejected` 与 `number_roll_started/finished`，不持有音频资源，也不决定音色。
 
 ## Game Feel
 
@@ -452,12 +451,12 @@ UX 规格必须覆盖以下内容，并以本 GDD 的 Formulas 作为数值下�
 | `design/gdd/dish-values.md` | 上游 | `price` / `satiety`；卡片字段；默认按陈列顺序、不按单位价值排序；`unit_value` 只在收据 |
 | `design/gdd/cloying-and-taste.md` | 上游 | `effective_satiety` / `extra_satiety` / `taste_tags` / `cleanse_target`；腻度面板；解腻预览 |
 | `design/gdd/menu-waves.md` | 上游 | 波次条、`?` 槽与数量、`preview_dishes`、跳过/结束取餐语义与确认面板内容 |
-| `design/gdd/settlement-and-entry-fee.md` | 上游 | `running_net` / `shortfall`；开局即显示 `−entry_fee`；不自行求和；免单显示「已回本」 |
+| `design/gdd/settlement-and-entry-fee.md` | 上游 | `running_net(k)` / `shortfall(k)` 的纯函数定义与结算复核；实时值经餐局流程快照到达，HUD 不自行求和、不维护第三份累加器；免单显示「已回本」 |
 | `design/gdd/input.md` | 上游 | 动作集、上下文、双焦点、焦点导航与禁用控件规则；HUD 不监听原始事件、不切上下文 |
 | `design/gdd/data-config.md` | 间接上游 | 菜品/档口记录的来源；HUD 不直接查询 |
 | `design/gdd/scene-flow.md` | 间接上游 | `frozen` 的顶层来源；暂停菜单与错误屏的归属 |
 | `design/gdd/game-concept.md` | 来源 | 四支柱；视觉锚点「食堂价目板」「橄榄绿表示胃容量与安全区」；MVP 12 道菜 |
-| `design/gdd/systems-index.md` | 索引 | 优先级 MVP、层 Presentation、依赖清单（需补腻度与菜单波次） |
+| `design/gdd/systems-index.md` | 索引 | 优先级 MVP、层 Presentation、八项硬依赖清单（已与第 15 行一致） |
 | `design/ux/hud.md` | **待创建** | 本 GDD 的 UI Requirements 是它的输入；它不存在时，本文件是唯一的 HUD 约束记录 |
 | `design/accessibility-requirements.md` | **待创建** | 对比度、字号缩放、减少动态、不透明度设置的完整标准 |
 
@@ -467,10 +466,10 @@ UX 规格必须覆盖以下内容，并以本 GDD 的 Formulas 作为数值下�
 
 **数据投影与不计算**
 
-1. **GIVEN** 一局已开始且已吃过 3 道菜（16、5、18 元），**WHEN** HUD 显示净利，**THEN** 显示 `−46` 且与结算的 `running_net` 完全一致；HUD 代码路径中不存在价格求和。
+1. **GIVEN** 一局已开始且已吃过 3 道菜（16、5、18 元），**WHEN** HUD 显示净利，**THEN** 显示 `−46`，与本局快照的 `running_net` 完全一致，并与结算纯函数 `running_net(k)` 对同一份 `RunLog` 的复核值一致；HUD 代码路径中不存在价格求和或第三份累加器。
 2. **GIVEN** 一局刚开始、尚未吃任何菜，**WHEN** `run_started` 到达，**THEN** 净利显示 `−entry_fee`（MVP 食堂档口为 `−85`）、回本差额显示 `还差 entry_fee 元`（MVP 为 `还差 85 元`），不需要等第一道菜。
 3. **GIVEN** `turns_remaining = 0`，**WHEN** 快照更新但 `run_state` 仍为 `Active`，**THEN** HUD 不显示“时间到”模态、不进入 `Ending`、只把数字画成 `剩余 0 / 10` 并等待餐局流程的结束信号。
-4. **GIVEN** 结算的 `running_net` 查询返回错误，**WHEN** HUD 重绘，**THEN** 净利与差额位置显示 `—`，不显示 0、不显示旧值、不自行求和。
+4. **GIVEN** 快照的 `running_net` / `shortfall` 查询失败或上游返回错误，**WHEN** HUD 重绘，**THEN** 净利与差额位置显示 `—`，不显示 0、不显示旧值、不自行求和、不回退到第三份累加器。
 5. **GIVEN** 同一帧到达两个 `action_committed`，**WHEN** HUD 重绘，**THEN** 只渲染最后一个快照，不出现两个中间态；调试构建记录一次 `HUD_INVARIANT` 5。
 6. **GIVEN** `run_faulted` 在 `Active` 中到达，**WHEN** HUD 进入 `Faulted`，**THEN** 保留最后一帧布局、受影响数字为 `—`、顶栏显示错误码文字、无控件可获焦。
 7. **GIVEN** `run_discarded` 在 `Frozen` 中到达，**WHEN** HUD 收到信号，**THEN** 直接进入 `Hidden`，不播放结束动画、不显示收据。
@@ -501,7 +500,7 @@ UX 规格必须覆盖以下内容，并以本 GDD 的 Formulas 作为数值下�
 23. **GIVEN** 焦点落在不可吃的卡上，**WHEN** 玩家按 `ui_accept`，**THEN** HUD 不提交动作，卡片抖动 ≤ 150 ms 并在焦点详情行写出“放不下”。
 24. **GIVEN** 非最后一波，**WHEN** 玩家激活「跳过本波 · 花 1 回合」，**THEN** HUD 立即提交跳波意图，不弹二次确认；回合数字由随后的 `action_committed` 在同一帧更新。
 25. **GIVEN** 最后一波，**WHEN** 玩家激活「结束取餐（免费）」，**THEN** 打开 HUD 内确认面板，逐条列出将失去的当前波菜品，默认焦点在「取消」；`ui_cancel` 关闭并把焦点还原到按钮；确认后面板关闭并提交意图。
-26. **GIVEN** 最后一波且 `turns_remaining ≥ 1`，**WHEN** 渲染「结束取餐」，**THEN** 按钮可用且文案写明免费；**GIVEN** 非最后一波的 `turns_remaining = 0` 终局帧，**WHEN** 渲染「跳过本波」，**THEN** 按钮不可用并写明“没有回合了”。
+26. **GIVEN** 最后一波且 `turns_remaining ≥ 1`，**WHEN** 渲染「结束取餐」，**THEN** 按钮可用且文案写明免费。**GIVEN** 非最后一波且 `turns_remaining = 0`，**WHEN** 渲染「跳过本波」，**THEN** 按钮不可用并写明“没有回合了”。**GIVEN** 非最后一波且 `turns_remaining = 1`，**WHEN** 渲染「跳过本波」，**THEN** 按钮不可用并写明“最后一回合不能跳波”，激活不提交 `game_skip_wave`；此时吃菜按钮保持可用。
 27. **GIVEN** 「结束取餐」确认面板已打开，**WHEN** 玩家按 `game_skip_wave`（S / X / 右键），**THEN** 面板保持原状、不重开、不提交意图、不产生 `action_committed`；**WHEN** 再按 `ui_cancel`，**THEN** 面板关闭并把焦点还原到「结束取餐」按钮。
 
 **无障碍**
@@ -540,3 +539,4 @@ UX 规格必须覆盖以下内容，并以本 GDD 的 Formulas 作为数值下�
 | 6 | 手柄焦点与鼠标悬停同时存在时，“提交哪张卡”定为键盘焦点优先。若玩家用鼠标点一张卡而键盘焦点在别处，点击是否应直接提交该卡（而不是只移动悬停）？ | ux-designer + game-designer | 写 `design/ux/hud.md` 时 |
 | 7 | 当前 GDD 假定 HUD 用 Godot `canvas_items` 拉伸 + 1280×720 基准。若后续支持 Steam Deck 的 1280×800 或 16:10，安全边距与顶栏比例是否需要单独一档？ | ui-programmer | 编辑器安装完成、能实机运行后，垂直切片前 |
 | 8 | 首局引导需要在 HUD 上叠加气泡并聚焦指定控件。**已回答（2026-11-04）**：HUD 暴露 `get_anchor_rect(anchor_id) -> Rect2` 与三个受保护矩形；引导只拿矩形，不知道 HUD 布局。 | ux-designer + game-designer | 已关闭 |
+| 9 | **注意力预算（D6）**：一次「吃 / 跳过」需同时权衡价格、基础饱腹、实际饱腹(`+N`)、解腻预览、剩余容量、剩余回合、`running_net` / 差额、波次与预览，共 8 个数字流；首局只教四个概念，且未教真正的决策量 `price / effective_satiety`。本轮只做措辞澄清，**不改变布局、信息块数量（AC 13 仍为 8）或任何数值**。可能方向：把 `price / effective_satiety` 纳入首局教学、将派生信息收进焦点详情行、或在 UX 规格中重排信息层级。 | ux-designer + game-designer | **推迟**：写 `design/ux/hud.md` 与垂直切片试玩后 |

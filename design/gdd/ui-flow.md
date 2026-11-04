@@ -24,7 +24,7 @@
 
 ### Core Rules
 
-1. **职责边界** — 本系统拥有：顶层状态到界面的映射、屏幕栈与返回行为、键盘/手柄焦点归属、模态的呈现与焦点陷阱、结算收据的打开时机与内容编排、设置屏与机器级设置模型、以及界面语义事件（`ui_button_activated`、收据数字滚动、收据关闭）。它**不拥有**：顶层状态与合法转移（`场景与流程管理`）、局内 HUD（`局内 HUD`）、动作映射与输入上下文状态机（`输入`）、任何一局的数值与 `RunResult` 字段（`结算与入场费`）、钱包与升级价格（`局外升级`）、纪录比较与里程碑判定（`纪录与里程碑`）、存档事务与载入结果（`存档`）、音频播放（`音效反馈`）、菜品/档口/里程碑记录本身（`数据配置`）。
+1. **职责边界** — 本系统拥有：顶层状态到界面的映射、屏幕栈与返回行为、键盘/手柄焦点归属、模态的呈现与焦点陷阱、结算收据的打开时机与内容编排、设置屏与机器级设置模型、界面语义事件（`ui_button_activated`、收据数字滚动、收据关闭）、以及档口选择器能力开关 `supports_station_selection()`。它**不拥有**：顶层状态与合法转移（`场景与流程管理`）、局内 HUD（`局内 HUD`）、动作映射与输入上下文状态机（`输入`）、任何一局的数值与 `RunResult` 字段（`结算与入场费`）、钱包与升级价格（`局外升级`）、纪录比较与里程碑判定（`纪录与里程碑`）、存档事务与载入结果（`存档`）、音频播放（`音效反馈`）、菜品/档口/里程碑记录本身（`数据配置`）。
 
 2. **屏幕清单固定** — MVP 的界面集合固定为下表。新增屏幕必须改本 GDD，不得由实现临时增加。`局内 HUD` 的一屏不在本清单内，它是同级系统，不是本系统的屏幕。
 
@@ -54,11 +54,13 @@
 
 7. **返回是确定的决策，不是默认退出** — `ui_cancel` 的行为由 `back_target`（Formulas）唯一决定，优先级固定为：①有可取消模态 → 关闭模态（模态捕获 `ui_cancel`）；②有强制模态 → 无动作；③有可关闭的非模态提示 → 关闭提示；④收据数字滚动中 → 跳过滚动；⑤`Menu` 子屏 → 弹回主菜单；⑥`Menu` 根屏且为收据 → 返回主菜单；⑦`Menu` 根屏且为主菜单 → 打开退出确认；⑧`Paused` → 打开退出确认；⑨`Error` / `Boot` / `Run` / `Quit` → 无动作。`ui_cancel` 在任何状态下都**不得直接退出游戏**，退出必须经过确认（`Run` / `Paused`）或明确的「退出」控件（`Menu` / `Error`）。强制模态（如存档 `Blocked` 说明）忽略 `ui_cancel`，只接受其列出的出口。
 
-8. **开始一局** — 主菜单的「开始营业」组装 `RunConfig`：`station_id` 取 MVP 唯一档口 `station_canteen`；`upgrade_snapshot = 局外升级.resolve_upgrade_snapshot()` 的**副本**（开局冻结，`局外升级` 规则 13）；`seed = null`；`is_first_run = 纪录与里程碑.snapshot().career.runs_settled == 0`；若 `is_first_run`，从 `首局引导.get_first_run_preset()` 取 `pool_override = 六道教学菜池` 与 `entry_fee_override = 40`，否则二者为 `null`。组装完成后调用 `场景与流程管理.request_transition(Menu → Run, RunConfig)`。返回 `false` 时留在主菜单并显示可见原因，不进入加载态、不重试、不伪造成功。主菜单必须在开始按钮旁显示本档口的入场费（`结算与入场费` UI Requirements）与当前钱包（可为负）；两者只读，来自 `数据配置.get_station()` 与 `局外升级.get_wallet()`。
+8. **开始一局** — 主菜单的「开始营业」组装 `RunConfig`：`station_id` 取 MVP 唯一档口 `station_canteen`；`upgrade_snapshot = 局外升级.resolve_upgrade_snapshot()` 的**副本**（开局冻结，`局外升级` 规则 13）；`seed = null`；`is_first_run = 存档.load_report().first_run_eligible ∧ 纪录与里程碑.snapshot().career.runs_settled == 0`（载入资格由存档一次性判定：`Fresh` / `Loaded` / `Migrated` 且载入时 `runs_settled = 0` 为真，`Recovered` 恒为假；再与当前纪录快照相与，使首局结算后主菜单立即切换到 85；见 `存档` 规则与 S11）。若 `is_first_run`，从 `首局引导.get_first_run_preset()` 取 `pool_override = 六道教学菜池` 与 `entry_fee_override = 40`，否则二者为 `null`。组装完成后调用 `场景与流程管理.request_transition(Menu → Run, RunConfig)`。返回 `false` 时留在主菜单并显示可见原因，不进入加载态、不重试、不伪造成功。主菜单必须在开始按钮旁显示**本次开始实际会扣收的入场费**与当前钱包（可为负），两者只读：入场费按 `effective_entry_fee = is_first_run ? 40 : 数据配置.get_station(station_id).entry_fee`（MVP 非首局为 85）显示，与同一次组装写入 `RunConfig.entry_fee_override` 的值同源；首局结算后 `runs_settled > 0`，主菜单立即改为显示 85。不得只显示 85、直到收据才解释首局 40 与常规 85 的差异。
 
-9. **收据在 `RunResult` 交付的同一帧打开** — `场景与流程管理` 在 `Run → Menu` 生效的同一帧把 `RunResult` 恰好一次交给界面流程。界面流程在该帧内完成入账编排（规则 10）并把 `ReceiptScreen` 设为根屏；`receipt_open_latency_frames = 0`（Formulas）。`RunResult` 按引用保留，只用于本张收据；不重算、不缓存到收据关闭之后、不为同一 `run_id` 打开第二张收据。切换不插入加载屏或「结算中」等待态；局内最终画面保留到收据覆盖它的那一帧（`餐局流程` UI Requirements 5、6）。
+   **档口可购买性以可选择性为前提**：MVP 主菜单只显示 `station_canteen`、**不显示档口选择器**，因此任何第二档口（含 `station_banquet`，120 元价格不变）都不得显示为可购买。若数据层发布了它，任何解锁入口必须把该档口标为不可购买并显示「需要档口选择器」的原因，直到本系统实现选择器为止；**不存在「已购买但无法选择」的中间态**。本系统拥有能力开关 `supports_station_selection() -> bool`：主菜单是否已提供档口选择器；MVP 固定返回 `false`。解锁与档口用 `gated(s) = ¬supports_station_selection() ∧ s.unlock_cost > 0` 隐藏付费档口、拒绝 `unlock` 为 `FEATURE_GATED`，并把它们排除在可见目录与解锁进度分母之外（`解锁与档口` 规则 17）。开关只在选择器真正上线时改为 `true`，不得为测试之外的任何原因伪造。多档口选择器见 Open Question 6。
 
-10. **结算入账编排：先校验纪录，再动钱包，最后一次提交** — 界面流程是 MVP 的**结算事务编排者**（回答 `纪录与里程碑` Open Question 1）。收据绘制前必须按固定顺序完成一次编排：①`纪录与里程碑.prepare_run(result)`；若返回 `INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY`，整笔放弃——不调用 `局外升级`、不提交任何命名空间，收据仍显示 `RunResult` 的原始值但标注「结算数据异常，未入账、未记录」；②`局外升级.prepare_run_result(result)` 恰好一次，处理 `APPLIED` / `APPLIED_UNSAVED` / `WALLET_OVERFLOW`；③把 `progression`、`records`（以及未来存在的 `unlocks`）合并为**一次** `存档.commit`。写盘失败时按 `存档` 规则 18 与 `局外升级` 规则 6 保留内存值、标记 dirty、在下个写入时点重试，收据带「未保存」标记。同一 `run_id` 的重复 `RunResult` 不重复入账。**接口约束**：`prepare` 两段只计算内存新值、不写盘，写盘由编排者的这一次 `commit` 负责（`存档` 规则 18 / AC 13）。
+9. **收据在 `RunResult` 交付的同一帧打开** — `场景与流程管理` 在 `Run → Menu` 生效的同一帧把 `RunResult` 恰好一次交给界面流程。界面流程在该帧内完成入账编排（规则 10）并把 `ReceiptScreen` 设为根屏；`receipt_open_latency_frames = 0`（Formulas）。收据根屏建立时，界面流程在**同一帧、任何收据动画或数字滚动之前**发 `settlement_started(run_id)` 恰好一次——它是收据打印音的唯一起点（`音效反馈` 规则 12），不得由结算或场景与流程管理代发。`RunResult` 按引用保留，只用于本张收据；不重算、不缓存到收据关闭之后、不为同一 `run_id` 打开第二张收据。切换不插入加载屏或「结算中」等待态；局内最终画面保留到收据覆盖它的那一帧（`餐局流程` UI Requirements 5、6）。
+
+10. **结算入账编排：先校验纪录，再动钱包，最后一次提交** — 界面流程是 MVP 的**结算事务编排者**（回答 `纪录与里程碑` Open Question 1）。收据绘制前必须按固定顺序完成一次编排：①`纪录与里程碑.prepare_run(result)`；若返回 `INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY`，整笔放弃——不调用 `局外升级`、不提交任何命名空间，并在同一帧发 `settlement_aborted(run_id, code)`；音效收到后必须取消该局任何待播结果 cue，且禁止播放 `broke_even` / `loss` 或任何成功音。收据仍显示 `RunResult` 的原始值但标注「结算数据异常，未入账、未记录」；②`局外升级.prepare_run_result(result)` 恰好一次，处理 `APPLIED` / `APPLIED_UNSAVED` / `WALLET_OVERFLOW`；③把 `progression`、`records`（以及未来存在的 `unlocks`）合并为**一次** `存档.commit`。写盘失败时按 `存档` 规则 18 与 `局外升级` 规则 6 保留内存值、标记 dirty、在下个写入时点重试，收据带「未保存」标记。同一 `run_id` 的重复 `RunResult` 不重复入账。**接口约束**：`prepare` 两段只计算内存新值、不写盘，写盘由编排者的这一次 `commit` 负责（`存档` 规则 18 / AC 13）。
 
 11. **收据只陈述 `RunResult`，不重算、不展示最优解** — `ReceiptScreen` 的每一行、每个合计都直接读 `RunResult`：行顺序严格按 `rows`（吃下顺序），行字段为菜名（由 `数据配置.get_dish(dish_id).display_name` 解析；`RunResult.rows` 只带 `dish_id`）、价格、基础饱腹、腻度追加（0 显示 `—`）、实际饱腹、静态单位价值、有效单位价值；合计区为总值、入场费（负项）、净利（带符号）、回本判定（「回本」/「未回本」）、回本率（`122.3%`）、已用/总容量、浪费容量、已用/总回合、腻度额外占用合计。不排序、不合并、不补算、不显示 `opt_value` 或“本可以多赚 X”（`结算与入场费` 规则 9–12）。空局显示「这一局什么都没吃」的空状态；`entry_fee = 0` 显示「免单」，不出现 `∞` / `NaN`。`record_broken` 到达时并排显示旧最佳，「新纪录」印章**只在新最佳 `net_profit > 0`** 时出现；没有破纪录时不显示任何安慰性文案（`纪录与里程碑` UI Requirements 5）。`record_broken` 在 `prepare_run` 期间同步到达时，界面流程把 `previous_best` 暂存给本张收据，不另开提示。新达成里程碑显示为收据底部的一条非模态「新达成」条；完成横幅按规则 23 处理。按钮由界面流程拥有，固定为「再来一局」「返回菜单」，位置不随净利正负变化；初始焦点为「再来一局」。
 
@@ -88,7 +90,7 @@
 
 24. **设置是机器级模型，不属于生涯档** — 界面流程拥有设置屏与机器级设置模型（`存档` 规则 20、`音效反馈` UI Requirements）。MVP 设置项与范围：`master_volume_db`（−80…0，`−80` 视为静音）、`sfx_volume_db`（−40…0）、`muted`（开/关）、`reduce_repetitive_cues`（开/关，默认关）、`text_scale_percent`（100 / 125 / 150）、`reduce_motion`（开/关）、`hud_opacity_percent`（60–100）。修改**立即生效**：音频值由 `音效反馈` 消费，文本缩放与 HUD 不透明度由 `局内 HUD` 与所有界面消费；`reduce_motion` 同时把界面过渡与收据滚动时长置 0。设置在设置模态关闭或退出游戏时写入机器级设置文件；写入失败显示「设置可能未保存」并保留内存值。设置不随生涯删除、不进入生涯备份。**删除生涯**放在设置屏的次级分区，需要两次确认（第二次默认「取消」），确认文案写明旧档会被隔离保留；删除后主菜单刷新为新生涯状态，设置不变（`存档` UI Requirements 5、规则 23）。不提供虚拟摇杆或触屏控件（`输入` Open Question 5）。
 
-25. **界面语义事件：只在提交时发声** — 界面流程发 `ui_button_activated(control_id)`，**每次已提交的控件激活恰好一次**；焦点移动、悬停、点击空白、禁用控件、按下但未提交都不发（`音效反馈` 前置契约）。收据滚动发 `number_roll_started` / `number_roll_finished`，跳过时 `skipped = true`。收据关闭、返回菜单、开始新一局时发 `receipt_closed(reason: restart | menu | quit)`，让音效取消待播的结算结果 cue（`音效反馈` Edge Cases）。界面流程不播放音频、不持有 cue、不订阅原始输入。
+25. **界面语义事件：只在提交时发声** — 界面流程发 `ui_button_activated(control_id)`，**每次已提交的控件激活恰好一次**；焦点移动、悬停、点击空白、禁用控件、按下但未提交都不发（`音效反馈` 前置契约）。收据打开时发 `settlement_started(run_id)`（同帧、任何动画或滚动之前，恰好一次）；结算事务整笔放弃时发 `settlement_aborted(run_id, code)`，音效据此禁止结果 cue。收据滚动发 `number_roll_started` / `number_roll_finished`，跳过时 `skipped = true`。收据关闭、返回菜单、开始新一局时发 `receipt_closed(reason: restart | menu | quit)`，让音效取消待播的结算结果 cue（`音效反馈` Edge Cases）。界面流程不播放音频、不持有 cue、不订阅原始输入。
 
 26. **过渡只播，不延迟状态；没有加载屏** — 顶层切换的淡入淡出由 `场景与流程管理` 定义上限（总时长 ≤ 0.2 秒），界面流程只负责播放，**不得推迟状态生效**；关闭视觉过渡时 `FADE_OUT = FADE_IN = 0`，切换仍立即生效（`场景与流程管理` 规则 12、Formulas）。`Menu ↔ Run` 之间不插入加载屏、过场或「结算中」等待态（`餐局流程` UI Requirements 5）。没有任何装饰性动画可以推迟数字出现。
 
@@ -157,15 +159,15 @@
 | 局外升级 | 上游（数据） | 读：`get_wallet()`、`get_catalog()`、`get_level(id)`、`next_price(id)`、`can_purchase(id)`、`resolve_upgrade_snapshot()`、`progression_changed`。写：`prepare_run_result(result)` 恰好一次、`purchase(id)` | 硬 |
 | 纪录与里程碑 | 上游（数据） | 读：`snapshot()`、`get_milestone_catalog()`、`milestone_progress(id)`、`record_broken` / `milestone_earned` / `career_completed` 信号。写：`prepare_run(result)` 恰好一次（由界面流程作为结算事务编排者调用） | 硬 |
 | 存档 | 上游（数据） | 读：`LoadReport`（`outcome`、`writable`、`warnings`、`lock_live`）、`SaveStatus` / `save_status_changed`、`retry_load()`。写：`commit({progression, records[, unlocks]})`、`flush()`、`delete_career(confirm_token)` | 硬 |
-| 音效反馈 | 同级协调（双向） | 界面流程拥有主音量 / 音效音量 / 静音 / 减少重复音效四项设置值；音效反馈消费它们。界面流程发 `ui_button_activated(control_id)`、收据 `number_roll_started/finished`、`receipt_closed(reason)`；音效不订阅原始输入、不读 `RunResult` | 硬（事件与设置契约）；播放本身为软 |
+| 音效反馈 | 同级协调（双向） | 界面流程拥有主音量 / 音效音量 / 静音 / 减少重复音效四项设置值；音效反馈消费它们。界面流程发 `settlement_started(run_id)`（收据打开同帧、动画前）、`settlement_aborted(run_id, code)`（事务放弃，禁止结果 cue）、`ui_button_activated(control_id)`、收据 `number_roll_started/finished`、`receipt_closed(reason)`；音效不订阅原始输入、不读 `RunResult` | 硬（事件与设置契约）；播放本身为软 |
 | 数据配置 | 上游（显示只读） | 读：`get_station(station_id)` 的 `display_name`、`entry_fee`；`get_dish(dish_id)` → `display_name`（收据菜名）。**只用于显示，不参与任何玩法判定** | 硬（显示） |
 | 局内 HUD | 同级协调 | 无数据依赖。屏幕归属：HUD 画局内一屏；界面流程画暂停菜单、收据、菜单、升级、设置、错误屏。`Paused` 时暂停菜单覆盖 HUD 但不卸载；`Settling` 时收据覆盖 HUD；HUD 保留到收据出现的那一帧 | 协调 |
-| 首局引导（#18） | 上游（预置/载荷）+ 下游（软） | 读 `get_first_run_preset()`（`pool_override` 六道 + `entry_fee_override = 40`）与 `FirstRunExplanation` 载荷（收据讲解块）；**不订阅 `onboarding_finished` 做首局判定**——`is_first_run` 只按 `records.career.runs_settled == 0` 计算；可在控件上叠加讲解与高亮，可请求 `Blocked` 上下文 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
-| 解锁与档口（#13，未设计） | 下游（软） | 将来在主菜单提供档口选择；MVP 只有一个档口，主菜单不显示选择器。接口见 Open Questions 5、6 | 软 |
+| 首局引导（#18） | 上游（预置/载荷）+ 下游（软） | 读 `get_first_run_preset()`（`pool_override` 六道 + `entry_fee_override = 40`）与 `FirstRunExplanation` 载荷（收据讲解块）；**不订阅 `onboarding_finished` 做首局判定**——`is_first_run` 按 `存档.load_report().first_run_eligible ∧ records.career.runs_settled == 0` 计算；可在控件上叠加讲解与高亮，可请求 `Blocked` 上下文 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
+| 解锁与档口（#13） | 下游（软） | 将来在主菜单提供档口选择器；MVP 只有一个档口，主菜单不显示选择器，第二档口不可购买（规则 8）。本系统提供 `supports_station_selection() -> bool`（MVP `false`），解锁按 `FEATURE_GATED` 隐藏付费档口。接口见 Open Questions 5、6 | 软 |
 
 **接口所有权**：界面流程拥有屏幕集合、屏幕栈、焦点顺序、模态呈现、收据的打开时机与呈现编排、设置模型与界面语义事件。上游拥有各自的数据、判定与状态；任何系统不得直接写界面栈、焦点或模态栈，也不得替界面流程决定收据内容。界面流程不得替上游计算任何玩法数值，也不得把显示值回写成数据。
 
-**事件与信号（过去式命名）**：`screen_changed(screen_id, ui_stack_depth)`、`modal_opened(modal_id, modal_depth)`、`modal_closed(modal_id, restored_focus_id)`、`receipt_opened(run_id)`、`receipt_closed(run_id, reason)`、`ui_button_activated(control_id)`、`number_roll_started(field, from, to, duration_ms)`、`number_roll_finished(field, skipped)`。这些事件供音效反馈与 QA 观察；它们不改变上游状态。
+**事件与信号（过去式命名）**：`screen_changed(screen_id, ui_stack_depth)`、`modal_opened(modal_id, modal_depth)`、`modal_closed(modal_id, restored_focus_id)`、`receipt_opened(run_id)`、`receipt_closed(run_id, reason)`、`settlement_started(run_id)`、`settlement_aborted(run_id, code)`、`ui_button_activated(control_id)`、`number_roll_started(field, from, to, duration_ms)`、`number_roll_finished(field, skipped)`。这些事件供音效反馈与 QA 观察；它们不改变上游状态。
 
 ## Formulas
 
@@ -380,7 +382,7 @@ The `displayed_value` formula is defined as:
 - **If 新最佳 `net_profit ≤ 0`**：不显示「新纪录」印章、不显示安慰文案；若存在旧最佳，并排显示旧值，否则只显示本局。
 - **If 同一帧达成多条里程碑**：收据底部「新达成」条按 id 升序列出全部；`career_completed()` 同帧到达时，完成横幅仍只显示一次，并排在里程碑条之后。
 - **If `career_completed()` 在收据滚动中到达**：横幅等滚动结束（或跳过）后显示；若玩家在滚动结束前离开收据，横幅改为在下一次 `MainMenu` 根屏显示，且只显示一次。
-- **If `纪录与里程碑.prepare_run` 返回致命错误**（`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY`）：不调用 `局外升级.prepare_run_result`、不提交任何命名空间；收据仍显示 `RunResult` 的原始值，但顶部标注「结算数据异常，未入账、未记录」；不显示新纪录印章。
+- **If `纪录与里程碑.prepare_run` 返回致命错误**（`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY`）：不调用 `局外升级.prepare_run_result`、不提交任何命名空间，并在同一帧发 `settlement_aborted(run_id, code)`；音效收到后取消该局待播结果 cue，禁止 `broke_even` / `loss` 或任何成功音。收据仍显示 `RunResult` 的原始值，但顶部标注「结算数据异常，未入账、未记录」；不显示新纪录印章。
 - **If 钱包入账溢出（`WALLET_OVERFLOW`）**：钱包不变，但纪录仍按本局更新；收据显示原始值并标注「入账失败」；新纪录印章按纪录结果正常显示。
 - **If 结算事务写盘失败**：钱包与纪录保留内存新值、标记 dirty、由存档在下个时点重试；收据显示「未保存」标记；不把收据内容回滚成旧值，也不重复入账。
 - **If 收据未关闭时又发生 `Run → Menu`**：不可能——一局只交付一次 `RunResult`；若发生，按同一 `run_id` 重复交付处理（忽略并记 WARNING）。
@@ -424,21 +426,21 @@ The `displayed_value` formula is defined as:
 
 | 系统 | 硬 / 软 | 接口 | 状态 |
 |---|---|---|---|
-| 场景与流程管理 | 硬 | 读顶层状态与切换 payload（`RunResult`、`abandoned`、`init_failed`）；写 `request_transition(Menu → Run, RunConfig)`、`request_transition(Paused → Run)`、`request_transition(Paused → Menu, abandoned)`、`request_transition(Quit)` | GDD 已写（`design/gdd/scene-flow.md`，In Review） |
+| 场景与流程管理 | 硬 | 读顶层状态与切换 payload（`RunResult`、`abandoned`、`init_failed`）；写 `request_transition(Menu → Run, RunConfig)`、`request_transition(Paused → Run)`、`request_transition(Paused → Menu, abandoned)`、`request_transition(Quit)` | GDD 已写（`design/gdd/scene-flow.md`） |
 | 输入 | 硬 | 读 `ui_up/down/left/right`、`ui_accept`、`ui_cancel`、焦点与悬停；写 `push_context(Modal)` / `pop_context()`；不调用 `request_context` | GDD 已写（`design/gdd/input.md`） |
 | 餐局流程 | 硬 | 本系统组装 `RunConfig` 并交给 `场景与流程管理`，餐局流程消费它；接收 `RunResult` 的交付时机；只读 `run_state` 快照判断 `Ending` / `Settling` / `Handoff` 期间暂停菜单的限制 | GDD 已写（`design/gdd/run-flow.md`） |
 | 结算与入场费 | 硬 | `RunResult` 的 `rows`、`total_value`、`entry_fee`、`net_profit`、`return_ratio` / `return_percent_x10`、容量/回合/腻度明细；`broke_even` 派生谓词 | GDD 已写（`design/gdd/settlement-and-entry-fee.md`） |
 | 局外升级 | 硬 | `get_wallet()`、`get_catalog()`、`can_purchase(id)`、`resolve_upgrade_snapshot()`、`prepare_run_result(result)`、`purchase(id)`、`progression_changed` | GDD 已写（`design/gdd/meta-upgrades.md`） |
 | 纪录与里程碑 | 硬 | `prepare_run(result)`、`snapshot()`、`milestone_progress(id)`、`record_broken` / `milestone_earned` / `career_completed` | GDD 已写（`design/gdd/records-and-milestones.md`） |
 | 存档 | 硬 | `LoadReport`（`outcome`、`writable`、`warnings`）、`SaveStatus` / `save_status_changed`、`commit`、`flush()`、`delete_career(confirm_token)` | GDD 已写（`design/gdd/save-system.md`） |
-| 音效反馈 | 硬（设置与事件契约） | 设置值：主音量、音效音量、静音、减少重复音效；界面事件：`ui_button_activated`、收据滚动、`receipt_closed` | GDD 已写（`design/gdd/audio-feedback.md`） |
+| 音效反馈 | 硬（设置与事件契约） | 设置值：主音量、音效音量、静音、减少重复音效；界面事件：`settlement_started`、`settlement_aborted`、`ui_button_activated`、收据滚动、`receipt_closed` | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 数据配置 | 硬（显示只读） | `get_station(station_id)` 的 `display_name` / `entry_fee`；`get_dish(dish_id)` → `display_name`。只用于显示，不参与玩法判定 | GDD 已写（`design/gdd/data-config.md`） |
 
 **下游依赖方：**
 
 | 系统 | 硬 / 软 | 接口 | 状态 |
 |---|---|---|---|
-| 音效反馈 | 硬（事件契约）/ 软（播放） | 消费 `ui_button_activated`、`number_roll_started/finished`、`receipt_closed`；消费 UI 设置值 | GDD 已写（双向：本系统也消费其设置契约） |
+| 音效反馈 | 硬（事件契约）/ 软（播放） | 消费 `settlement_started`、`settlement_aborted`、`ui_button_activated`、`number_roll_started/finished`、`receipt_closed`；消费 UI 设置值 | GDD 已写（双向：本系统也消费其设置契约） |
 | 首局引导（#18） | 软 | 在本系统控件上叠加讲解与高亮，可请求 `Blocked` 上下文；不得隐藏数字、不得改变屏幕流程 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 | 解锁与档口（#13） | 软 | 将来在主菜单提供档口选择；MVP 单档口，无选择器 | GDD 已写（`design/gdd/unlocks-and-stations.md`） |
 
@@ -449,7 +451,9 @@ The `displayed_value` formula is defined as:
 - **存档与设置**：设置不进入生涯档，删除生涯不重置设置（`存档` 规则 20）。界面流程拥有设置模型，但不把设置写进生涯档。
 - **游戏概念**：来源文档，不是系统依赖。
 
-**双向一致（已完成，2026-11-03）**：`场景与流程管理`、`餐局流程`、`结算与入场费`、`局外升级`、`纪录与里程碑`、`存档`、`音效反馈`、`输入` 的下游表均已有「界面流程」行并改为「GDD 已写（`design/gdd/ui-flow.md`）」；`数据配置` 已新增显示只读行；`局内 HUD` 的协调行已改为已写；`systems-index.md` 第 16 行已更新 Design Doc、Status 与 `Depends On`。
+**双向一致（已完成，2026-11-03）**：`场景与流程管理`、`餐局流程`、`结算与入场费`、`局外升级`、`纪录与里程碑`、`存档`、`音效反馈`、`输入` 的下游表均已有「界面流程」行并改为「GDD 已写（`design/gdd/ui-flow.md`）」；`数据配置` 已新增显示只读行；`局内 HUD` 的协调行已改为已写；`systems-index.md` 第 16 行已更新 `Design Doc`、`Status` 与 `Depends On`。
+
+**与音效反馈的双向关系（W10 澄清）**：本系统与音效反馈互为**同级协调**——界面流程发界面语义事件（含 `settlement_started` / `settlement_aborted`）并拥有四项音频设置值，音效反馈消费它们；音效反馈不向界面流程写状态、不改变界面栈或焦点。这是同一 `Presentation` 层内的**事件 / 设置回路**，不是跨层依赖环。`systems-index.md` §Circular Dependencies 的「None found」按字面不成立，应改为「无跨层环；界面流程 ⇄ 音效反馈 为同层事件 / 设置回路」；本文件不修改索引。
 
 ## Visual/Audio Requirements
 
@@ -470,7 +474,7 @@ The `displayed_value` formula is defined as:
 
 **颜色与对比度**：所有文本与背景组合对比度 ≥ 4.5:1（与 `局内 HUD` 同一门槛）；正负、可购买/不可购买、回本/未回本都必须同时有符号与文字，不能只靠颜色。`design/accessibility-requirements.md` 尚未创建；本 GDD 只固定上述下限，完整标准由该文件拥有。
 
-**音效**：界面流程不拥有任何 cue、不播放音频。它只发语义事件（`ui_button_activated`、收据滚动、`receipt_closed`），由 `音效反馈` 决定音色与时机。**没有焦点移动音**——焦点移动用视觉表达，避免奖励快速扫读（`音效反馈` 决策 5）。每一条声音信息都必须有视觉对应物，游戏可以完全静音通关。
+**音效**：界面流程不拥有任何 cue、不播放音频。它只发语义事件（`settlement_started`、`settlement_aborted`、`ui_button_activated`、收据滚动、`receipt_closed`），由 `音效反馈` 决定音色与时机。**没有焦点移动音**——焦点移动用视觉表达，避免奖励快速扫读（`音效反馈` 决策 5）。每一条声音信息都必须有视觉对应物，游戏可以完全静音通关。
 
 > **📌 UX Flag — 界面流程**：`design/ux/` 尚未存在。Phase 4（Pre-Production）写 epic 之前，必须用 `/ux-design` 为 `main-menu`、`settlement`（收据）、`upgrades`、`records`、`settings`、`pause`、`error` 七个屏幕产出 UX 规格；相关 story 引用 `design/ux/[screen].md`，不直接引用本 GDD。本 GDD 只记录屏幕流程、焦点规则与信息清单，不创建 UX 文件。
 
@@ -493,7 +497,7 @@ The `displayed_value` formula is defined as:
 |---|---|---|---|---|
 | `BootWaiting` | `Boot` | 等待文案、静态标识；无进度条、无最短展示时长 | 无 | 无 |
 | `ErrorScreen` | `Error` | 可读的错误标题与说明；唯一的「退出」；debug 额外「重新加载数据」、失败文件、记录 id | 「退出」 | `ui_cancel` 无效 |
-| `MainMenu` | `Menu` 根屏 | 档口名、入场费、钱包（带符号）；「开始营业」「升级」「纪录」「设置」「退出」；保存指示与非模态提示层 | 「开始营业」 | `ui_cancel` → 退出确认 |
+| `MainMenu` | `Menu` 根屏 | 档口名、**本次实际入场费**（首局 `is_first_run` 显示 40，否则档口值；MVP 85）、钱包（带符号）；「开始营业」「升级」「纪录」「设置」「退出」；保存指示与非模态提示层；MVP 不显示档口选择器，第二档口不可购买 | 「开始营业」 | `ui_cancel` → 退出确认 |
 | `ReceiptScreen` | `RunResult` 同帧 | 行：菜名、价格、基础饱腹、腻度追加（0 显示 `—`）、实际饱腹、静态单位价值、有效单位价值；合计：总值、入场费（负项）、净利（带符号）、回本判定、回本率、已用/总容量、浪费容量、已用/总回合、腻度额外占用合计；首局额外渲染 `FirstRunExplanation`（教学价说明「首局 40 元，正式食堂 85 元」、替换建议、首笔升级建议）；空局空状态；免单；新纪录印章 + 旧最佳；「新达成」条；钱包；「再来一局」「返回菜单」 | 「再来一局」 | `ui_cancel` → 先跳过滚动，再返回主菜单 |
 | `UpgradeScreen` | `Menu` 子屏 | 每条：名称、等级 `n / max`、当前效果、下一效果、下一价格、可购买性与原因；钱包常驻；购买确认；`COMMIT_FAILED` / `MAX_LEVEL` / `NO_EFFECT` / `NOT_WRITABLE`；推荐高亮 | 第一条可购买项的购买按钮；若无可购买项则为「返回」 | `ui_cancel` → 弹回主菜单 |
 | `RecordsScreen` | `Menu` 子屏 | 每档口一行：档口名、最佳净利（带符号）、回本率（免单显示「免单」）、总值、达成日期、空状态；里程碑按「未达成 / 已达成」分组，含名称、条件、进度 `当前值 / 阈值 单位`、达成日期；完成状态与「距离通关还差 N 项」；完成横幅 | 第一条纪录行；空则为「返回」 | `ui_cancel` → 弹回主菜单 |
@@ -526,15 +530,15 @@ The `displayed_value` formula is defined as:
 | `design/gdd/meta-upgrades.md` | 上游（数据） | `get_wallet` / `get_catalog` / `can_purchase` / `resolve_upgrade_snapshot` / `prepare_run_result` / `purchase` / `progression_changed` |
 | `design/gdd/records-and-milestones.md` | 上游（数据） | `prepare_run` / `snapshot` / `milestone_progress`、`record_broken` / `milestone_earned` / `career_completed`、新纪录印章规则、完成横幅 |
 | `design/gdd/save-system.md` | 上游（数据） | `LoadReport`、`SaveStatus`、保存指示、`Blocked` / `Recovered`、`commit` / `flush` / `delete_career`、设置不属于生涯档 |
-| `design/gdd/audio-feedback.md` | 同级（接口） | 音频设置四项、`ui_button_activated`、收据滚动事件、`receipt_closed`、无焦点音 |
+| `design/gdd/audio-feedback.md` | 同级（接口） | 音频设置四项、`settlement_started` / `settlement_aborted`、`ui_button_activated`、收据滚动事件、`receipt_closed`、无焦点音 |
 | `design/gdd/data-config.md` | 上游（显示只读） | `StationData.display_name` / `entry_fee`、菜品 `display_name`；不参与玩法判定 |
 | `design/gdd/records-and-milestones.md` | 上游（显示只读） | `get_milestone_catalog()`（名称、条件、阈值、`required_for_completion`） |
 | `design/gdd/in-game-hud.md` | 同级（协调） | 屏幕归属、暂停覆盖层不卸载 HUD、收据覆盖 HUD 的时机、HUD 不透明度与文本缩放设置 |
-| `design/gdd/systems-index.md` | 索引 | 优先级 MVP、层 Presentation、设计顺序 #13、依赖行需补 `纪录与里程碑` / `音效反馈` / `数据配置` |
+| `design/gdd/systems-index.md` | 索引 | 优先级 MVP、层 Presentation、设计顺序 #13、依赖行已含 `餐局流程` / `结算与入场费` / `局外升级` / `场景与流程管理` / `输入` / `存档` / `纪录与里程碑` / `音效反馈` / `数据配置`（第 16 行，与本文件一致） |
 | `design/accessibility-requirements.md` | 待创建 | 对比度、字号缩放、减少动态、颜色之外的第二通道；本 GDD 只固定下限 |
 | `design/ux/[screen].md` | 待创建 | 七屏 UX 规格；story 引用 UX 规格，不直接引用本 GDD |
 
-**双向回指（待编排会话处理）**：`场景与流程管理`、`输入`、`餐局流程`、`结算与入场费`、`局外升级`、`纪录与里程碑`、`存档`、`音效反馈`、`局内 HUD` 的下游/协调表中已有「界面流程」行，状态需改为已写；`数据配置` 需新增「界面流程（显示只读）」行；`systems-index.md` 第 16 行需更新。详见 Dependencies 末段。
+**双向回指（已完成，2026-11-04）**：`场景与流程管理`、`输入`、`餐局流程`、`结算与入场费`、`局外升级`、`纪录与里程碑`、`存档`、`音效反馈`、`局内 HUD` 的下游/协调表中均已有「界面流程」行并标为 GDD 已写；`数据配置` 已有「界面流程（显示只读）」行；`systems-index.md` 第 16 行已更新。本文件无待编排会话回改的条目（W10 的索引措辞例外，见 Dependencies 末段）。
 
 ## Acceptance Criteria
 
@@ -562,8 +566,8 @@ The `displayed_value` formula is defined as:
 
 **收据**
 
-11. **GIVEN** `Run → Menu` 在帧 N 交付 `run_id = R` 的 `RunResult`，**WHEN** 该帧渲染，**THEN** `ReceiptScreen` 在帧 N 成为根屏，`receipt_open_latency_frames = 0`；`prepare_run` → `prepare_run_result` → `commit` 各恰好一次且顺序固定；同一 `R` 再次交付不改变任何调用计数。
-12. **GIVEN** `records.prepare_run` 返回 `INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY`，**WHEN** 处理 `RunResult`，**THEN** 不调用 `prepare_run_result`、不提交任何命名空间；收据显示原始 `RunResult` 值并标注「结算数据异常，未入账、未记录」；不显示新纪录印章。
+11. **GIVEN** `Run → Menu` 在帧 N 交付 `run_id = R` 的 `RunResult`，**WHEN** 该帧渲染，**THEN** `ReceiptScreen` 在帧 N 成为根屏，`receipt_open_latency_frames = 0`；`settlement_started(R)` 在帧 N、任何收据动画或 `number_roll_started` 之前恰好发出一次；`prepare_run` → `prepare_run_result` → `commit` 各恰好一次且顺序固定；同一 `R` 再次交付不改变任何调用计数。
+12. **GIVEN** `records.prepare_run` 返回 `INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY`，**WHEN** 处理 `RunResult`，**THEN** 不调用 `prepare_run_result`、不提交任何命名空间，并在同一帧发 `settlement_aborted(R, code)` 一次；音效收到后不播放 `broke_even` / `loss` 或任何成功音；收据显示原始 `RunResult` 值并标注「结算数据异常，未入账、未记录」；不显示新纪录印章。
 13. **GIVEN** `rows = [A, B, C]` 且其中一行 `cloy_extra = 0`，**WHEN** 打开收据，**THEN** `receipt_rows_rendered = 3`，顺序与 `rows` 相同；该行腻度追加显示 `—`；总值、入场费、净利、回本判定、容量/回合/腻度合计与 `RunResult` 逐字段相等。
 14. **GIVEN** `rows = []`，**WHEN** 打开收据，**THEN** 显示「这一局什么都没吃」的空状态，不显示全 0 表；总值为 0、净利为 `−entry_fee`、回本判定为「未回本」（`entry_fee = 0` 时除外）。
 15. **GIVEN** `entry_fee = 0`，**WHEN** 打开收据，**THEN** 回本判定为「回本」、回本率位置显示「免单」；不出现 `∞`、`NaN` 或 `100%`。
@@ -615,6 +619,8 @@ The `displayed_value` formula is defined as:
 43. **GIVEN** F1，**WHEN** 焦点移动、悬停、点击空白、按禁用控件、滚动跳过，**THEN** `activation_event_count = 0`；**WHEN** 一次已提交激活，**THEN** 恰好 1 次；同一帧至多 1 次。
 44. **GIVEN** 收据关闭 / 返回菜单 / 开始新一局，**WHEN** 检查事件，**THEN** 各发一次 `receipt_closed(reason)`；音效的待播结算结果 cue 被取消。
 45. **GIVEN** 实现完成，**WHEN** 关闭验收，**THEN** `production/qa/evidence/` 中存在以下保留截图：主菜单（1280×720）、收据（含行与合计）、收据空局、免单、新纪录印章、升级页、纪录页、设置屏、暂停覆盖层、`Error` 屏、`Blocked` 模态、150% 字号下的收据与设置屏、键盘焦点与鼠标悬停同时可见。
+46. **GIVEN** 数据中存在第二档口 `station_banquet`（120 元）且主菜单尚未实现档口选择器，**WHEN** 打开主菜单或任一解锁入口，**THEN** 该档口不可购买并显示「需要档口选择器」的原因；不存在可购买但无法选择的按钮，也不存在「已解锁档口」的中间状态。
+47. **GIVEN** `career.runs_settled = 0`，**WHEN** 主菜单渲染，**THEN** 开始按钮旁显示入场费 40；**GIVEN** 首局结算后 `runs_settled > 0`，**THEN** 同一位置显示档口入场费（MVP 85）；显示值与下一次 `RunConfig.entry_fee_override`（首局 40，否则 `null`）同源。
 
 ## Open Questions
 

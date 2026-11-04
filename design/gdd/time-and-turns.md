@@ -50,6 +50,8 @@
 
 12. **结束后只读**：`run_ended` 之后数值冻结，供 `RunLog` 与结算读取；直到下一次 `initialize()` 才重置。局外界面（菜单、升级、结算页）不得直接读取本系统的当前读数——结算只使用 `RunLog` 里冻结的值，也不能据此显示“上一局还剩几格”。
 
+13. **最后一回合拒绝付费跳波**：`turns_remaining = 1` 时，非最后一波的付费跳波必须在调用 `spend_turn()` **之前**被拒绝（`NO_TURNS`），不推进波次、不扣回合、不播放跳波成功反馈。理由：花掉最后一回合只会让玩家看到一波无法取菜的新波，并让 `TIME_EXHAUSTED` 与跳波反馈叠在同一帧。该判断由餐局流程执行（本系统不判断动作语义），但阈值以本系统的 `turns_remaining` 为准；最后一波「结束取餐」代价为 0，不受此限。
+
 ### States and Transitions
 
 | 状态 | 含义 | 进入条件 | 离开 |
@@ -173,7 +175,7 @@ The `is_exhausted` formula is defined as:
 - **If 暂停、失焦、最小化或结算动画期间**：不调用 `spend_turn()`，因此不消耗任何回合。本系统没有内部计时器，不存在“后台偷偷走表”。
 - **If 本局以 `NO_EATABLE_DISH` 结束且仍有剩余回合**：数值冻结在结束时刻，`is_exhausted()` 为 `false`；结算按 `turns_total` / `turns_used` 如实记录，不收走剩余回合、不折算成分数。
 - **If 本局以 `TIME_EXHAUSTED` 结束**：`turns_remaining = 0`、`turns_used = turns_total`，`is_exhausted()` 保持 `true` 直到下一局 `initialize()`。
-- **If 最后一格花在付费跳波上**：餐局流程先确认波次可推进、回合可用，再提交；提交后 `turns_remaining = 0`，本局同一帧以 `TIME_EXHAUSTED` 结束，新波次只作为最终画面出现，玩家无法从中取菜。本系统允许这次消耗（它不判断“值不值”）；是否在剩余 1 格时禁止付费跳波由餐局流程 / 菜单波次决定，见 Open Question 1。
+- **If `turns_remaining = 1` 时请求付费跳波**：餐局流程在提交前拒绝（`NO_TURNS`），不推进波次、不扣回合、不播放跳波成功反馈；本局停在 `Active`，玩家仍可吃菜，或在最后一波选择「结束取餐」（0 回合）。若在 `turns_remaining ≥ 2` 时付费跳波，则允许：扣 1 回合、波次推进，本局不因此立即结束。
 - **If 同一帧同时满足回合耗尽与无可吃菜**：本系统只报告 `is_exhausted() = true`，不保存原因；餐局流程按固定优先级取 `TIME_EXHAUSTED`。本系统不参与排序。
 - **If 观测到 `turns_used > turns_total` 或 `turns_remaining < 0`**：内部状态已损坏，返回结构化错误并停止消耗，**不钳回合法区间**。钳制会让越界变成一张看起来正常的收据。
 - **If `turn_budget` 远大于菜池规模**（例如 1000 回合、12 道菜）：数据合法，游戏照常开始；但回合永远不是约束，属于可玩性缺陷而非错误。按 `dish-values.md` 的 `opt_value` 审计处理：当最优解的道数少于 `turns_total` 时，回合不再承重，应同时调低预算或调高容量，而不是让本系统拒绝数据。
@@ -187,15 +189,15 @@ The `is_exhausted` formula is defined as:
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 餐局流程 | 硬 | `initialize(turn_budget) → turns_total \| 结构化错误`；`can_spend_turn()`；`spend_turn()`；`turns_remaining` / `turns_used` / `turns_total`；`is_exhausted()` | GDD 已写（Designed） |
+| 餐局流程 | 硬 | `initialize(turn_budget) → turns_total \| 结构化错误`；`can_spend_turn()`；`spend_turn()`；`turns_remaining` / `turns_used` / `turns_total`；`is_exhausted()` | GDD 已写 |
 
 **下游依赖方（它们在运行时依赖本系统；依赖方向上它们依赖本系统）：**
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 结算与入场费 | 硬 | 经 `RunLog` 取得 `turns_total` / `turns_used`；依赖恒等式 `turns_used = 吃菜数 + 付费跳波数` 与 `turns_used ≤ turns_total` | GDD 已写（Designed） |
+| 结算与入场费 | 硬 | 经 `RunLog` 取得 `turns_total` / `turns_used`；依赖恒等式 `turns_used = 吃菜数 + 付费跳波数` 与 `turns_used ≤ turns_total` | GDD 已写 |
 | 局内 HUD | 硬 | 只读本局快照中的 `turns_remaining` / `turns_total`；不得自行推算耗尽 | GDD 已写（`design/gdd/in-game-hud.md`） |
-| 菜单波次 | 硬（经餐局流程） | 从餐局流程收到 `turns_total`；付费跳波由餐局流程扣 1 回合，菜单波次不直接调用本系统 | GDD 已写（Designed） |
+| 菜单波次 | 硬（经餐局流程） | 从餐局流程收到 `turns_total`；付费跳波由餐局流程扣 1 回合，菜单波次不直接调用本系统 | GDD 已写 |
 | 菜品数值 | 软（仅设计期） | `T` 作为 `opt_value(M, C, T)` 与 `calibration_ratio` 的审计参数 | GDD 已写（Approved） |
 
 **为什么方向是“本系统依赖餐局流程”，而不是反过来**：索引记录 `时间与回合 → 餐局流程`。运行时的调用方向是餐局流程调用本系统，但设计依赖按**生命周期所有权**记录——本系统需要餐局流程定义“一局从哪一刻开始、哪些动作算提交、什么时候结算”，而餐局流程不需要本系统定义“什么时候算一局”。这与餐局流程 GDD 的 §Dependencies 采用同一条理由，避免形成环。
@@ -211,10 +213,10 @@ The `is_exhausted` formula is defined as:
 
 **双向一致核对：**
 
-- 已回指本系统的 GDD：餐局流程（下游表，接口逐字一致）、结算与入场费（上游表，`turns_total` / `turns_used`）、菜品数值（软上游，`T` 作为审计参数）。菜单波次从餐局流程接收 `turns_total`，索引未把本系统列为其上游，与本设计一致。
-- **索引第 6 行**：`Status` 应由 `Not Started` 改为 `Designed`，`Design Doc` 应指向 `design/gdd/time-and-turns.md`；由编排会话统一处理。
+- 已回指本系统的 GDD：餐局流程（下游表，接口逐字一致）、结算与入场费（上游表，`turns_total` / `turns_used`）、菜品数值（软上游，`T` 作为审计参数）、局内 HUD（上游表）。菜单波次从餐局流程接收 `turns_total`，索引未把本系统列为其上游，与本设计一致。
+- **索引已对齐（不在本文件修改）**：`systems-index.md` 第 6 行已记录 `Status = Approved`、`Design Doc = design/gdd/time-and-turns.md`、`Depends On = 餐局流程`；本节不再包含待编排会话处理的事项。
 - **数据配置已定义**：`StationData.turn_budget: int`（≥ 1）已在 `design/gdd/data-config.md` 声明并纳入加载期校验；本 GDD 的规则 3 依赖该字段存在。
-- **菜单波次措辞**：其 UI Requirements 写“本系统只发起扣除”，本 GDD 规定唯一调用者是餐局流程；行为一致（发起 ≠ 执行），但文档措辞需要在一致性检查时统一，见 Open Question 6。
+- **菜单波次措辞**：其 UI Requirements 写“本系统只发起扣除”，本 GDD 规定唯一调用者是餐局流程；行为一致（发起 ≠ 执行），措辞统一与 S4 的按钮禁用见 Cross-References 末段与 Open Question 6。
 
 ## Visual/Audio Requirements
 
@@ -252,7 +254,10 @@ The `is_exhausted` formula is defined as:
 | 输入 | design/gdd/input.md | 无直接交互：动作由餐局流程路由 |
 | 音效反馈 | design/gdd/audio-feedback.md | 无直接交互：本系统不发信号 |
 
-**待回指（不由本文件修改）**：其余回指均已完成。唯一剩余项：`menu-waves.md` §UI Requirements 的「本系统只发起扣除」建议改为「本系统发出跳波意图，由餐局流程调用时间与回合扣除」。
+**待回指（不由本文件修改）**：其余回指均已完成。剩余两项：
+
+1. `menu-waves.md` §UI Requirements 的「本系统只发起扣除」建议改为「本系统发出跳波意图，由餐局流程调用时间与回合扣除」。
+2. **S4 落地**：`run-flow.md` 的跳波校验需加入「`turns_remaining = 1` 时拒绝非最后一波的付费跳波（`NO_TURNS`，先于 `spend_turn()`）」；`menu-waves.md` 与 `in-game-hud.md` 需在 `turns_remaining = 1` 时禁用「下一波」按钮并显示原因，最后一波「结束取餐」保持可用。
 
 ## Acceptance Criteria
 
@@ -279,15 +284,16 @@ The `is_exhausted` formula is defined as:
 15. **GIVEN** 本局以 `NO_EATABLE_DISH` 结束且 `turns_remaining = 3`，**WHEN** `run_ended` 之后读取，**THEN** 数值冻结为 3，`is_exhausted() = false`；`RunLog.turns_total` / `turns_used` 与冻结值一致。
 16. **GIVEN** 任意完成的一局，吃菜行数为 `n`、付费跳波次数为 `s`，**WHEN** 结算校验，**THEN** `n ≤ turns_used ≤ turns_total` 且 `turns_used = n + s`；结算能接收该 `RunLog` 而不返回 `TURN_INCONSISTENT`。
 17. **GIVEN** 一次成功动作后同时满足 `turns_remaining = 0` 与“无可吃菜”，**WHEN** 餐局流程判定，**THEN** `end_reason = TIME_EXHAUSTED`；本系统只返回 `is_exhausted() = true`，不保存也不排序原因。
-18. **GIVEN** `turns_remaining = 1`，**WHEN** 餐局流程允许并提交一次付费跳波，**THEN** `turns_remaining = 0`、本局同一帧以 `TIME_EXHAUSTED` 结束；新波次只作为最终画面出现，不能从中取菜（当前行为；是否禁止见 Open Question 1）。
+18. **GIVEN** `turns_remaining = 2`，**WHEN** 餐局流程允许并提交一次付费跳波，**THEN** `turns_remaining = 1`、波次推进、`turns_used` 加 1，本局不因此立即结束；随后仍可吃一道菜或在最后一波结束取餐。
 19. **GIVEN** 一次吃菜提交后 `action_committed` 广播，**WHEN** 局内 HUD 读取本局快照，**THEN** 快照中的 `turns_remaining` 与本系统的读数在同一帧相等，且比提交前恰好少 1。
 20. **GIVEN** 当前 12 道菜池、`C = 20`、`turn_budget = 10` 的 MVP 内容，**WHEN** 玩家完成最优餐（10 道菜、20 格），**THEN** 第 10 次吃菜后 `turns_used = 10`、`turns_remaining = 0`；**GIVEN** 玩家付费跳过 2 波，**THEN** 最多只能吃 8 道菜，`turns_used` 仍为 10。
 21. **GIVEN** `turn_budget = 1000` 与 12 道菜的菜池，**WHEN** 开局，**THEN** 初始化成功（数据合法，不钳制）；设计期审计应报告“回合不承重”，而不是让本系统拒绝该档口。
 22. **GIVEN** 故障注入：同一动作调用两次 `spend_turn()`，**WHEN** 两次都被处理，**THEN** 扣除两格；本系统不去重、不猜测调用意图；正常路径的集成判据（第 7、8 条）断言每次提交只扣一次。
+23. **GIVEN** `turns_remaining = 1` 且当前不是最后一波，**WHEN** 玩家按 `game_skip_wave`（付费跳波），**THEN** 餐局流程在调用 `spend_turn()` 之前拒绝（`NO_TURNS`），波次不推进、`turns_remaining` 与 `turns_used` 不变、不播放跳波成功反馈；**GIVEN** 当前是最后一波，**WHEN** 玩家选择「结束取餐」，**THEN** 不消耗回合且仍然允许。
 
 ## Open Questions
 
-1. **最后一格花在付费跳波上是否应被禁止？** 当前本系统允许（它不判断“值不值”），结果是玩家花掉最后一回合看到一波自己吃不到的新菜，本局立即结束。建议由餐局流程 / 菜单波次在 `turns_remaining = 1` 时禁用“下一波”按钮，而不是在本系统加特例。Owner：餐局流程 + 菜单波次。目标：局内 HUD UX 规格之前（2026-11-17）。
+1. **最后一格花在付费跳波上是否应被禁止？** **已回答（2026-11-04 交叉复审）：是。** `turns_remaining = 1` 时，非最后一波的付费跳波由餐局流程在提交前拒绝（`NO_TURNS`），不推进波次、不扣回合；最后一波「结束取餐」代价为 0，不受影响。按钮禁用与拒绝文案由菜单波次 / 局内 HUD 落实；本系统只提供 `turns_remaining` 读数，不加特例。Owner：餐局流程 + 菜单波次。目标：局内 HUD UX 规格之前（2026-11-17）。
 2. **`turn_budget` 的归属与命名？** 本 GDD 假定它是 `StationData` 的必填字段（整数 ≥ 1），由数据配置加载期校验；MVP 值 `station_canteen = 10`。若数据配置更愿意把它放进每档口的常量表或单独的时间配置，需要同步修改本 GDD 的变量 Source 与校准说明。Owner：数据配置 + 编排会话。目标：实现前。
 3. **是否要有时间类升级？** MVP 明确没有（`upgrade_snapshot` 不含时间字段）。若垂直切片的试玩证明“回合永远不够”是主要挫败来源，可考虑 `upgrade_snapshot.turn_bonus`；加入时必须开局冻结，并重跑 `opt_value` / `calibration_ratio`。Owner：局外升级 + 用户。目标：Vertical Slice 试玩后。
 4. **HUD 用槽位还是数字？** 10 格以内槽位可读，更多回合需要数字。当前 MVP 只有 10，两者皆可；若未来档口预算超过 20，槽位行会失去可读性。Owner：`/ux-design`（`design/ux/hud.md`）。目标：局内 HUD epic 之前。

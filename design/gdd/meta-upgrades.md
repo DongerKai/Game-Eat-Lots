@@ -62,6 +62,8 @@
     - 护栏：任一档口的设计必须满足 `R_max ≤ cloy_cap − 1`，保证满级玩家在同组吃满时仍至少付 1 点重复代价（支柱 2「没有白吃的菜」）。MVP `cloy_cap = 3`、`R_max = 1`，满足。
     - 抗性不能让 `extra_satiety` 变负；下限 0。抗性也不改变 `cloy_cap` 的含义，后者仍是原始追加的上限。
 
+**20 元定价是保险位，不是收益位** —— 在「腻度与口味」的 canonical order（红烧肉 → 拍黄瓜 → 糖醋里脊 → 其余）下重复惩罚本来就是 0，抗性收益恒为 0；它只对尚未掌握顺序的玩家兑现，价值上限约 4 元/局（省下的 1 格换成更高值的菜）。因此这项升级不参与「每局稳定回本」的校准。`/prototype` 若测出新手在 3 局内普遍学会 canonical order，应把 L1 价格下调到 12–16，而不是加效果——加效果会让掌握顺序的玩家白拿收益，回到 D1 已否决的「解腻免费」。
+
 17. **三项效果各自独立，不交叉相乘** — 容量升级只加 `capacity_bonus`，不解腻；解腻只减追加饱腹，不加容量；视野只买信息，不改价格、饱腹或腻度。任何「升级影响另一种升级收益」的乘区都推迟到 Vertical Slice 并需重写本 GDD。
 
 18. **价格与结算的入场费无关** — 入场费是档口数据，运行期只读；本系统不在玩家升级后重算或上调入场费。**这是对结算 Open Question 6 的回答**：每座档口的入场费按**未升级**的可达上限校准（MVP `opt_value = 104`、`entry_fee = 85`，比值 1.224 落在 `[1.15, 1.35]`）；升级把玩家的上限抬到 120（容量 25）是设计内的成长，但必须落在**满级带 `[1.35, 1.45]`**（120 / 85 = 1.412），超出就改档口入场费或少卖等级，而不是运行时动态改价。任何 `effect_value`、`max_level` 或 `cost_growth` 的改动都必须在设计期重跑 `capacity_ceiling` 与 `wave_reachable_opt`，但不改运行时逻辑。
@@ -265,8 +267,8 @@ The `menu_vision_useful_max` formula is defined as:
 | 升级 | `value(L)` 估计 | L1/L2/L3/L4/L5 价格 | 回收局数（L1） |
 |---|---|---|---|
 | 胃容量 | 2–5 元/局，均值 ~3.2（20→25） | 12 / 17 / 22 / 30 / 40 | 2–6 |
-| 菜单视野 | 3–4 元/局（一次跳过的代价约 4–5 元） | 16 / 22 / 30 | 4–5 |
-| 解腻 | 3–6 元/局（省下 1 格容量与一次解腻菜） | 20 | 3–7 |
+| 菜单视野 | 3–4 元/局（一次跳过的代价约 3–4 元） | 16 / 22 / 30 | 4–5 |
+| 解腻 | 0–4 元/局（仅对未掌握顺序的玩家兑现；掌握 canonical order 后恒为 0） | 20 | 5–∞ |
 
 **目标带**：首级回收 3–8 局；后期等级允许回收 10–20 局（生涯目标是跨会话的）。若 `/prototype` 测得的实际收益低于估计的一半，先降 `cost`，不要先改 `cost_growth`——后者影响的是整棵树的价格形状。
 
@@ -275,7 +277,7 @@ The `menu_vision_useful_max` formula is defined as:
 | id | 名称 | `effect_type` | `cost`（L1） | `cost_growth` | `max_level` | `effect_value` | 满级效果 | 设计作用 |
 |---|---|---|---|---|---|---|---|---|
 | `upgrade_stomach_capacity` | 加宽胃袋 | `STOMACH_CAPACITY` | 12 | 1.35 | 5 | 1.0 | 容量 +5（20 → 25） | 把低值小份换成高值大份；上限 104 → 120 |
-| `upgrade_cloying_resistance` | 久吃不腻 | `CLOYING_RESISTANCE` | 20 | 1.35 | 1 | 1.0 | 抗性 1 点/次 | 免掉一次重复追加（MVP 每组最多重复一次） |
+| `upgrade_cloying_resistance` | 久吃不腻 | `CLOYING_RESISTANCE` | 20 | 1.35 | 1 | 1.0 | 抗性 1 点/次 | 保险位：顺序错误时补 1 格（canonical order 下收益为 0） |
 | `upgrade_menu_vision` | 先看一步 | `MENU_VISION` | 16 | 1.35 | 3 | 1.0 | 下一波预览 3 道 | 少跳过、早规划；上限 `wave_size − 1 = 3` |
 
 - 三项记录都不设前置（`prerequisite_id = ""`）；购买顺序完全由价格与钱包决定。
@@ -336,7 +338,7 @@ The `menu_vision_useful_max` formula is defined as:
 |---|---|---|---|
 | 结算与入场费 | 硬 | `RunResult.net_profit`（有符号 int64）、`run_id`、`upgrade_snapshot` | GDD 已写（`design/gdd/settlement-and-entry-fee.md`） |
 | 存档 | 硬 | `progression.wallet`、`progression.upgrade_levels`；`commit` / `mark_dirty` / `flush`；`SaveStatus` | GDD 已写（`design/gdd/save-system.md`） |
-| 数据配置 | 硬 | `get_upgrade(id)` → `cost`、`cost_growth`、`max_level`、`effect_type`、`effect_value`、`prerequisite_id`；`get_station(id)` → `wave_size`；前提 `Ready` | GDD 已写（`design/gdd/data-config.md`，`cost_growth` 待补） |
+| 数据配置 | 硬 | `get_upgrade(id)` → `cost`、`cost_growth`、`max_level`、`effect_type`、`effect_value`、`prerequisite_id`；`get_station(id)` → `wave_size`；前提 `Ready` | GDD 已写（`design/gdd/data-config.md`） |
 
 **下游依赖方：**
 

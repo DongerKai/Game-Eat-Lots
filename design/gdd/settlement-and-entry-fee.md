@@ -40,7 +40,7 @@
 16. **重复出现的菜按次计价**：同一道菜被吃两次时，收据出现两行，各自计一次 `price` 与各自的实际饱腹，不合并、不取最后一次。MVP 假设不重复抽取；本条为菜单波次的未来改动预留。
 17. **数据未就绪或记录缺失是错误，不是零分**：若数据配置不在 `Ready`、或吃菜记录中的 id 无法解析，返回结构化错误（调用者、dish id、原因），不生成部分收据、不用占位菜、不按 0 元计入。
 18. **结算不碰钱包，也不比较纪录**：它只产出 `RunResult`。净利如何进入钱包（是否允许为负、是否有下限）、是否刷新最佳纪录、是否解锁档口，分别属于「局外升级」「纪录与里程碑」「解锁与档口」。这条边界让结算可独立测试，也避免与未设计的局外系统形成环。
-19. **局内净利与本系统同一套求和**：实时累加器由「餐局流程」维护——开局以 `−entry_fee` 初始化，每次成功提交 `+price(d)`；本系统定义 `running_net` / `shortfall` 两个纯函数，并在结算时用同一公式复核。HUD 只读餐局流程的快照与这两个函数，不得自行再写一份求和。两处一旦漂移，玩家在局内和结算页会看到两个不同的世界。
+19. **局内净利与本系统同一套求和**：运行期实时累加器由「餐局流程」维护——开局以 `−entry_fee` 初始化，每次成功提交 `+price(d)`，并作为本局运行期净值的**唯一副本**随快照发布；本系统**不维护运行期累加器**，只定义 `running_net(k)` / `shortfall(k)` 两个纯函数，并在结算时用同一份 `RunLog` 复核。HUD 只读餐局流程快照的实时值（或调用这两个纯函数），不得自行再写一份求和。两处一旦漂移，玩家在局内和结算页会看到两个不同的世界。
 
 ### States and Transitions
 
@@ -102,11 +102,11 @@
 | 局外升级 | 下游 | `net_profit`（有符号）、`broke_even`；钱包策略由它拥有 | 硬 |
 | 纪录与里程碑 | 下游 | `net_profit`、`total_value`、`return_ratio`、`station_id`、`end_reason`；时间戳由它添加 | 硬 |
 | 存档 | 下游（间接） | 只持久化局外升级与纪录保留下来的字段；结算本身无 I/O | 软 |
-| 局内 HUD | 下游 | `running_net(k)` / `shortfall(k)` 的定义；实时累加器由餐局流程维护，HUD 只读 | 硬 |
+| 局内 HUD | 下游 | `running_net(k)` / `shortfall(k)` 的纯函数定义；实时值经餐局流程快照到达（唯一运行期副本），HUD 只读快照或调用纯函数，不得另建累加器 | 硬 |
 | 首局引导 | 下游 | 每行的静态 / 实际单位价值 | 软 |
-| 音效反馈 | 下游 | `settlement_started`、`broke_even`、`loss` 三个结算事件 | 软 |
+| 音效反馈 | 下游 | `broke_even`、`loss` 两个结果事件（`settlement_started` / `settlement_aborted` 由界面流程发出） | 软 |
 
-**接口所有权**：本系统拥有 `RunResult` 的字段与语义、求和规则、净利与回本判定、收据顺序。下游不得自行实现另一套求和或回本判定；HUD 的实时净利必须走 `running_net`。
+**接口所有权**：本系统拥有 `RunResult` 的字段与语义、求和规则、净利与回本判定、收据顺序。下游不得自行实现另一套求和或回本判定；HUD 的实时净利只能来自餐局流程快照或本系统的纯函数 `running_net(k)`。
 
 ## Formulas
 
@@ -260,7 +260,7 @@ The `shortfall` formula is defined as:
 | `running_net(k)` | int64 | −entry_fee–+∞ | calculated | 局内实时净利；第一道菜之前就是 `−entry_fee` |
 | `shortfall(k)` | int64 | 0–entry_fee | calculated | 距回本还差多少元；回本后恒为 0 |
 
-**Output Range:** `running_net` 从 `−entry_fee` 起步，随每道菜上升；`shortfall` 单调不增，回本后为 0。**HUD 必须从第一道菜之前就显示 `−85`**，否则玩家在结算页第一次看到入场费，会觉得被偷袭。
+**Output Range:** `running_net` 从 `−entry_fee` 起步，随每道菜上升；`shortfall` 单调不增，回本后为 0。两个都是**无状态纯函数**（输入前缀长度 `k`，不持有累加器）；运行期累加器只在餐局流程。**HUD 必须从第一道菜之前就显示 `−85`**，否则玩家在结算页第一次看到入场费，会觉得被偷袭。
 
 **Example:** 已吃红烧肉（16）、拍黄瓜（5）、糖醋里脊（18）→ 总值 39、`running_net = −46`、`shortfall = 46`。
 
@@ -335,16 +335,16 @@ The `shortfall` formula is defined as:
 | 局外升级 | 硬 | `net_profit`（有符号）、`broke_even`；钱包策略与是否钳制由它拥有 | GDD 已写（`design/gdd/meta-upgrades.md`） |
 | 纪录与里程碑 | 硬 | `net_profit`、`total_value`、`return_ratio`、`station_id`、`end_reason`；时间戳由它添加 | GDD 已写（`design/gdd/records-and-milestones.md`） |
 | 界面流程 | 硬 | `RunResult` → 收据屏；在 `Run → Menu` 同帧接收 | GDD 已写（`design/gdd/ui-flow.md`） |
-| 局内 HUD | 硬 | `running_net(k)` / `shortfall(k)` 的定义；实时累加器由餐局流程维护；不得自行求和 | GDD 已写（`design/gdd/in-game-hud.md`） |
+| 局内 HUD | 硬 | `running_net(k)` / `shortfall(k)` 的纯函数定义；实时值经餐局流程快照到达；不得另建累加器或自行求和 | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 首局引导 | 软 | 每行的静态 / 实际单位价值，用于讲解与替换建议 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
-| 音效反馈 | 软 | `settlement_started` / `broke_even` / `loss` 事件；结果 cue 在数字滚动结束时起播 | GDD 已写（`design/gdd/audio-feedback.md`） |
+| 音效反馈 | 软 | 本系统只发 `broke_even` / `loss` 结果事件（`settlement_started` / `settlement_aborted` 由界面流程发）；结果 cue 在数字滚动结束时起播 | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 存档 | 软（间接） | 只持久化局外升级与纪录保留下来的字段；结算无 I/O | GDD 已写（`design/gdd/save-system.md`） |
 | 菜单波次 | 软（未来） | 若允许同一道菜重复出现，结算按次计价 | GDD 已写（`design/gdd/menu-waves.md`） |
 
-**双向一致要求**：上表每个系统在编写自己的 GDD 时，必须在 Dependencies 中列出「结算与入场费」。已知需要回指的两处：
+**双向一致（2026-11-04 已完成）**：上表每个系统的 GDD 均已在 Dependencies 中列出「结算与入场费」。
 
-- **局内 HUD**：`systems-index.md` 当前把 HUD 的上游列为餐局流程、时间与回合、胃容量、菜品数值、输入，**漏了结算**。HUD 要显示实时净利，就必须依赖本系统的 `running_net`；索引行需要补上这条边。
-- **餐局流程 / 界面流程**：两者分别负责调用结算与接收 `RunResult`；它们的 GDD 必须写出"放弃不是结算"的边界（场景与流程管理规则 6 / 8）。
+- **局内 HUD**：HUD 的运行期实时值来自**餐局流程快照**（唯一累加器），本系统只提供 `running_net(k)` / `shortfall(k)` 的纯函数口径并在结算时复核；`systems-index.md` 中 HUD 的硬依赖是餐局流程，结算只作为口径来源与结算页上游。
+- **餐局流程 / 界面流程**：两者分别负责调用结算与接收 `RunResult`，并已写出"放弃不是结算"的边界（场景与流程管理规则 6 / 8）；`settlement_started` / `settlement_aborted` 由界面流程发出，本系统只发 `broke_even` / `loss`。
 
 **对未设计系统的前置契约（provisional）**：
 
@@ -368,7 +368,7 @@ The `shortfall` formula is defined as:
 - **容量用橄榄绿**：已用容量、浪费容量、腻度额外占用使用橄榄绿，与"胃容量与安全区"的既有语义一致。
 - **无庆祝特效**：亏损不撒纸屑、不播放上扬音效、不出现"再接再厉"弹窗。回本可以有一次性短促的收银机音效，上限 0.4 秒。
 - **一次性呈现**：收据行在同一帧全部出现，不用逐行打字机效果。唯一允许的动画是数字从 0 滚到终值（≤ 0.6 秒，可跳过，且不阻塞按钮）。
-- **音效事件**（由「音效反馈」实现，本系统只定义语义）：`settlement_started`（纸张/打印）、`broke_even`（收银机/上扬短音）、`loss`（低闷短音）。`settlement_started` 与结果三选一可以同时存在；结果三者互斥，不叠加。
+- **音效事件**（由「音效反馈」实现；本系统只定义结果语义并只发 `broke_even` / `loss`）：`settlement_started`（纸张/打印）由界面流程在收据根创建时、任何收据动画之前同帧发出；`broke_even`（收银机/上扬短音）与 `loss`（低闷短音）由本系统发出。`settlement_started` 与结果二选一可以同时存在；`broke_even` / `loss` 互斥，不叠加。若 `records.prepare_run` 致命失败、事务未提交，界面流程发 `settlement_aborted`，本系统不发任何结果事件，音频不得播放成功或回本 cue。
 
 > `art-director` not consulted — Lean mode（本系统是 Economy 计算层，视觉由收据隐喻与概念文档的视觉锚点直接决定）。进入生产前需人工复核。
 
@@ -396,7 +396,7 @@ The `shortfall` formula is defined as:
 **局内 HUD（跨系统要求）**
 
 - 从进入 `Run` 的第一道菜之前，HUD 就显示 `running_net = −entry_fee`（MVP 为 `−85`），并显示「还差 85 元回本」。不得等第一道菜下肚才出现入场费。
-- 每吃一道菜，净利与回本差额在同一帧更新；数据来自本系统的 `running_net` / `shortfall`，HUD 不得自行求和。
+- 每吃一道菜，净利与回本差额在同一帧更新；实时值经餐局流程快照到达（本系统只定义纯函数口径并在结算时复核），HUD 不得另建累加器或自行求和。
 - 入场费必须在进入一局之前的菜单上可见，玩家不能在不知道价格的情况下走进餐厅。
 
 **无障碍**
@@ -473,6 +473,7 @@ The `shortfall` formula is defined as:
 29. **GIVEN** 静态检查运行时 API，**THEN** 没有任何导出函数求和或计算净利时绕过 `RunLog` 与 checked int64；`opt_value` 只能从 CI / 设计审查入口到达，结算无引用。
 30. **GIVEN** 20 行以内的正常 `RunLog`，**WHEN** 结算，**THEN** 单次结算 ≤ 1 ms（硬上限 5 ms）。这是逻辑预算，不是帧时间预算。
 31. **GIVEN** 首局 `RunLog.entry_fee = 40`、`eaten` 总值为 82，**WHEN** 结算，**THEN** `net_profit = +42`、`return_percent_x10 = 2050`、`broke_even = true`；把同一份 `eaten` 的 `RunLog.entry_fee` 改成 85 不产生这组值。
+32. **GIVEN** 一局结算成功，**WHEN** 检查事件序列，**THEN** 本系统只广播 `broke_even` 或 `loss`（二选一），不广播 `settlement_started`；后者由界面流程在收据根创建时、任何收据动画之前同帧发出一次。**GIVEN** `records.prepare_run` 致命失败，**THEN** 事务不提交，本系统不广播任何结果事件。
 
 **无法直接断言的规则**
 

@@ -2,7 +2,7 @@
 
 > **Status**: In Design
 > **Author**: user + agents
-> **Last Updated**: 2026-11-03
+> **Last Updated**: 2026-11-04
 > **Last Verified**: 2026-11-03
 > **Implements Pillar**: 每口都是算术题；数字看得见地涨
 
@@ -28,31 +28,31 @@
 2. **四类记录，四类 Resource**：`DishData`、`UpgradeData`、`StationData`、`BalanceData`，字段固定，在 Godot 编辑器里可视化编辑。`MilestoneData` 是否成为第五类由纪录与里程碑 Open Question 2 决定，当前不在 schema 内。
 3. **`DishData` 字段**：
    - `id: StringName` — 稳定唯一，格式 `^[a-z][a-z0-9_]*$`
-   - `display_name: String`
+   - `display_name: String` — **必须是 `tr()` key**，语法见规则 7 的 `DISPLAY_NAME_NOT_A_KEY`
    - `price: int` — 单点价（元），≥ 0
-   - `satiety: int` — 占用的饱腹格，≥ 1
+   - `satiety: int` — 占用的饱腹格，**1–6**（菜品数值的设计带；校验拒绝 0、负数与 ≥ 7）
    - `taste_tags: Array[StringName]` — 只能取自固定标签表：酸、甜、苦、辣、鲜、冰、油；可为空（无味菜）
    - `cloying_group: StringName` — 腻度分组；为空表示不参与腻度
    - `station_id: StringName` — 必须指向存在的档口，且该档口的 `dish_pool` 必须包含这道菜
    - `icon: Texture2D` — 缺失时用占位图标（警告，不致命）
 4. **`UpgradeData` 字段**：
-   - `id`、`display_name`、`description`
-   - `cost: int` — ≥ 0；本字段是第 1 级价格，价格曲线由「局外升级」拥有
-   - `cost_growth: float` — 默认 1.35，安全范围 1.2–1.6，校验必须 ≥ 1.0
+   - `id`、`display_name`、`description` — 后两者是翻译 key（规则 7）
+   - `cost: int` — ≥ 0；本字段是**第 1 级价格**，后续等级的价格曲线由「局外升级」按 `upgrade_price` 拥有并计算，本系统只提供字段
+   - `cost_growth: float` — 每级价格增长率；Resource 默认 **1.35**。设计带 **1.2–1.6**，校验硬下限 **≥ 1.0**（且必须为有限数，NaN / INF 失败）。它只影响第 2 级及以后：第 1 级价格恒等于 `cost`，不乘增长率；本系统不实现价格曲线，语义归「局外升级」
    - `max_level: int` — ≥ 1
    - `effect_type: enum {STOMACH_CAPACITY, CLOYING_RESISTANCE, MENU_VISION}`
    - `effect_value: float` — 每级增量，> 0；`STOMACH_CAPACITY` 与 `MENU_VISION` 必须是正整数；`CLOYING_RESISTANCE` 的语义为每级减免 1 点追加饱腹，小数部分在解析时取整
    - `prerequisite_id: StringName` — 可空；非空时必须存在
 5. **`StationData` 字段**：
-   - `id`、`display_name`
+   - `id`、`display_name` — `display_name` 是翻译 key（规则 7）
    - `entry_fee: int` — ≥ 0
    - `unlock_cost: int` — ≥ 0（0 表示开局可用）
    - `dish_pool: Array[StringName]` — 至少 1 项，每项必须存在，且每道菜的 `station_id` 必须指回本档口（双向一致）
    - `cloy_cap: int` — ≥ 1，默认 3；单道菜因同组重复最多追加的饱腹格（由「腻度与口味」消费）
    - `turn_budget: int` — ≥ 1（本局允许的回合数，由「时间与回合」消费；归属见其 Open Question 2）
-   - `wave_size: int` — ≥ 1，默认 4（每波菜数，由「菜单波次」消费）
+   - `wave_size: int` — 每波揭示的菜数；Resource 默认 **4**，校验要求 **≥ 1**，设计带 **1–8**。它是逐档口字段，不改变 `dish_pool` 大小；菜池小于 `wave_size` 时菜单波次退化为单波。`MENU_VISION` 的预览上限按本字段计算（`wave_size − 1`），语义归「菜单波次」与「局外升级」
 6. **id 是契约**：按类型命名空间隔离（`dish_*` / `upgrade_*` / `station_*`）。发布后不得改名——改名等于删除旧记录并新增，会让存档失效。
-7. **启动即校验**：加载全部记录 → 校验 → 建立目录 → Ready。任一规则失败就停在这里，不进入游戏。建议增加一条：至少存在一个 `unlock_cost = 0` 的档口；当前由「解锁与档口」在运行期兜底（`NoPlayableStation`）。
+7. **启动即校验**：加载全部记录 → 校验 → 建立目录 → Ready。任一规则失败就停在这里，不进入游戏。建议增加一条：至少存在一个 `unlock_cost = 0` 的档口；当前由「解锁与档口」在运行期兜底（`NoPlayableStation`）。**`display_name` 与 `description` 是翻译 key，不是中文文本**：`DishData` / `UpgradeData` / `StationData` 的 `display_name`，以及 `UpgradeData.description`，值必须匹配 `^content\.(dish|upgrade|station)\.[a-z0-9_]+\.[a-z_]+$`；不匹配时写 `DISPLAY_NAME_NOT_A_KEY` warning（不阻断启动，记录保持 key 原样往返）。本系统只校验语法，不查翻译表——翻译由 `tr()` 在呈现层解析，翻译表缺失属于 CI 检查（ADR-0008 §5）。这条关闭 Open Question 6。
 8. **运行时只读**：局内状态（当前饱腹、净利、剩余时间格）属于餐局流程，任何系统都不得写回数据记录。
 9. **查询走目录**：下游系统通过 `get_dish(id)` / `get_upgrade(id)` / `get_station(id)` / `get_balance()` 取记录；不得自行扫描资源目录或按文件名猜测。
 10. **`BalanceData` 字段（单例）**：
@@ -93,8 +93,8 @@ The `valid_record_set` formula is defined as:
 
 其中：
 
-- `R_dish(d) = d.price ≥ 0 ∧ d.satiety ≥ 1 ∧ d.taste_tags ⊆ TAGSET ∧ d.station_id ∈ S_ids ∧ d.id ∈ dish_pool(d.station_id) ∧ hasPrefix(d.id, "dish_")`
-- `R_upg(u) = u.cost ≥ 0 ∧ u.cost_growth ≥ 1.0 ∧ u.max_level ≥ 1 ∧ u.effect_value > 0 ∧ (u.effect_type ∈ {STOMACH_CAPACITY, MENU_VISION} → u.effect_value ∈ ℤ⁺) ∧ (u.prerequisite_id = "" ∨ (u.prerequisite_id ∈ U_ids ∧ ¬cyclic(u))) ∧ hasPrefix(u.id, "upgrade_")`
+- `R_dish(d) = d.price ≥ 0 ∧ 1 ≤ d.satiety ≤ 6 ∧ d.taste_tags ⊆ TAGSET ∧ d.station_id ∈ S_ids ∧ d.id ∈ dish_pool(d.station_id) ∧ hasPrefix(d.id, "dish_")`
+- `R_upg(u) = u.cost ≥ 0 ∧ u.cost_growth ≥ 1.0 ∧ isFinite(u.cost_growth) ∧ u.max_level ≥ 1 ∧ u.effect_value > 0 ∧ (u.effect_type ∈ {STOMACH_CAPACITY, MENU_VISION} → u.effect_value ∈ ℤ⁺) ∧ (u.prerequisite_id = "" ∨ (u.prerequisite_id ∈ U_ids ∧ ¬cyclic(u))) ∧ hasPrefix(u.id, "upgrade_")`
 - `R_sta(s) = s.entry_fee ≥ 0 ∧ s.unlock_cost ≥ 0 ∧ s.cloy_cap ≥ 1 ∧ s.turn_budget ≥ 1 ∧ s.wave_size ≥ 1 ∧ |s.dish_pool| ≥ 1 ∧ ¬hasDuplicates(s.dish_pool) ∧ (∀p ∈ s.dish_pool: p ∈ D_ids ∧ dish(p).station_id = s.id) ∧ hasPrefix(s.id, "station_")`
 - `R_bal(b) = b.base_capacity ≥ 1 ∧ b.base_capacity ≤ 999`
 
@@ -104,16 +104,16 @@ The `valid_record_set` formula is defined as:
 |---|---|---|---|---|
 | `D_dish` / `D_upg` / `D_sta` / `D_bal` | Resource[] | ≥ 0 项 | data file | 四类记录加载后的集合 |
 | `price` | int | 0–INT32_MAX | data file | 单点价（元） |
-| `satiety` | int | 1–INT32_MAX | data file | 占用的饱腹格 |
+| `satiety` | int | 1–6 | data file | 占用的饱腹格；设计带，超出即校验失败 |
 | `cost` / `entry_fee` / `unlock_cost` | int | 0–INT32_MAX | data file | 元 |
 | `max_level` | int | 1–INT32_MAX | data file | 升级最大等级 |
 | `effect_value` | float | (0, +∞) | data file | 每级增量；离散类型必须为正整数 |
 | `taste_tags` | StringName[] | TAGSET 子集，可为空 | data file | 口味标签 |
 | `dish_pool` | StringName[] | ≥ 1 项 | data file | 档口菜池 |
 | `cloy_cap` | int | 1–INT32_MAX | data file | 腻度重复惩罚的单道上限（格）；默认 3 |
-| `cost_growth` | float | 1.0–INT32_MAX（设计带 1.2–1.6） | data file | 每级价格增长率 |
+| `cost_growth` | float | 1.0–+∞（设计带 1.2–1.6） | data file | 每级价格增长率；只作用于第 2 级及以后 |
 | `turn_budget` | int | 1–INT32_MAX | data file | 每局回合预算 |
-| `wave_size` | int | 1–8 | data file | 每波菜数 |
+| `wave_size` | int | 1–8（设计带；校验只要求 ≥ 1） | data file | 每波揭示的菜数；默认 4 |
 | `base_capacity` | int | 1–999 | data file | 基础胃容量 C0 |
 | `hasPrefix(id, p)` / `hasDuplicates(xs)` | bool | {true, false} | calculated | id 命名空间与池唯一性谓词 |
 | `TAGSET` | StringName[7] | 固定 | constant | 酸 / 甜 / 苦 / 辣 / 鲜 / 冰 / 油 |
@@ -148,6 +148,7 @@ The `valid_record_set` formula is defined as:
 - **If 同类型两条记录共用同一个 id**：加载失败，报出两条记录的文件路径与 id；不加载任何记录。
 - **If `BalanceData` 缺失或不止一个**：校验失败。`BalanceData` 是单例：零个会让 `get_balance()` 返回 null、胃容量没有 C0；多个则取哪个未定义。
 - **If `satiety` 为 0**：校验失败。下游的单位价值计算以饱腹为分母，0 会让局面无法定义；不钳制。
+- **If `satiety` ≥ 7**：校验失败，报出菜品 id 与字段名。7 格基础饱腹即使没有腻度追加也会越过 `effective_satiety` 的声明值域（1–(6 + `cloy_cap`)），是一条能通过旧校验、却让胃容量与结算同时越界的静默错误。
 - **If `price` 为 0**：合法（例如免费白水）。下游单位价值为 0，照常参与结算。
 - **If `price` 或 `satiety` 为负**：校验失败。
 - **If `taste_tags` 含固定表之外的标签**：校验失败，并列出未知标签与文件——拼写错误不能静默失效。
@@ -218,7 +219,7 @@ The `valid_record_set` formula is defined as:
 2. **GIVEN** 两个 dish 夹具 id 同为 `dish_rice`，**WHEN** 校验，**THEN** 状态为 Failed，日志含重复 id `dish_rice`，主场景未被实例化。
 3. **GIVEN** id 为 `dish_Rice_01`（含大写）或 `dish-1abc`（缺 `dish_` 前缀），**WHEN** 校验，**THEN** Failed；id 为 `dish_a_b1` 时 **THEN** Ready。
 4. **GIVEN** `price=-1`，**WHEN** 校验，**THEN** Failed；`price=0` 时 **THEN** Ready。
-5. **GIVEN** `satiety=0`，**WHEN** 校验，**THEN** Failed；`satiety=1` 时 **THEN** Ready。
+5. **GIVEN** `satiety=0` 或 `satiety=7`（两个夹具），**WHEN** 校验，**THEN** Failed；`satiety=1` 与 `satiety=6` 时 **THEN** Ready。
 6. **GIVEN** `taste_tags=["咸"]`，**WHEN** 校验，**THEN** Failed；`taste_tags=[]` 时 **THEN** Ready。
 7. **GIVEN** `cloying_group=""`，**WHEN** 校验，**THEN** Ready，且校验报告的 warnings 计数为 0。
 8. **GIVEN** `station_id` 指向不存在的档口，**WHEN** 校验，**THEN** Failed；**GIVEN** 档口存在但 `dish_pool` 不含该菜，**WHEN** 校验，**THEN** Failed（两个独立夹具）。
@@ -245,6 +246,8 @@ The `valid_record_set` formula is defined as:
 28. **GIVEN** `DishData.id=station_canteen`（前缀错误）或 `StationData.id=dish_a`（前缀错误），**WHEN** 校验，**THEN** Failed；各用正确前缀时 **THEN** Ready。
 29. **GIVEN** `BalanceData.base_capacity=0`，**WHEN** 校验，**THEN** Failed；`=1`、`=999` 时 **THEN** Ready；`=1000` 时 **THEN** Failed（三个独立夹具）。
 30. **GIVEN** 缺少 `BalanceData`（零个）或有两个 `BalanceData`，**WHEN** 校验，**THEN** Failed；恰好一个时 **THEN** Ready（三个独立夹具）。
+31. **GIVEN** `cost_growth` 分别为 `1.2`、`1.6`，**WHEN** 校验，**THEN** 均为 Ready 且不产生 warning（设计带内）；`=1.0` 时 **THEN** Ready（硬下限）；`=0.99` 或 NaN / INF 时 **THEN** Failed；`=1.7` 时 **THEN** Ready 但记一条 `COST_GROWTH_OUTSIDE_DESIGN_BAND` 警告（不阻断）。
+32. **GIVEN** `StationData` 未显式填写 `wave_size`，**WHEN** 加载，**THEN** 取默认值 `4`；显式填写 `1` 时 **THEN** Ready 且菜单波次按单波处理；`=0` 时 **THEN** Failed（与 AC 26 同一规则的两个方向）。
 
 **无法直接断言、已改写或转为开放问题的规则**：
 - 「不得硬编码平衡数字」：静态扫描需要先定义"平衡字面量"的白名单，转为第 23 条的行为验证；静态规则列为 Open Question。
@@ -260,4 +263,4 @@ The `valid_record_set` formula is defined as:
 | 3 | 编辑器内热重载 `.tres`（不重启游戏）要不要进 MVP？倾向放 Vertical Slice。 | user | 原型之后 |
 | 4 | 发布版中数据是随包的 `.tres`，还是导出为二进制资源？ | technical-director | 架构阶段（`/architecture-decision`） |
 | 5 | 数据文件的目录组织（按类型分文件夹还是按档口分）？ | user | 实现阶段（ADR） |
-| 6 | `display_name` 是否要改为多语言 key？首版只做中文，倾向 Full Vision 再处理。 | ux-designer | Full Vision 之前 |
+| 6 | `display_name` 是否要改为多语言 key？首版只做中文，倾向 Full Vision 再处理。**已裁决（2026-11-04，ADR-0008 §5）**：`display_name` / `description` 的值**必须是 `tr()` key**（`^content\.(dish\|upgrade\|station)\.[a-z0-9_]+\.[a-z_]+$`），中文文案进 `zh_Hans` 翻译表；本系统只加 `DISPLAY_NAME_NOT_A_KEY` 语法警告，不做翻译查表。 | ux-designer | 已解决 |

@@ -2,7 +2,7 @@
 
 > **Status**: In Design
 > **Author**: game-designer + systems-designer, qa-lead
-> **Last Updated**: 2026-11-03
+> **Last Updated**: 2026-11-04
 > **Last Verified**: 2026-11-03
 > **Implements Pillar**: 数字看得见地涨 · 没有白吃的菜
 
@@ -45,6 +45,7 @@
 19. **不存逐局历史**：只存聚合与每档口最佳，不存「最近 N 局」列表。收据屏就是那一局的视图，再存一份历史只会在 `save_bytes` 上线性增长，而 MVP/Vertical Slice 没有任何消费者（存档 Open Question 7 的答案）。
 20. **单机信任模型**：本地纪录不防篡改，也不假装可信。将来在线挑战需要可信数据时，由服务端解决，不得把本地 `records` 当作排行榜数据（存档 Open Question 5、在线挑战）。
 21. **确定性与可测试性**：给定同一份起始 `records` 与同一份 `RunResult`，两次应用除时间戳外逐字段相同；不依赖帧率、随机数或 wall clock。时间戳是唯一允许变化的字段，测试必须把它排除在外。
+22. **每次应用返回显式状态，失败不等于成功（S5）**：`prepare_run` 一律返回 `RecordsApplyResult`（见「对外接口」），其中 `status` 是唯一权威判据——只有 `APPLIED` 表示可以提交，且此时 `change` 非空；`ALREADY_APPLIED` 是幂等空操作（这份结果此前已落账：不重新累计、不再提交任何命名空间、不重放成功音效）；`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID` 是**失败**，`applied = false`、`change = null`。失败时编排者必须整笔中止结算事务，并发出一个下游可订阅的失败事件（建议 `settlement_aborted(run_id, status)`；具体事件名归界面流程与音效反馈），**不得让收据进入成功态、不得播放 `broke_even` / `loss` 等结果 cue**。`status` 不允许缺省为成功，也不允许用「空 `change`」表示失败——下游必须只看 `status`。
 
 ### States and Transitions
 
@@ -56,7 +57,7 @@
 | `Validating` | 收到 `RunResult` | `Applying` / `Idle` | 断言失败返回 `INCONSISTENT_RESULT`；重复 `run_id` 返回 `ALREADY_APPLIED` 并留在 `Idle` |
 | `Applying` | 断言通过 | `Evaluating` / `Idle` | 计算新档口纪录与生涯合计；溢出返回 `OVERFLOW`，整次不生效 |
 | `Evaluating` | 纪录与合计计算成功 | `Committing` | 按 id 升序判定里程碑，锁存完成条件 |
-| `Committing` | 新命名空间就绪 | `Idle` | 返回 `RecordsChange`；信号在内存应用成功后发出，不等写盘 |
+| `Committing` | 新命名空间就绪 | `Idle` | 返回 `RecordsApplyResult{status: APPLIED, applied: true, change}`；信号在内存应用成功后发出，不等写盘 |
 | `Committing` | 写盘失败 | `Dirty` | 保留内存值，由存档重试；不发第二条「已保存」 |
 | `Dirty` | 下一次成功写入 | `Idle` | 与后续结算的更新合并，不重复发已发过的信号 |
 
@@ -108,7 +109,7 @@
 | 接口 | 输入 | 输出 | 说明 |
 |---|---|---|---|
 | `load(saved: Dictionary)` | 存档命名空间 | `RecordsLoadReport` | 载入后调用一次；做语义校验并产出警告列表 |
-| `prepare_run(result: RunResult)` | 已结算结果 | `RecordsChange` / 错误 | 纯更新：返回新命名空间与本次新达成的里程碑；不写盘 |
+| `prepare_run(result: RunResult)` | 已结算结果 | `RecordsApplyResult` | 纯更新：返回状态、新命名空间（仅成功）与本次新达成的里程碑；不写盘 |
 | `snapshot()` | — | `RecordsSnapshot` | 只读视图，供界面与音效读取 |
 | `milestone_progress(id)` | 里程碑 id | `{current, threshold, unit, earned}` | 只读；用于展示「340 / 500」这类进度 |
 | `record_broken(station_id, new_best, previous_best)` | — | 信号 | 新纪录替换旧纪录时发一次；首次建立纪录时 `previous_best = null` |
@@ -117,7 +118,27 @@
 
 **接口所有权**：本系统拥有 `records` 命名空间的全部字段、里程碑与完成条件的语义、比较规则与时间戳。存档只提供存放位置与原子性；界面流程只读；结算不得解释纪录。`RunResult` 的字段与求和规则归结算，本系统不复制一份求和逻辑。
 
-**结算提交编排者的契约**：本系统不决定事务边界。`prepare_run` 返回的新 `records` 值必须由同一个编排者与其他命名空间（局外升级的 `progression`、解锁的 `unlocks`）合并为**一次**提交，且该事务在写盘失败时整体延后重试、不逐命名空间回滚。`prepare_run` 返回任何错误（`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY`）时，编排者必须中止整笔结算事务，不得提交其他命名空间。编排者身份尚未指定（见 Open Question 1）。
+**`RecordsApplyResult`（S5，唯一权威的返回形状）**：
+
+| 字段 | 类型 | 约束 | 含义 |
+|---|---|---|---|
+| `status` | enum | 6 值，无缺省 | 见下表；下游只读它 |
+| `applied` | bool | `true` 仅当 `status = APPLIED` | 是否产生了可提交的变更 |
+| `change` | `RecordsChange` \| `null` | 非空仅当 `APPLIED` | 新 `records` 值与新达成的里程碑 |
+| `error_detail` | String \| `null` | 仅失败时非空 | 调试用；不参与判定、不面向玩家 |
+
+| `status` | `applied` | `change` | 编排者必须做什么 | 界面 / 音效可以做什么 |
+|---|---|---|---|---|
+| `APPLIED` | `true` | 非空 | 把 `change.records` 与 `progression` / `unlocks` 并入**同一事务**提交 | 正常成功路径：显示收据与结果 cue |
+| `ALREADY_APPLIED` | `false` | `null` | **空操作**：不再累计、不再提交任何命名空间（这份结果此前已原子落账） | 不重放成功 cue、不第二次标「新纪录」；按幂等处理 |
+| `INCONSISTENT_RESULT` | `false` | `null` | **整笔中止**：`progression` / `unlocks` 一律不提交；发失败事件 | 不得进入成功态；收据显示「结算未入账」并给出原因 |
+| `OVERFLOW` | `false` | `null` | 同上 | 同上 |
+| `DATA_NOT_READY` | `false` | `null` | 同上；不得用默认纪录兜底 | 同上 |
+| `MILESTONE_CATALOGUE_INVALID` | `false` | `null` | 同上；不得跳过里程碑后照常提交纪录 | 同上 |
+
+**失败事件**：任一失败 status 下，编排者在返回菜单（或停留在收据屏的错误态）之前必须发出一个可订阅的失败事件，供界面与音效区分「未入账」与「成功」——建议 `settlement_aborted(run_id: StringName, status: StringName)`。该事件名与订阅关系归界面流程与音效反馈（见最终报告的跨文件清单）；本系统只规定「必须有一个可观测的失败信号」，不规定它的名字。
+
+**结算提交编排者的契约**：本系统不决定事务边界。`prepare_run` 返回 `APPLIED` 时，`change.records` 必须由同一个编排者与其他命名空间（局外升级的 `progression`、解锁的 `unlocks`）合并为**一次**提交，且该事务在写盘失败时整体延后重试、不逐命名空间回滚。`prepare_run` 返回任何失败 status（`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID`）时，编排者必须中止整笔结算事务，不得提交其他命名空间；`ALREADY_APPLIED` 时按幂等空操作处理，同样不提交。编排者身份已定：界面流程在 `Run → Menu` 交付时调用 `SettlementTransaction.apply()`，由它按「纪录 → 钱包」的顺序合并并做唯一一次 `commit`（ADR-0007 D2–D4）。
 
 ## Formulas
 
@@ -413,13 +434,13 @@ The `career_complete` formula is defined as:
 19. **GIVEN** 3 条必需里程碑已达成、`completed_at` 已锁存，**WHEN** 目录新增第 4 条必需项，**THEN** `career_complete` 仍为 true；**GIVEN** 目录没有任何必需项，**THEN** `career_complete` 为 false 并产生 `NO_COMPLETION_PATH` 警告。
 20. **GIVEN** 一次结算同时达成 `record_broken` 与两条里程碑，**WHEN** 应用，**THEN** 信号顺序固定为 `record_broken` → 按 id 升序的两次 `milestone_earned` →（若完成）`career_completed`，每条各一次。
 21. **GIVEN** 一个已通关的生涯，**WHEN** 提交、退出并重新启动游戏，**THEN** 载入后 `career_complete` 为 true、`completed_at` 与重启前相同、不重发 `career_completed`、纪录页不重播庆祝横幅。
-22. **GIVEN** 同一份 `RunResult` 连续应用两次，**WHEN** 第二次调用，**THEN** 返回 `ALREADY_APPLIED`，`runs_settled` 不变、信号不重发。
-23. **GIVEN** 一份 `net_profit ≠ total_value − entry_fee` 的 `RunResult`，**WHEN** 应用，**THEN** 返回 `INCONSISTENT_RESULT`，`records` 逐字段不变；**GIVEN** `entry_fee = 0` 但 `return_percent_x10` 非空，**THEN** 同样拒绝。**GIVEN** 同一事务还含钱包变化，**THEN** 编排者中止整笔事务，钱包与解锁逐字段不变（编排者指定后可执行，见 Open Question 1）。
+22. **GIVEN** 同一份 `RunResult` 连续应用两次，**WHEN** 第二次调用，**THEN** 返回 `RecordsApplyResult{status: ALREADY_APPLIED, applied: false, change: null}`，`runs_settled` 不变、信号不重发，编排者不提交任何命名空间。
+23. **GIVEN** 一份 `net_profit ≠ total_value − entry_fee` 的 `RunResult`，**WHEN** 应用，**THEN** `status = INCONSISTENT_RESULT`、`applied = false`、`change = null`，`records` 逐字段不变；**GIVEN** `entry_fee = 0` 但 `return_percent_x10` 非空，**THEN** 同样拒绝。**GIVEN** 同一事务还含钱包变化，**THEN** 编排者中止整笔事务，钱包与解锁逐字段不变（编排者见 ADR-0007 D2）。
 24. **GIVEN** 载入数据含 `runs_settled = −3`、一条缺 `net_profit` 的档口纪录、一条只缺 `achieved_at` 的档口纪录、一条缺 `earned_at` 的里程碑，**WHEN** 载入，**THEN** 计数钳为 0、缺 `net_profit` 的纪录被丢弃、只缺时间戳的纪录保留且 `achieved_at = null`、该里程碑保留；`LoadReport.warnings` 分别含 `CLAMPED_NEGATIVE_COUNTER`、`STATION_RECORD_DROPPED`、`RECORD_TIMESTAMP_MISSING`、`MILESTONE_TIMESTAMP_MISSING`，其余数据不变。
-25. **GIVEN** 一个受控累加器夹具（两条 `lifetime_net_profit` 之和越过 int64 上限），**WHEN** 应用，**THEN** 返回 `OVERFLOW`，三条合计与档口纪录均不生效、不回绕。
+25. **GIVEN** 一个受控累加器夹具（两条 `lifetime_net_profit` 之和越过 int64 上限），**WHEN** 应用，**THEN** `status = OVERFLOW`、`applied = false`，三条合计与档口纪录均不生效、不回绕。
 26. **GIVEN** 同一起始 `records` 与同一 `RunResult` 的两个副本，**WHEN** 分别应用，**THEN** 两份结果除时间戳外逐字段深度相等；改变系统时钟不改变任何判定或排序。
 27. **GIVEN** 数据配置不在 `Ready` 或里程碑目录含重复 id / 非法 id / 生涯指标带档口过滤器，**WHEN** 应用或载入，**THEN** 返回结构化错误 `DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID`，不产生部分更新。
-28. **GIVEN** 一次成功应用后写盘失败，**WHEN** 检查内存与界面，**THEN** 新纪录仍在内存中显示、命名空间标记 dirty、不发第二条信号；下一次成功写入后磁盘与内存一致。**GIVEN** 该事务同时含钱包变化，**THEN** 两者一起延后重试，不出现钱包已回滚而纪录保留的分裂（该子项待 Open Question 1 指定编排者后可执行）。
+28. **GIVEN** 一次成功应用后写盘失败，**WHEN** 检查内存与界面，**THEN** 新纪录仍在内存中显示、命名空间标记 dirty、不发第二条信号；下一次成功写入后磁盘与内存一致。**GIVEN** 该事务同时含钱包变化，**THEN** 两者一起延后重试，不出现钱包已回滚而纪录保留的分裂（失败策略见 ADR-0007 D5）。
 29. **GIVEN** 载入时遇到不认识的里程碑 id 与档口 id，**WHEN** 保存后再载入，**THEN** 两者原样保留、不被删除、不参与完成判定；**GIVEN** `records` 命名空间整体缺失，**THEN** 按空纪录继续，首局结算正常工作。
 30. **GIVEN** 一条已冻结的档口纪录，**WHEN** 数据配置把该档口 `entry_fee` 从 85 改为 99、或把档口 `display_name` 改名，**THEN** 纪录中的 `entry_fee`、`total_value`、回本率与快照逐字段不变；只有展示名跟随数据配置变化。
 31. **GIVEN** 玩家删除生涯，**WHEN** 新纪录页打开，**THEN** `records` 为空、`completed_at = null`，不保留旧生涯的任何纪录。
@@ -429,6 +450,12 @@ The `career_complete` formula is defined as:
 32. **GIVEN** Vertical Slice 里程碑目录，**WHEN** 运行数据校验，**THEN** 所有 id 匹配 `^ms_[a-z0-9_]+$` 且唯一；至少一条 `required_for_completion = true`；`RUNS_SETTLED` 与 `RETURN_RATIO_X10` 的阈值 ≥ 1；没有任何 `RETURN_RATIO_X10` 里程碑绑定零入场费档口；没有生涯指标带 `station_id`；每条必需里程碑的目标档口存在；**每个档口至少一条 `*_return_1000` 且标记为完成必需**（否则 `REQUIRED_MILESTONE_UNREACHABLE`）。
 33. **GIVEN** 4 个档口、每个档口 1 条纪录、目录 24 条里程碑全部达成，**WHEN** 估算 `save_bytes`，**THEN** 体积不超过 `SAVE_BYTES_MAX`；新增里程碑或档口时该估算随目录一起更新。
 34. **GIVEN** 20 行以内的正常结算结果，**WHEN** 在 headless 基准中应用 1000 次（丢弃前 100 次预热，取中位数），**THEN** 单次更新中位数 ≤ 1 ms、p99 ≤ 5 ms。这是逻辑预算，不是帧时间预算。
+
+**编排契约（S5）**
+
+35. **GIVEN** `prepare_run` 分别因四类失败返回（`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID`），**WHEN** 编排者处理返回值，**THEN** 每个结果都是 `RecordsApplyResult{applied: false, change: null}`；**AND** 同一事务里的 `progression` 与 `unlocks` 逐字段不变、commit spy 调用 0 次；**AND** 发出一次失败事件（`settlement_aborted` 或等价的 `run_faulted`），收据不进入成功态、`broke_even` / `loss` 结果 cue 不播放。
+36. **GIVEN** `prepare_run` 返回 `APPLIED`，**WHEN** 编排者处理，**THEN** `applied = true`、`change` 非空，且 `progression` / `unlocks` / `records` 在同一次 commit 中提交（commit spy 调用 1 次、载荷同时含三个命名空间）。
+37. **GIVEN** `prepare_run` 返回 `ALREADY_APPLIED`，**WHEN** 编排者处理，**THEN** 不发起任何 commit，也不发失败事件；界面按幂等处理，不重放成功 cue、不第二次标记「新纪录」。
 
 **无法直接断言的规则**
 
@@ -440,7 +467,7 @@ The `career_complete` formula is defined as:
 
 | # | 问题 | 负责人 | 目标解决时间 |
 |---|---|---|---|
-| 1 | **谁拥有「结算提交编排者」？** 本系统返回新的 `records` 值，但把 `progression`、`records`、`unlocks` 合并为同一事务的调用者尚未指定。由界面流程、局外升级还是场景流程承担？该决定同时决定混合事务的失败策略（见 Dependencies 的存档契约澄清）。 | lead-programmer + technical-director | 架构阶段 |
+| 1 | **谁拥有「结算提交编排者」？** **已回答（2026-11-04，ADR-0007 D2）**：界面流程是唯一调用者，`SettlementTransaction` 是唯一算法实现；它把 `records`、`progression`（以及未来奖励解锁的 `unlocks`）合并为一次 `SaveSystem.commit`。混合事务的失败策略见 ADR-0007 D5：纪录致命则整笔中止（0 次提交），`WALLET_OVERFLOW` 只省略 `progression`，写盘失败保留内存并标 dirty。 | lead-programmer + technical-director | 架构阶段 |
 | 2 | **`MilestoneData` 放进数据配置，还是纪录系统自带资源加载器？** **已回答（2026-11-04）**：由纪录系统自带只读加载器，在启动序列校验；数据配置保持四类记录，不扩展。 | technical-director（数据配置 + 纪录） | 架构阶段 |
 | 3 | **里程碑阈值如何校准？** 当前基线的 1100 / 1200 依据食堂静态最优 1223；多档口、升级生效后可达上限会变化。需要 economy-designer 在 `/prototype` 后按每档口的 `calibration_ratio` 重算，并保证每条必需里程碑可达。 | economy-designer + prototyper | Vertical Slice 设计前 |
 | 4 | **完成条件是否应该解锁内容？** **已回答（2026-11-03）**：MVP/VS 完成条件不发放解锁；若未来发放，必须并入结算事务——见 `design/gdd/unlocks-and-stations.md`。 | game-designer（解锁与档口 + 纪录） | 解锁与档口 GDD 完成时 |

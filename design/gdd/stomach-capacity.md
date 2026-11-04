@@ -2,7 +2,7 @@
 
 > **Status**: In Design
 > **Author**: user + Claude（autonomous 模式；systems-designer 复核规则与公式，qa-lead 复核验收标准，两份意见已并入）
-> **Last Updated**: 2026-11-03
+> **Last Updated**: 2026-11-04
 > **Last Verified**: 2026-11-03
 > **Implements Pillar**: 每口都是算术题 · 没有白吃的菜
 
@@ -26,7 +26,7 @@
 
 1. **职责边界**：本系统拥有**一局的容量上限、已用容量计数、可吃性判定**，以及容量状态在一局开始时的重置。它不拥有 `effective_satiety`（腻度与口味）、`satiety`（数据配置 / 菜品数值）、回合（时间与回合）、可见菜与焦点（菜单波次 / 局内 HUD）、结束条件（餐局流程）、等级到加成的换算（局外升级）或净利与浪费容量的展示（结算与入场费）。
 2. **一局一份容量状态**：餐局流程在每局的 `Initializing` 中**恰好调用一次** `initialize(upgrade_snapshot)`，且在 `run_started` 之前完成。`initialize` 把 `capacity_used` 置 0，并按快照算出 `capacity_total`。**同一局内**第二次调用是契约违例，进入 `Faulted`，不得静默重置——静默重置会抹掉已用容量。跨局的第二次调用是正常重开，不是违例。**局边界触发器**：餐局流程在**每一条**终止路径调用一次 `end_run(reason)`——结算交接完成（`ended`）、放弃/退出（`discarded`）、初始化失败（`failed`）、运行期故障（`faulted`）。收到后本系统立即回到 `未初始化`（丢弃本局容量）。因此下一次 `initialize` 必然是新局，不会被误判为同局第二次；`initialize` 本身不需要携带 run identity。信号订阅（`run_ended` / `run_discarded` / `run_faulted`）可作冗余，但 `end_run` 是权威边界，覆盖「从未开始」的 `Failed` 路径。
-3. **容量按整格计**：容量与 `effective_satiety` 都是整数格，没有小数、没有四舍五入。`effective_satiety` 由腻度与口味给出且恒 ≥ 1；本系统只消费这个值，**不重算、不缓存、不改写**。
+3. **容量按整格计**：容量与 `effective_satiety` 都是整数格，没有小数、没有四舍五入。基础 `satiety` 由数据配置校验在 **1–6**；`effective_satiety = satiety + extra_satiety`，其中 `extra_satiety` 最多 `cloy_cap`（默认 3），因此本系统消费的值域是 **1–(6 + `cloy_cap`)**（MVP 1–9）。`effective_satiety` 由腻度与口味给出且恒 ≥ 1；本系统只消费这个值，**不重算、不缓存、不改写**。数据配置拒绝 7 格基础饱腹，正是为了让这个值域闭合。
 4. **上限来自快照，不来自等级**：`capacity_total = C0 + capacity_bonus`。`C0` 是基础容量（数据配置提供的平衡常数，MVP = 20）。`capacity_bonus` 是局外升级在开局前算好的非负整数，本系统只相加。快照缺少 `capacity_bonus`、值为负数、`null` 或非整数时，初始化失败——**不缺省为 0、不钳制**。
 5. **可吃性是唯一闸门**：`can_fit(e) ⇔ e 是 ≥ 1 的整数 ∧ capacity_used + e ≤ capacity_total`。边界**包含等号**：恰好填满最后一格是允许的（104 元最优餐正好占满 20 / 20，改成严格小于会让校准最优不可达）。
 6. **容量不结束本局**：本系统没有“吃撑”结果，也不产生任何结束原因。已用容量等于上限、或当前可见菜都放不下时，餐局流程保持 `Active`；玩家可以付费跳波、等下一波，或用掉剩余回合。**“吃不下”是展示层的判断，不是本系统的状态，也不是第三种结束原因。**
@@ -60,7 +60,7 @@
 | 系统 | 方向 | 数据/接口 | 硬/软 |
 |---|---|---|---|
 | 餐局流程 | 上游 | `initialize(upgrade_snapshot) → capacity_total \| 结构化错误`；`can_fit(e)`；`consume(e)`；读取 `capacity_total` / `capacity_used` / `capacity_remaining`；`end_run(reason)` 在所有终止路径调用 | 硬 |
-| 数据配置 | 上游 | `BalanceData.base_capacity`（`C0`，MVP 20）；**不读取 `DishData`** | 硬（字段缺口见 Open Questions 1） |
+| 数据配置 | 上游 | `BalanceData.base_capacity`（`C0`，MVP 20，已定义）；**不读取 `DishData`** | 硬（GDD 已写：`design/gdd/data-config.md`） |
 | 局外升级 | 上游（经快照） | `upgrade_snapshot.capacity_bonus: int ≥ 0`（已解析值）；购买时保证 `C0 + 最大加成 ≤ 999` | 硬（GDD 已写：`design/gdd/meta-upgrades.md`） |
 | 腻度与口味 | 间接上游 | `effective_satiety` 经餐局流程传入；本系统不直接调用、不重算 | 硬（值依赖，无调用边） |
 | 局内 HUD | 下游 | 只读 `capacity_total` / `capacity_used` / `capacity_remaining` / `can_fit`；不得写、不得自建计数器 | 硬（GDD 已写：`design/gdd/in-game-hud.md`） |
@@ -109,7 +109,7 @@ The `capacity_used` formula is defined as:
 | Variable | Type | Range | Source | Description |
 |---|---|---|---|---|
 | `capacity_used` | int | 0–`capacity_total` | calculated（本系统运行期累加器） | 本局已占用格数 |
-| `effective_satiety` | int | 1–9 | 腻度与口味在吃下时刻给出，经餐局流程传入（与 `RunLog.eaten[i].effective_satiety` 同值） | 本次吃菜占用的实际格数（基础饱腹 + 腻度追加） |
+| `effective_satiety` | int | 1–(6 + `cloy_cap`)（MVP 1–9） | 腻度与口味在吃下时刻给出，经餐局流程传入（与 `RunLog.eaten[i].effective_satiety` 同值） | 本次吃菜占用的实际格数（基础饱腹 + 腻度追加） |
 | `capacity_used'` | int | 0–`capacity_total` | calculated | 本次提交后的已用格数 |
 
 **Output Range:** `[0, capacity_total]`，且一局内单调不减。若 `capacity_used + effective_satiety > capacity_total`，`consume` 返回 `CAPACITY_OVERFLOW` 且不改变任何字段——**不钳到上限**。结算 GDD 的 `capacity_used(R) = Σ effective_satiety(d_i)` 是本式在 `RunLog` 上的重算，用于校验；运行期累加值以本系统为准，两者不相等时结算返回 `CAPACITY_MISMATCH`。
@@ -144,7 +144,7 @@ The `can_fit` formula is defined as:
 
 | Variable | Type | Range | Source | Description |
 |---|---|---|---|---|
-| `e` | int | 1–9（正常值域） | 调用方传入（餐局流程从腻度取得） | 待判定菜品的 `effective_satiety` |
+| `e` | int | 1–(6 + `cloy_cap`)（MVP 1–9；防御性上限不设） | 调用方传入（餐局流程从腻度取得） | 待判定菜品的 `effective_satiety` |
 | `capacity_used` | int | 0–`capacity_total` | 本系统 | 本局已占用 |
 | `capacity_total` | int | 1–999 | 本系统 | 本局总容量 |
 | `can_fit` | bool | `true` / `false` | calculated | 这道菜现在是否放得下 |
@@ -171,6 +171,8 @@ The `capacity_bonus` formula is defined as:
 **Output Range:** `[0, 999 − C0]`。**本式由「局外升级」拥有**；本系统只消费已解析的整数结果，不读等级、不读存档、不做乘法。若局外升级未来引入非线性或递减曲线，本式随上游改变，而 `capacity_total = C0 + capacity_bonus` 不变。局外升级必须在购买时保证任意可达组合都满足 `C0 + capacity_bonus ≤ 999`（规则 10）。
 
 **Example:** 3 级 × 每级 1 格 → `capacity_bonus = 3` → `capacity_total = 23`。
+
+> **📌 决策记录（D5，`/prototype` 前不改数值）**：容量升级的**边际收益不单调**——按当前定价与 `opt_value(C)` 扫描，逐级的边际收益为 **+2 / +1 / +5 / +4 / +4**（元/局），其中第 2 级花 17 元只换 +1 元/局，是**死等级**；第 3 级又突然跳到 +5。原因是 10 回合最多吃 10 道菜，`C0 = 20` 恰好等于 10 道最优餐的总格数，容量处在**刀刃**上：多出的格子只有在刚好解锁“多拿一道高价菜”时才有收益，否则只是增加 `wasted_capacity`。本版**不修改任何容量与升级数值**（`C0 = 20`、每级 +1 格、价格不变），也不引入递减曲线或分级定价。**由 `/prototype` 的 `opt_value(C)` 扫描（C = 20–30）验证**：若扫描确认断点分布同上，再决定是平滑升级曲线、调整 `C0`，还是改回合/菜池内容；在此之前，本系统只保证 `capacity_total = C0 + capacity_bonus` 的确定性，不对边际收益作任何承诺。见 Open Question 3。
 
 ## Edge Cases
 
@@ -211,7 +213,7 @@ The `capacity_bonus` formula is defined as:
 
 **方向说明**：索引里「胃容量 → 餐局流程」按**设计依赖**记录，而运行期是餐局流程调用本系统；这与 run-flow GDD 对其它子系统的处理一致——它们按生命周期所有权方向记录，避免形成环。本系统与腻度之间没有直接调用边：腻度给出 `effective_satiety`，餐局流程把它交给本系统判定，因此索引中不新增「胃容量 → 腻度」的边。
 
-**双向一致性**：`餐局流程`、`腻度与口味`、`结算与入场费`、`菜品数值`、`菜单波次` 的 GDD 均已把本系统列入依赖或下游表；`数据配置` 目前没有「胃容量」下游行（见最终报告的共享文件清单）；`局外升级`、`局内 HUD`、`纪录与里程碑`、`存档` 的 GDD 尚未撰写。
+**双向一致性**：`餐局流程`、`腻度与口味`、`结算与入场费`、`菜品数值`、`菜单波次`、`数据配置`、`局外升级`、`局内 HUD`、`纪录与里程碑` 的 GDD 均已把本系统列入依赖或下游表（`数据配置` 的「胃容量」下游行已补，`base_capacity` 已定义）。`存档` 与 `解锁与档口` 仍无本系统行：MVP 容量不持久化，且容量不按档口区分（Open Question 8），不构成缺口。
 
 ## Visual/Audio Requirements
 
@@ -250,7 +252,7 @@ The `capacity_bonus` formula is defined as:
 | 文档 | 关系 | 本系统引用/依据 |
 |---|---|---|
 | `design/gdd/run-flow.md` | 上游 | `initialize(upgrade_snapshot) → capacity_total`、`can_fit(e)`、`capacity_used`；动作校验顺序；无“吃撑”结束原因；`RunLog.capacity_total` / `capacity_used` |
-| `design/gdd/data-config.md` | 上游 | `UpgradeData.effect_type = STOMACH_CAPACITY`、`effect_value` 必须为整数；基础容量字段缺口见 Open Questions 1 |
+| `design/gdd/data-config.md` | 上游 | `BalanceData.base_capacity`（1–999，默认 20）；`UpgradeData.effect_type = STOMACH_CAPACITY`、`effect_value` 必须为整数 |
 | `design/gdd/cloying-and-taste.md` | 值来源 | `effective_satiety = satiety + extra_satiety`；`meal_step` 的 `remaining_capacity` 即本系统剩余容量；“已付的额外占用不退还” |
 | `design/gdd/settlement-and-entry-fee.md` | 下游 | `capacity_total`、`wasted_capacity`、`CAPACITY_MISMATCH` / `CAPACITY_OVERFLOW` 不变式与错误码 |
 | `design/gdd/dish-values.md` | 设计期下游 | 初始容量 `C0 = 20` 作为 `opt_value` 与 `calibration_ratio` 的审计参数；`opt_value = 104` 正好占满 20 格 |
@@ -258,9 +260,9 @@ The `capacity_bonus` formula is defined as:
 | `design/gdd/game-concept.md` | 来源 | 支柱 1/2/3；MVP「局外升级：容量 +1」；视觉锚点「橄榄绿表示胃容量与安全区」 |
 | `design/gdd/systems-index.md` | 索引 | 优先级 MVP、层 Core、依赖清单与设计顺序 |
 
-**待回指（不由本文件修改）**：`数据配置` 的下游表需要新增「胃容量」行（基础容量常数）；`局外升级`、`局内 HUD`、`纪录与里程碑` 的 GDD 写好后，需在各自的 Dependencies 与 Cross-References 中列出「胃容量」。
+**待回指（不由本文件修改）**：`解锁与档口` 若未来引入按档口区分的容量（Open Question 8），需在其 Dependencies 与 Cross-References 中列出「胃容量」；当前 MVP 不做，无缺口。
 
-**待回改**：`run-flow.md` 的 Interactions 表把本系统接口缩写为 `initialize` / `capacity_used` / `can_fit`，漏了提交用的 `consume(e)`；建议在 merge 后补上，避免实现者把“判定”当成“扣减”。
+**待回改**：无。`run-flow.md` 的 Interactions 表已包含 `consume(e)`；`数据配置` 的 `base_capacity` 与下游行均已补齐。
 
 ## Acceptance Criteria
 
@@ -310,9 +312,9 @@ The `capacity_bonus` formula is defined as:
 
 | # | 问题 | 负责人 | 目标解决时间 |
 |---|---|---|---|
-| 1 | **基础容量 `C0` 没有数据归属。** 数据配置只有 `UpgradeData` 与 `StationData`，没有基础容量字段；若在代码里写 `20`，违反「平衡数值必须数据驱动」。建议新增 `BalanceData`（或 `RunTuningData`）的 `base_capacity: int`（1–999），由数据配置加载并在启动时校验；本系统只消费。这样不改动 run-flow 已锁定的 `initialize(upgrade_snapshot)` 签名。 | 数据配置（编排会话） | 数据配置复审时 |
+| 1 | **基础容量 `C0` 没有数据归属。**（**已解决**）数据配置已新增 `BalanceData.base_capacity: int`（1–999，默认 20）并在启动校验；本系统只消费。保留此条仅作决策留痕；若未来容量按档口区分，见 Open Question 8。 | 数据配置（编排会话） | 已解决 |
 | 2 | **容量加成的购买上限。** 局外升级必须在购买时保证 `C0 + 最大可能加成 ≤ 999`，否则玩家会做出永久无法开局的存档；只靠开局检查不够。等级→数值的换算（含未来是否非线性）也由局外升级定义。 | 局外升级 | 局外升级 GDD 完成时 |
-| 3 | **容量升级的收益断点。** 104 元的最优 10 道正好占满 20 格，而价格最高的 10 道需要 26 格——两者不是同一个集合，说明容量确实在承重。但固定入场费 85 下，`+1` 格是否带来更高分需要扫描确认：可能只在少数 `C` 处出现收益台阶，中间的 `+1` 只增加浪费容量。需要在 Vertical Slice 前做 `opt_value(C)` 扫描（C = 20–30），决定升级定价与入场费是否随容量重算。 | economy-designer（局外升级 + 结算 + 菜品数值） | Vertical Slice 前 |
+| 3 | **容量升级的收益断点。** 104 元的最优 10 道正好占满 20 格，而价格最高的 10 道需要 26 格——两者不是同一个集合，说明容量确实在承重。但固定入场费 85 下，`+1` 格是否带来更高分需要扫描确认：可能只在少数 `C` 处出现收益台阶，中间的 `+1` 只增加浪费容量。需要在 Vertical Slice 前做 `opt_value(C)` 扫描（C = 20–30），决定升级定价与入场费是否随容量重算。**已知现状（D5）**：逐级边际收益为 +2 / +1 / +5 / +4 / +4，第 2 级是死等级（17 元换 +1 元/局）；本版按决策记录保持数值不变，由 `/prototype` 验证后再决定是否平滑曲线。若原型确认死等级不可接受，优先调**升级价格曲线**（局外升级拥有），不要把 `C0` 或每级格数当调参旋钮——那会同时移动回合/菜池的刀刃。 | economy-designer（局外升级 + 结算 + 菜品数值） | Vertical Slice 前 |
 | 4 | **`capacity_used` 的注册表归属。** `entities.yaml` 当前把 `capacity_used` 的 `source` 记为 `settlement-and-entry-fee.md`；运行期累加器在本系统。建议保留结算为公式来源，并在 `referenced_by` 加本 GDD，或把 `source` 改到本 GDD 并注明结算是同量校验。 | 编排会话（注册表） | 合并第 2 波时 |
 | 5 | **“吃撑”是否只是展示概念。** `systems-index.md` 概述说容量“decides when the player is stuffed”，但 run-flow 明确没有 `STUFFED` 结束原因。当前解释为 HUD 的“没有可见菜放得下”提示，不是状态或结束原因。若试玩认为“有回合却吃不下”是空转，应回到 run-flow Open Question 9。 | game-designer（餐局流程 + 局内 HUD） | 垂直切片试玩后 |
 | 6 | **是否需要容量释放 / 消化机制。** MVP 没有；加入会破坏规则 7 与结算的 `capacity_used = Σ effective_satiety` 不变式，并需要显式的容量事件，而不是一个调参开关。 | creative-director | Vertical Slice 规划时 |

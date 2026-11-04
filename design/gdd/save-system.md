@@ -33,7 +33,7 @@
 7. **只写当前版本** — 存档只以当前 `SAVE_SCHEMA_VERSION` 写出；不写旧版本，不提供「导出为旧版」。
 8. **原子提交** — 一次写入要么完整生效，要么完全不生效。写入顺序固定为：校验 → 写临时文件 → flush → 主档改名备份 → 临时文件改名主档。任何一步失败，主档保持原样，临时文件删除，事务报告失败。
 9. **备份保留一份** — `SAVE_BACKUP_COUNT = 1`，备份保存的是**上一次成功写入**的完整主档。备份不是同步副本，它总是落后一个成功事务；这也是恢复时可能损失最近一次事务的原因，恢复报告必须如实说明。
-10. **载入结果六态** — `Fresh`（无档）、`Loaded`（当前版本、结构合法）、`Migrated`（从旧版本迁移成功）、`Recovered`（主档不可用、备份可用）、`ReadOnly`（另一实例持有存活写锁，但主档可读且版本 ≤ 当前，可浏览不可写；旧版本用内存中的只读迁移渲染，不写盘）、`Blocked`（无可用副本、版本高于游戏、迁移失败、或持锁且文件不可读）。每种结果附一份 `LoadReport`（来源版本、原因码、警告列表、是否可写、`lock_live`）。
+10. **载入结果六态** — `Fresh`（无档）、`Loaded`（当前版本、结构合法）、`Migrated`（从旧版本迁移成功）、`Recovered`（主档不可用、备份可用）、`ReadOnly`（另一实例持有存活写锁，但主档可读且版本 ≤ 当前，可浏览不可写；旧版本用内存中的只读迁移渲染，不写盘）、`Blocked`（无可用副本、版本高于游戏、迁移失败、或持锁且文件不可读）。每种结果附一份 `LoadReport`（来源版本、原因码、警告列表、是否可写、`lock_live`、`first_run_eligible`）。
 11. **载入永不阻断启动** — 存档不驱动顶层状态切换。任何载入结果（包括 `Blocked`）都让 `Boot → Menu` 照常发生（场景与流程管理规则 4）；`Blocked` 时写入被禁用，由界面流程在进入 `Menu` 后显示说明。存档不静默覆盖、不自动删除任何文件。
 12. **版本高于游戏 = 拒绝** — 存档版本 `>` 当前游戏版本时，不加载、不迁移、不回退到备份、不覆盖。避免旧程序读新档丢掉新字段。只有 `lock_live = false` 且玩家明确选择「新建生涯」时，旧档才被改名隔离；`lock_live = true` 时该出口不存在（规则 21）。
 13. **迁移是单向链** — 旧版本逐级迁移：`v → v+1 → … → n`。每一步是纯函数，只依赖存档自身与该步定义，不读时钟、不读运行期状态、不联网。任何一步失败，载入结果为 `Blocked`，原文件保持不变。
@@ -49,6 +49,12 @@
 23. **删除生涯是显式且可恢复的** — 删除生涯必须由玩家在界面二次确认；存档把现有文件改名隔离而非删除，然后建立新档。隔离文件不自动清理，也不计入备份轮换。另一实例持锁时（`ReadOnly`，或 `lock_live = true` 的 `Blocked`）删除请求被拒绝——隔离同样会破坏对方正在写的文件（规则 21）。
 24. **确定性往返** — 同一份内存状态连续写两次（不改变任何值，排除 `last_saved_at`）产生逐字节相同的文件：map 按键排序、整数按十进制、无随机 id、无平台相关换行。这让 diff 可读，让「往返不变」成为可断言的测试。
 25. **不做防篡改** — 单机信任模型。不加密、不设校验和来阻止编辑；手工编辑过的档按普通结构校验处理，类型或结构不合法就走损坏路径。将来若排行榜需要可信数据，由在线挑战在服务端解决，不由本地存档假装解决（Open Question 5）。
+26. **首局资格由载入结果给出（S11）** — `LoadReport.first_run_eligible: bool` 回答「这次载入后能不能开一局首局引导」，供组装 `RunConfig` 的一方使用（`is_first_run = runs_settled == 0 ∧ first_run_eligible`）。定义：
+
+    - `first_run_eligible = (outcome ∈ {Fresh, Loaded, Migrated}) ∧ records.career.runs_settled = 0`。
+    - **`Recovered` 时恒为 `false`**：备份可能早于第一次结算，恢复出的 `runs_settled = 0` 不能证明玩家没结算过；只凭它就重播教学是错的。`ReadOnly` / `Blocked` 也为 `false`（写入禁用或不可开局）。
+    - **`Recovered` 不得单独复活 `runs_settled = 0`**：若备份里已有结算证据（`records.stations` 非空、`career.lifetime_value > 0`、`career.lifetime_net_profit ≠ 0`、已达成里程碑非空、或 `progression` 的钱包 / 升级等级 / 付费解锁非空）而 `runs_settled = 0`，存档把 `runs_settled` 钳到 **≥ 1** 并写 `SETTLED_COUNTER_ROLLED_BACK` 警告。若没有任何证据，保持 0，但 `first_run_eligible` 仍为 `false`——无法区分「真首局但主档损坏」与「老玩家的旧备份」时，保守选择是不重播教学。
+    - 本规则只做保守判定，不尝试恢复真实局数；`runs_settled` 被钳制后，下一次结算正常 `+1`。
 
 ### States and Transitions
 
@@ -79,7 +85,7 @@
 | `Blocked`（迁移失败且 `lock_live = false`，或 `lock_live = true` 的任意原因） | 玩家确认重试 | `Unloaded` → `Loading` | 调用 `retry_load()` 重新读取，替换缓存的 `LoadReport`；不隔离文件 |
 | 任意（`lock_live = false`） | 玩家确认删除生涯 | `Fresh` → `Clean` | 同上；设置不受影响；持锁时删除请求被拒绝 |
 
-同一帧内出现多个事务时按到达顺序串行写入；一个事务的写入未结束前不开始下一个，不允许交错。一次结算引起的钱包、纪录与解锁变化必须合并为**同一个事务**，不得拆成多次写入。
+同一帧内出现多个事务时按到达顺序串行写入；一个事务的写入未结束前不开始下一个，不允许交错。一次结算引起的钱包、纪录与解锁变化必须合并为**同一个事务**，不得拆成多次写入（MVP/VS 的菜单付费解锁不属于结算，另起事务；见 ADR-0007 D3）。
 
 ### Interactions with Other Systems
 
@@ -90,7 +96,7 @@
 | 解锁与档口 | 下游 | 拥有 `unlocks` 命名空间：`stations`、`dishes` 两组 id | 硬 |
 | 纪录与里程碑 | 下游 | 拥有 `records` 命名空间：按档口纪录、生涯合计、已达成里程碑 id；字段语义与排名规则由它定义 | 硬 |
 | 在线挑战 | 下游（未来） | 拥有 `challenges` 命名空间；MVP 不存在，随 schema 迁移加入 | 软 |
-| 界面流程 | 下游 | 读取 `LoadReport` / `SaveStatus` 显示「已保存」「从备份恢复」「无法写入」；发起删除生涯请求 | 硬（UI） |
+| 界面流程 | 下游 | 读取 `LoadReport` / `SaveStatus` 显示「已保存」「从备份恢复」「无法写入」；读取 `LoadReport.first_run_eligible` 决定 `is_first_run`（S11）；发起删除生涯请求 | 硬（UI） |
 | 场景与流程管理 | 无直接调用 | 只共享启动时序：数据 `Ready` 之后、进入 `Menu` 之前完成载入；存档不发起任何顶层切换 | 软（编排） |
 
 **接口所有权**：存档拥有信封（`schema_version`、`career_id`、`created_at`、`last_saved_at`、`slot_id`、`extensions`）、结构校验、原子性与迁移。每个下游系统拥有自己命名空间的字段与含义；存档不解释、不推导、不替它们做玩法判断。
@@ -233,7 +239,9 @@ The `slots_available` formula is defined as:
 
 - **If 主档与备份都不存在**：结果 `Fresh`，不报错——这是首次启动的正常路径。用默认值建立生涯（`wallet = 0`、空升级表、空解锁集、空纪录）；**写基线之前先调用解锁与档口的 `normalize()`，把回填后的 `unlocks` 并入同一基线事务**，不写空集合基线。写失败则保持 dirty 并提示，不阻塞进入菜单。
 - **If 主档为空文件、截断或不是存档结构**：按损坏处理，尝试备份；不逐字段抢救。损坏的文件在玩家确认新建生涯前保持原样，不被覆盖。
-- **If 主档缺失但备份存在**：结果 `Recovered`——上次写入在「主档改名备份」与「临时文件改名主档」之间崩溃。使用备份，并在下一次成功写入时重建主档。
+- **If 主档缺失但备份存在**：结果 `Recovered`——上次写入在「主档改名备份」与「临时文件改名主档」之间崩溃。使用备份，并在下一次成功写入时重建主档。**`LoadReport.first_run_eligible = false`**（规则 26）：即使备份里 `runs_settled = 0` 也不得据此重播首局。
+- **If `Recovered` 且备份里的 `runs_settled = 0` 但存在其他结算证据**（非空 `records.stations`、`lifetime_value > 0`、`lifetime_net_profit ≠ 0`、已达成里程碑、或非空钱包 / 升级 / 付费解锁）：把 `runs_settled` 钳到 ≥ 1 并写 `SETTLED_COUNTER_ROLLED_BACK` 警告；不伪造局数、不改动其他字段。
+- **If `Recovered` 且备份完全看不出是否结算过**（`runs_settled = 0` 且无任何证据）：保持 0，但 `first_run_eligible = false`；界面按普通菜单进入，不显示教学，也不为「可能是首局」弹任何补偿提示。
 - **If 主档损坏、备份版本较旧**：迁移备份后使用，`LoadReport` 必须写明「可能丢失最近一次成功写入之后的进度」，不得只说「已恢复」。
 - **If 主档版本高于游戏版本**：`Blocked`。不回退到备份、不迁移、不覆盖。即使备份版本较低且可读，也不使用它——静默降级会丢数据。
 - **If 主档与备份都无法读取**：`Blocked`，写入禁用，旧文件保留。只有 `lock_live = false` 且玩家在界面明确选择「新建生涯」时，两个文件才被改名为 `corrupt-<UTC>.sav` 隔离，随后建立新档；`lock_live = true` 时只给「退出」「重试」，选择退出则文件原封不动。
@@ -273,7 +281,7 @@ The `slots_available` formula is defined as:
 | 解锁与档口 | 硬 | 拥有 `unlocks`（`stations`、`dishes`）；解锁条件、免费档口、删除条件由它拥有 | GDD 已写（`design/gdd/unlocks-and-stations.md`）；空集合由它在载入后回填，标记 dirty，下一次写入时点落盘 |
 | 纪录与里程碑 | 硬 | 拥有 `records`；字段语义、排名规则、里程碑判定由它拥有；存档只提供存储与原子性 | GDD 已写（`design/gdd/records-and-milestones.md`） |
 | 在线挑战 | 软 | 拥有 `challenges`；MVP 不存在，随 schema 迁移加入；不得把本地存档当作可信排行榜数据 | GDD 未写 |
-| 界面流程 | 硬（UI） | 读取 `LoadReport` / `SaveStatus` 显示保存指示、恢复说明与 `Blocked` / `ReadOnly` 提示；发起删除生涯请求 | GDD 已写（`design/gdd/ui-flow.md`） |
+| 界面流程 | 硬（UI） | 读取 `LoadReport` / `SaveStatus` 显示保存指示、恢复说明与 `Blocked` / `ReadOnly` 提示；用 `LoadReport.first_run_eligible` 参与 `is_first_run` 判定；发起删除生涯请求 | GDD 已写（`design/gdd/ui-flow.md`） |
 
 **不属于依赖的关系：**
 
@@ -346,18 +354,21 @@ The `slots_available` formula is defined as:
 | `design/gdd/scene-flow.md` | 时序 | `Boot → Menu` 的启动顺序；放弃 / 进入失败 / 退出不产生写入；存档不驱动顶层状态 |
 | `design/gdd/cloying-and-taste.md` | 条件契约 | 若启用中途存档，计数表与规范组序必须一起持久化；MVP 不启用 |
 | `design/gdd/menu-waves.md` | 条件契约 | 若启用中途存档，需保存 `seed` / `wave_index` / 本波剩余；MVP 不启用，单局种子不持久化 |
+| `design/gdd/first-run-onboarding.md` | 下游契约 | `LoadReport.first_run_eligible` 参与 `is_first_run` 判定；`Recovered` 不重播首局。存档不拥有教学序列 |
 | `design/gdd/game-concept.md` | 来源 | 长期成长「已投入的升级与纪录」、会话级停点、单机无网络 |
 | `design/gdd/systems-index.md` | 索引 | 优先级 MVP、层 Core、设计顺序 #4、下游清单 |
 
 **待回指**：在线挑战的 GDD 写好后，必须在 Dependencies 与 Cross-References 中列出「存档」，并写明只经命名空间提交、不自行写文件。局外升级、解锁与档口、纪录与里程碑、界面流程已回指。
 
-**待回改（不在本文件执行，交由编排会话统一处理）**：
+**待回改（不在本文件执行，交由编排会话统一处理）**：无未完成项。以下五条已于 2026-11-04 复核为已落地：
 
-1. `data-config.md` — 下游表「存档」状态改为「GDD 已写（`design/gdd/save-system.md`）」。
-2. `settlement-and-entry-fee.md` — 下游表「存档」状态改为「GDD 已写（软）」。
-3. `cloying-and-taste.md` — 「存档」行状态改为「GDD 已写（MVP 无中途存档）」；Open Question 8 标记为已由本 GDD 回答并延后。
-4. `menu-waves.md` — 「存档」行状态改为「GDD 已写（MVP 无中途存档）」；Open Question 7 标记为已回答（种子不进存档）。
-5. `systems-index.md` — #4 行改为 `Designed` / `design/gdd/save-system.md`，并更新进度计数与 UX 备注。
+1. `data-config.md` — 「存档」下游行已是 `GDD 已写`。
+2. `settlement-and-entry-fee.md` — 「存档」下游行已是 `GDD 已写`。
+3. `cloying-and-taste.md` — 「存档」行已是 `GDD 已写（MVP 无中途存档）`；Open Question 8 已标回答。
+4. `menu-waves.md` — 「存档」行已是 `GDD 已写（MVP 无中途存档）`；Open Question 7 已标回答。
+5. `systems-index.md` — #4 行已是 `Approved` / `design/gdd/save-system.md`。
+
+**跨文件回写（S11，由界面流程执行）**：`ui-flow.md` 规则 8 的 `is_first_run` 必须从 `runs_settled == 0` 改为 `runs_settled == 0 ∧ LoadReport.first_run_eligible`，并在主菜单读取一次 `LoadReport`；`first-run-onboarding.md` 已按同一判据更新。
 
 ## Acceptance Criteria
 
@@ -411,6 +422,8 @@ The `slots_available` formula is defined as:
 28. **GIVEN** 同一个满载夹具，**WHEN** 在最小规格 PC 的非调试构建上重复 100 次写入与载入，**THEN** 写入 p95 ≤ 50 ms、载入 p95 ≤ 100 ms；超预算时用同一夹具重测确认。
 29. **GIVEN** 主档可读、版本 < 当前、迁移失败、备份合法，**WHEN** 载入，**THEN** `outcome = Blocked`，不加载备份，两个文件都未被修改。
 30. **GIVEN** `Blocked`（迁移失败 / 持锁不可读），**WHEN** 玩家选择重试，**THEN** 调用 `retry_load()` 重新读取并替换缓存的 `LoadReport`，不隔离任何文件；若仍失败则停留在 `Blocked` 并允许再次重试。
+31. **GIVEN** `Fresh` / `Loaded` / `Migrated` 且 `records.career.runs_settled = 0`，**WHEN** 载入，**THEN** `LoadReport.first_run_eligible = true`；**GIVEN** 同一份档但 `runs_settled ≥ 1`，**THEN** `false`；**GIVEN** `ReadOnly` 或 `Blocked`，**THEN** `false`。
+32. **GIVEN** `Recovered`、备份里 `runs_settled = 0` 且 `records.stations` 非空（存在结算证据），**WHEN** 载入，**THEN** `first_run_eligible = false`、`runs_settled` 被钳到 ≥ 1、`LoadReport.warnings` 含 `SETTLED_COUNTER_ROLLED_BACK`，其他字段不变；**GIVEN** 备份里 `runs_settled = 0` 且无任何结算证据，**THEN** `runs_settled` 保持 0、`first_run_eligible` 仍为 `false`。
 
 > **测试夹具**：用例 8–10 需要测试构建注册一个 `m_1` 迁移函数与版本 0 的合成文件；用例 11–14 需要可注入的写入失败点与崩溃点；用例 16 需要一个会计数调用次数的纪录替身，用来证明重试发生在下一个写入时点。夹具不得修改真实的 12 道菜与升级数据。
 

@@ -29,7 +29,7 @@
 3. **状态 → 输入上下文**：切换生效时，本系统调用 `request_context(default_ctx, clear_stack := true)`（输入 GDD 规则 12），把输入置于该状态的默认上下文并清空临时栈：`Boot` → Blocked、`Error` → Menu、`Menu` → Menu、`Run` → Run、`Paused` → Paused。`Error` 沿用 Menu 上下文只是为了让唯一按钮可以被导航与确认；`Error` 内不存在任何能触发 `Menu` 或 `Run` 的动作。`Modal` 与 `Blocked` 可由界面流程或首局引导临时压栈；本系统不感知其内容，只在顶层切换时保证输入栈回到该状态的默认上下文。
 4. **启动序列**：进入 `Boot` 后读取数据配置的加载与校验结果；`Ready` → `Menu`，`Failed` → `Error`。启动期间输入为 Blocked。
 5. **一局的进入**：`Menu → Run` 携带 `RunConfig`，由发起方（界面流程）组装：`station_id` 与当前局外升级等级快照。本系统不读存档、不组装 `RunConfig`，只原样转交。
-6. **一局的离开**：`Run → Menu` 携带 `RunResult`，由餐局流程在结算完成时发起。`RunResult` 在切换生效的同一帧内、恰好一次同步交给界面流程，不落盘、不缓存；界面流程据此打开结算屏。**进入失败不是结算**：若 `RunConfig` 在进入时无法解析，餐局流程立即请求 `Run → Menu`，携带 `init_failed = true`；不产生 `RunResult`、不结算。
+6. **一局的离开**：`Run → Menu` 携带 `RunResult`，由餐局流程在结算完成时发起。`RunResult` 在切换生效的同一帧内、恰好一次同步交给界面流程，不落盘、不缓存；界面流程据此打开结算屏。**进入失败不是结算**：若 `RunConfig` 在进入时无法解析，餐局流程立即请求 `Run → Menu`，携带 `init_failed = true` 与 `fault.phase = INIT`；不产生 `RunResult`、不结算。开局之后的不变式或结算失败同样携带 `init_failed = true`，但 `fault.phase = RUN`——`phase` 才是文案判据，`init_failed` 只表示 payload 中没有 `RunResult`（ADR-0007 D7）。
 7. **暂停**：`Run` 中收到 `ui_pause` → `Paused`，本系统通知餐局流程冻结；`Paused` 中收到 `ui_pause` → `Run`，通知恢复。`ui_accept` 不直达本系统：它激活暂停菜单的焦点控件（初始焦点为「继续」），由界面流程消费后请求 `Paused → Run`。暂停期间不得推进回合、不得结算。
 8. **放弃一局**：`Paused` 中请求回到菜单需二次确认；确认后 `Paused → Menu`，携带 `abandoned = true`——不产生 `RunResult`、不结算、不写纪录。这是支柱 2「没有白吃的菜」在流程层的落点。
 9. **错误是受限态**：`Error` 不得进入 `Menu` 或 `Run`，只能退出；debug 构建额外可以"重新加载数据"回到 `Boot` 重走校验。release 构建中该入口**不存在**，不是存在后被拒绝。
@@ -58,7 +58,7 @@
 | `Error` | 重新加载数据（debug） | `Boot` | — | 重走加载与校验 |
 | `Menu` | 请求开始一局 | `Run` | `RunConfig` | 同一档口可重复开始 |
 | `Run` | 餐局流程结算完成 | `Menu` | `RunResult` | 由餐局流程发起 |
-| `Run` | 进入失败（`RunConfig` 无法解析） | `Menu` | `init_failed = true` | 不是结算、不产生 `RunResult`、不写纪录 |
+| `Run` | 进入失败（`RunConfig` 无法解析） | `Menu` | `init_failed = true, fault = {phase: INIT}` | 不是结算、不产生 `RunResult`、不写纪录 |
 | `Run` | `ui_pause` | `Paused` | — | |
 | `Paused` | `ui_pause` / 界面流程请求恢复 | `Run` | — | 恢复现场；`ui_accept` 由界面流程消费 |
 | `Paused` | 放弃确认 | `Menu` | `abandoned = true` | 无结算、无纪录 |

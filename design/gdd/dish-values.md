@@ -107,7 +107,7 @@ The `unit_value` formula is defined as:
 |---|---|---|---|---|
 | `d` | DishData | — | 数据配置 `get_dish(id)` | 被评估的菜 |
 | `price(d)` | int | 0–INT32_MAX | `DishData.price` | 吃下即计入得分 |
-| `satiety(d)` | int | 1–INT32_MAX | `DishData.satiety` | 占用的容量格；0 在上游非法 |
+| `satiety(d)` | int | 1–6 | `DishData.satiety` | 占用的容量格；0 与 ≥7 在上游非法 |
 | `unit_value` | float64 | 0–+∞ | calculated | 每格得分（元/格） |
 
 **Output Range:** `[0, price_max]`；MVP 菜单的常态区间是 3.0–7.0。`price = 0` 时恒为 `0.0`。展示值由 `display_uv(uv) = floor(uv × 100 + 0.5) / 100` 得出，固定两位小数；**展示值不参与任何玩法判定**。
@@ -129,7 +129,7 @@ The `uv_cmp` formula is defined as:
 | `a`, `b` | DishData | 不同 id | 菜单集合 | 待比较的两道菜 |
 | `uv_cmp` | int | {-1, 0, 1} | calculated | -1 表示 a 更低，0 表示精确相等 |
 
-**Output Range:** `{-1, 0, 1}`。返回 0 是精确相等，不是四舍五入造成的并列；并列时以 `id` 字典序升序打破。`INT32_MAX² ≈ 4.6×10¹⁸`，小于 int64 上限 `9.22×10¹⁸`，乘积不会溢出。
+**Output Range:** `{-1, 0, 1}`。返回 0 是精确相等，不是四舍五入造成的并列；并列时以 `id` 字典序升序打破。`satiety ≤ 6` 时交叉相乘的上限为 `6 × INT32_MAX ≈ 1.29×10¹⁰`，远小于 int64 上限，乘积不会溢出。
 
 **Example:** 红烧肉 vs 清蒸鱼：`16×3 − 15×3 = +3` → 红烧肉更高；清蒸鱼 vs 另一道 `20/4`：`15×4 − 20×3 = 0` → 精确并列。
 
@@ -254,7 +254,7 @@ The `calibration_ratio` formula is defined as:
 - **If 菜单内所有菜单位价值相同**：`uv_span = 0` → `menu_healthy = false`。这是"看起来很多选择、实际只有一个答案"的典型退化。
 - **If 某个菜单划分让 `wave_reachable_opt` 跌破「菜单波次」的下界**：由「菜单波次」重掷该划分；本系统只提供 `opt_value` 与 `C0`，不定义、也不检查任何逐划分的上界。整池 `opt_value` 的回归由本系统 CI 断言负责。
 - **If 玩家在局内连续选择同一 `cloying_group` 的菜**：本系统不做任何处理。惩罚系数、叠加顺序与上限全部属于「腻度与口味」；本系统只提供 `cloying_group` 与 `satiety`。
-- **If `uv_cmp` 的乘积超出 int64**：仅当上游放宽 `price` / `satiety` 到 int64 全范围时才会发生。当前 schema 上限为 INT32_MAX，乘积约 `4.6×10¹⁸ < 9.22×10¹⁸`，安全；若未来放宽，必须改用 128 位整数或在数据配置加界，不得静默截断。
+- **If `uv_cmp` 的乘积超出 int64**：仅当上游放宽 `price` / `satiety` 的 schema 上限时才会发生。当前 `price ≤ INT32_MAX`、`satiety ≤ 6`，交叉相乘约 `1.29×10¹⁰`，安全；若未来放宽，必须改用 128 位整数或在数据配置加界，不得静默截断。
 - **If 平衡审查失败但数据合法**：游戏照常启动，只写审查报告。把平衡问题变成启动错误，会让内容作者无法进入游戏调试。
 - **If 菜单波次允许重复抽取同一道菜**：`opt_value` 的 0/1 背包假设失效，公式必须改为有界背包并更新本 GDD。当前假设与「不重复抽取」一致，跨系统改动必须先改这里。
 - **If 数据配置尚未 `Ready` 或 dish id 不存在**：查询返回错误并带调用者与 id，不返回 0、空记录或占位菜。静默兜底会让数值 bug 变成平衡 bug。

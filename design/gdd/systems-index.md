@@ -45,8 +45,9 @@ daily challenges and a leaderboard; 同屏合作 is the deferred co-op system.
 the dish schema reaches 腻度, 菜单波次, 结算 and HUD. 结算与入场费 feeds every
 progression system, and 餐局流程 is the skeleton that 时间与回合, 胃容量, HUD and
 首局引导 hang from. 场景与流程管理 is the app shell: 数据配置 and 输入 feed it, and
-界面流程 and 餐局流程 both hang from its Menu/Run states. No circular dependencies
-were found.
+界面流程 and 餐局流程 both hang from its Menu/Run states. No cross-layer cycles
+exist; the only bidirectional relationship is the same-layer 界面流程 ⇄ 音效反馈
+event/settings loop (see Circular Dependencies).
 
 ---
 
@@ -62,16 +63,16 @@ were found.
 | 6 | 时间与回合 | Core | MVP | Approved | design/gdd/time-and-turns.md | 餐局流程 |
 | 7 | 胃容量 | Gameplay | MVP | Approved | design/gdd/stomach-capacity.md | 餐局流程, 数据配置 |
 | 8 | 菜品数值 | Gameplay | MVP | Approved | design/gdd/dish-values.md | 数据配置 |
-| 9 | 腻度与口味 | Gameplay | MVP | Needs Revision | design/gdd/cloying-and-taste.md | 菜品数值, 餐局流程 |
-| 10 | 菜单波次 | Gameplay | Vertical Slice | Needs Revision | design/gdd/menu-waves.md | 菜品数值, 数据配置, 餐局流程 |
+| 9 | 腻度与口味 | Gameplay | MVP | In Review | design/gdd/cloying-and-taste.md | 菜品数值, 餐局流程, 数据配置（`cloy_cap`）, 菜单波次（软） |
+| 10 | 菜单波次 | Gameplay | Vertical Slice | In Review | design/gdd/menu-waves.md | 菜品数值, 数据配置, 餐局流程 |
 | 11 | 结算与入场费 | Economy | MVP | Approved | design/gdd/settlement-and-entry-fee.md | 菜品数值, 腻度与口味, 胃容量, 时间与回合, 餐局流程 |
-| 12 | 局外升级 | Progression | MVP | Needs Revision | design/gdd/meta-upgrades.md | 结算与入场费, 存档, 数据配置 |
+| 12 | 局外升级 | Progression | MVP | In Review | design/gdd/meta-upgrades.md | 结算与入场费, 存档, 数据配置, 胃容量（快照） |
 | 13 | 解锁与档口 | Progression | Vertical Slice | Approved | design/gdd/unlocks-and-stations.md | 局外升级, 存档, 数据配置 |
 | 14 | 纪录与里程碑 | Progression | Vertical Slice | Approved | design/gdd/records-and-milestones.md | 结算与入场费, 存档, 数据配置 |
 | 15 | 局内 HUD | UI | MVP | Approved | design/gdd/in-game-hud.md | 餐局流程, 时间与回合, 胃容量, 菜品数值, 输入, 结算与入场费, 腻度与口味, 菜单波次 |
 | 16 | 界面流程 | UI | MVP | Approved | design/gdd/ui-flow.md | 餐局流程, 结算与入场费, 局外升级, 场景与流程管理, 输入, 存档, 纪录与里程碑, 音效反馈, 数据配置 |
-| 17 | 音效反馈 | Audio | Vertical Slice | Approved | design/gdd/audio-feedback.md | 餐局流程, 结算与入场费, 场景与流程管理 |
-| 18 | 首局引导 | Meta | Vertical Slice | Approved | design/gdd/first-run-onboarding.md | 餐局流程, 局内 HUD, 输入, 场景与流程管理, 菜品数值, 结算与入场费 |
+| 17 | 音效反馈 | Audio | Vertical Slice | In Review | design/gdd/audio-feedback.md | 餐局流程, 结算与入场费, 场景与流程管理, 纪录与里程碑（事件契约）, 数据配置（cue 目录） |
+| 18 | 首局引导 | Meta | Vertical Slice | Approved | design/gdd/first-run-onboarding.md | 餐局流程, 局内 HUD, 输入, 场景与流程管理, 菜品数值, 结算与入场费, 腻度与口味 |
 | 19 | 在线挑战 | Meta | Full Vision | Not Started | — | 结算与入场费, 存档 |
 | 20 | 同屏合作 | Meta | Full Vision | Not Started | — | 几乎全部系统（延后） |
 
@@ -112,6 +113,15 @@ were found.
 >
 > 解锁与档口 imposes UI requirements on 界面流程（档口选择页的锁定态、价格与差额、
 > 解锁确认、`COMMIT_FAILED` 提示、解锁进度）。`/ux-design` must cover them.
+>
+> 档口选择器门禁（S8）：`supports_station_selection()` 由界面流程拥有，MVP 返回
+> `false`；主菜单只显示 `station_canteen`，付费档口按 `FEATURE_GATED` 隐藏并排除出
+> 进度分母。UI 规格必须先画出「无选择器」状态，不得把付费档口画成可购买（ui-flow
+> 规则 8、解锁与档口规则 17）。
+>
+> 局内 HUD 的 UX 规格已写入 `design/ux/hud.md`（In Design，2026-11-04）；无障碍承诺
+> 与 54 条 ACC 要求见 `design/accessibility-requirements.md`（Standard 档）。Standard
+> 档仍有 3 个未闭合项：按键重绑、色盲模式、教学回放。
 >
 > 界面流程 owns the menu, receipt, upgrade, records, settings, pause and error screens;
 > `/ux-design` must cover each screen before its epic is written.
@@ -169,22 +179,22 @@ Vertical Slice tier, and the rest are Full Vision.
 
 ### Feature Layer (depends on core)
 
-1. **腻度与口味** — depends on: 菜品数值, 餐局流程
+1. **腻度与口味** — depends on: 菜品数值, 餐局流程, 数据配置（`cloy_cap`）; soft design edge to 菜单波次 (its pressure assumes waves limit the visible set)
 2. **菜单波次** — depends on: 菜品数值, 数据配置, 餐局流程
 3. **结算与入场费** — depends on: 菜品数值, 腻度与口味, 胃容量, 时间与回合, 餐局流程
-4. **局外升级** — depends on: 结算与入场费, 存档, 数据配置
+4. **局外升级** — depends on: 结算与入场费, 存档, 数据配置, 胃容量（只读快照）
 5. **解锁与档口** — depends on: 局外升级, 存档, 数据配置
 6. **纪录与里程碑** — depends on: 结算与入场费, 存档, 数据配置
 
 ### Presentation Layer (depends on features)
 
-1. **局内 HUD** — depends on: 餐局流程, 时间与回合, 胃容量, 菜品数值, 输入, 结算与入场费, 腻度与口味, 菜单波次
+1. **局内 HUD** — depends on: 餐局流程（`running_net` / `shortfall` 的唯一运行期累加器与快照）, 时间与回合, 胃容量, 菜品数值, 输入, 结算与入场费（纯函数口径）, 腻度与口味, 菜单波次
 2. **界面流程** — depends on: 餐局流程, 结算与入场费, 局外升级, 场景与流程管理, 输入, 存档, 纪录与里程碑, 音效反馈, 数据配置
-3. **音效反馈** — depends on: 餐局流程, 结算与入场费, 场景与流程管理
+3. **音效反馈** — depends on: 餐局流程, 结算与入场费, 场景与流程管理, 纪录与里程碑（事件契约）, 数据配置（cue 目录）
 
 ### Polish Layer (depends on everything)
 
-1. **首局引导** — depends on: 餐局流程, 局内 HUD, 输入, 场景与流程管理, 菜品数值, 结算与入场费
+1. **首局引导** — depends on: 餐局流程, 局内 HUD, 输入, 场景与流程管理, 菜品数值, 结算与入场费, 腻度与口味
 2. **在线挑战** — depends on: 结算与入场费, 存档
 3. **同屏合作** — depends on: 几乎全部系统（延后）
 
@@ -219,7 +229,8 @@ Vertical Slice tier, and the rest are Full Vision.
 
 ## Circular Dependencies
 
-- None found.
+- No **cross-layer** cycle: every hard data/interface edge points from presentation → feature → core → foundation.
+- One **same-layer** bidirectional relationship exists: 界面流程 ⇄ 音效反馈. 界面流程 owns the settings model and emits UI/settlement events; 音效反馈 subscribes to those events and reads the settings snapshot. Both live in the Presentation layer, the loop is event/settings only (no construction cycle), and ADR-0004's composition root constructs both in a fixed order. This is not a layering violation, but the earlier "none found" wording was literally false (W10).
 
 ---
 

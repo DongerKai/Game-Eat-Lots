@@ -32,23 +32,23 @@
 4. **初始化失败不是一局**：`RunConfig` 无法解析、`station_id` 不存在、升级快照字段非法或任一子系统初始化失败时，本系统立即请求 `Run → Menu`，携带 `init_failed = true`；不产生 `RunLog`、不产生 `RunResult`、不广播 `run_started`、不写纪录。**若该返回请求因同一帧内 `Menu → Run` 已先生效而被拒绝**（场景与流程管理按帧初状态校验），本系统留在 `Failed` 并在下一帧重发，不重复初始化。不得停在半初始化的 `Run`。
 5. **一次输入只提交一个动作**：`Active` 中每个输入事件至多提交一个动作，动作集只有三种——`eat`（吃一道菜，`ui_accept` 作用于当前焦点菜品）、`skip_wave`（主动跳波，`game_skip_wave`，非最后一波）、`end_pickup`（最后一波「结束取餐」，同一输入动作，0 回合）。`action_committed(action, payload)` 的 `action` 取值就是这三个。焦点菜品由局内 HUD 按当前键盘/手柄焦点或鼠标悬停解析后随动作传入；本系统只校验它仍在当前可见集，不自行猜测焦点。动作入口为 `submit_action(action, dish_id) → COMMITTED | REJECTED(code)`，`code` 至少覆盖 `STALE_FOCUS` / `CAPACITY` / `NO_TURNS` / `FROZEN`；动作先完整校验再原子提交；被拒绝的尝试不改变任何状态，HUD 直接渲染该码对应文案。
 6. **吃菜的提交顺序固定**：校验顺序为“菜仍在当前可见集 → 向腻度取得 `effective_satiety(d)` → 胃容量 `can_fit(effective_satiety)` → 回合仍可用”；通过后原子提交：按吃下顺序追加 `EatenEntry(dish_id, extra_satiety, effective_satiety)`、更新腻度计数、调用菜单波次的 `consume(dish_id)`（返回 `ADVANCED` 或 `NO_EATABLE`）把该菜从当前波移除、消耗 1 回合，然后执行一次结束判定。任何一步之前失败都整体回滚，不扣回合、不写日志。
-7. **跳波由菜单波次拥有，回合由时间与回合拥有**：非最后一波的 `game_skip_wave` 丢弃当前波剩余菜、推进一波、消耗 1 回合；最后一波该动作为「结束取餐」，不消耗回合、丢弃剩余菜并向本系统发出“无可吃菜”信号。本系统只负责路由输入、确认代价、执行结束判定，不自行计算跳过代价。跳波校验顺序固定为“波次是否允许推进 → 回合是否可用 → 提交”。
+7. **跳波由菜单波次拥有，回合由时间与回合拥有**：非最后一波的 `game_skip_wave` 丢弃当前波剩余菜、推进一波、消耗 1 回合；最后一波该动作为「结束取餐」，不消耗回合、丢弃剩余菜并向本系统发出“无可吃菜”信号。本系统只负责路由输入、确认代价、执行结束判定，不自行计算跳过代价。跳波校验顺序固定为“波次是否允许推进 → 回合是否可用 → 提交”。**付费跳波需要至少 1 个可用回合来支付它自己**：非最后一波且 `turns_remaining = 1` 时，第二次校验判定为不可用，返回 `NO_TURNS`，且在调用任何 `spend_turn()` / `advance()` 之前返回；不推进波次、不丢弃当前波、不写日志、不播放成功反馈。最后一波的 `end_pickup` 不消耗回合，不受此限。
 8. **只有两个结束原因**：`TIME_EXHAUSTED` 与 `NO_EATABLE_DISH`。**没有“吃撑”结束原因**：胃容量只决定一道菜能不能吃，不直接结束本局；玩家可能仍有回合却暂时放不下任何可见菜，此时可以付费跳波或等下一波。菜单波次的 `no_eatable` 信号只覆盖“最后一波被吃完 / 玩家结束取餐 / 本局已无剩余菜”，**不覆盖“可见菜都放不进剩余容量”**；后者不结束本局。MVP 不提供主动提前结账（回答结算与入场费 Open Question 2）；最后一波「结束取餐」记为 `NO_EATABLE_DISH`，不新增第三枚举。
 9. **结束判定时机固定**：每次成功提交动作之后判定一次；初始化完成后判定一次。被拒绝的动作、暂停中的帧、以及纯展示帧都不判定。判定命中后同一帧进入 `Ending`，此后不再接受任何动作。
 10. **结束原因优先级固定**：若同一帧同时满足回合耗尽与无可吃菜，取 `TIME_EXHAUSTED`。顺序写死在判定函数里，不依赖事件到达顺序，也不随机。
 11. **结束即冻结**：进入 `Ending` 后，回合消耗、容量变化、波次推进、菜品选择全部停止；局内画面保持最终状态只读显示。剩余工作只有组装 `RunLog`、调用结算、交接结果。
 12. **`RunLog` 由本系统组装，值来自动作发生时刻**：字段包含 `run_id`、`station_id`、`entry_fee`、`end_reason`、`eaten[]`（按提交顺序，每条含 `dish_id`、`extra_satiety`、`effective_satiety`）、`capacity_total`、`capacity_used`、`turns_total`、`turns_used`、`upgrade_snapshot`。`extra_satiety` 与 `effective_satiety` 是吃下那一刻由腻度系统给出的快照，**结算时不得按菜名重放**。
-13. **结算恰好一次**：在 `Ending → Settling` 中调用结算的 `settle(RunLog)` 一次。成功则持有 `RunResult` 进入 `Handoff`；返回结构化错误则进入 `Faulted`，不重试结算、不生成部分结果、不把错误当 0 分。顶层处于 `Paused` 时停在 `Ending` 等待，恢复后才调用。
+13. **结算恰好一次**：在 `Ending → Settling` 中调用结算的 `settle(RunLog)` 一次。成功则持有 `RunResult` 进入 `Handoff`；返回结构化错误则进入 `Faulted`，不重试结算、不生成部分结果、不把错误当 0 分。顶层处于 `Paused` 时停在 `Ending` 等待，恢复后才调用。**`run_settled` 只是「结果已就绪」的预通知**：它不写盘，持久化只发生在 `Run → Menu` 交付被接受之后（ADR-0007 D3）。
 14. **交接与重试**：在 `Handoff` 中请求 `Run → Menu`，携带同一份 `RunResult`。若请求被拒绝（例如同一帧内暂停先到），保留该 `RunResult`，在回到 `Run` 顶层状态后重发；**不得重新结算、不得重建结果、不得重复交付**。暂停期间等待，不请求。
 15. **暂停是冻结，不是一个局内状态**：本系统只持有 `frozen` 标志，由场景与流程管理的冻结/恢复通知驱动。冻结期间不提交动作、不判定结束、不调用结算、不请求交接；恢复后从暂停前的精确状态继续。暂停与恢复不消耗回合、不改变 `run_id` 或日志。
-16. **放弃与退出不是结算**：顶层状态在不由本系统发起交接的情况下离开 `Run` / `Paused` 进入 `Menu` 或 `Quit`（暂停菜单放弃、直接退出、窗口关闭确认），本系统丢弃本局全部状态并广播 `run_discarded`；不产生 `RunResult`、不结算、不写纪录。下一局从全新的 `RunConfig` 开始。
+16. **放弃与退出不是结算**：顶层状态在不由本系统发起交接的情况下离开 `Run` / `Paused` 进入 `Menu` 或 `Quit`（暂停菜单放弃、直接退出、窗口关闭确认），本系统丢弃本局全部状态并广播 `run_discarded`；不产生 `RunResult`、不结算、不写纪录。**该规则同样覆盖 `Ending` / `Settling` / `Handoff`**：在这些阶段从暂停菜单退出，已算出的 `RunResult` 不交付、不写纪录、不出收据；`run_settled` 的订阅者不得据此写盘（ADR-0007 D3）。下一局从全新的 `RunConfig` 开始。
 17. **重开是全新一局**：结算屏“再来一局”是一次新的 `Menu → Run`，分配新的 `run_id`、新的 `run_seed`（`RunConfig.seed` 为空时），所有子系统重置；上一局的任何字段都不延续。“重开”不是独立生命周期事件——每一次开始都是重置。
 18. **失败不是卡死**：容量不一致、结算错误、日志含未知菜等不变式失败时进入 `Faulted`，以 ERROR 记录 `run_id` 与违反的字段，并通过当前唯一可用的无结果返回（`Run → Menu`，`init_failed = true` 附带 `fault` 明细）离开 `Run`。**`fault` 必须携带 `phase ∈ {INIT, RUN}`**：`INIT` = 初始化阶段失败、`run_started` 从未发出、本局从未开始；`RUN` = 开局之后的不变式或结算失败、玩家已经玩过这一局。界面流程按 `phase` 选择文案，不得对 `RUN` 说「本局未能开始」。若返回请求因同帧 `Menu → Run` 已生效而被拒绝，留在 `Faulted` 并在下一帧重发。绝不把玩家留在 `Run` 里，也绝不伪造 `RunResult`。
 19. **确定性**：给定同一 `RunConfig`（含显式种子）与同一动作序列，`run_seed`、`end_reason` 与 `RunLog` 必须逐字段相同——**`run_id` 除外**，它按局递增。本系统不使用系统时钟或未播种随机数；种子在 `run_started` 中记录，供复盘与复现。
 20. **交接尽量单帧、不做等待态**：动作提交、结束判定与结算都在触发帧内完成；返回请求在切换合法的第一帧发出，最迟下一帧——因同帧 `Menu → Run` 已生效而被拒绝时顺延一帧。不插入加载、过场或“结算中”状态。淡入淡出属于表现层，且不得推迟状态生效（场景与流程管理规则 12）。
 21. **首局钩子**：`RunConfig` 可以携带 `is_first_run` 与可选的 `pool_override`，本系统把它们原样转交首局引导与菜单波次，除此之外对首局不做任何特殊处理。首局引导可以压入 Blocked 输入上下文，但不得改变本局状态、结束条件或生命周期。
 22. **数据前提**：本系统只在数据配置 `Ready` 时开始一局（由 `Boot` 保证），并只校验 `station_id` 可解析；解析成功后读取 `StationData.turn_budget`，作为 `initialize(turn_budget)` 的入参传给时间与回合。`pool_override` 的子集校验只读取 `StationData.dish_pool` 的 id 集合。它不读取任何菜品价格或饱腹；所有数字来自各子系统。
-23. **实时净值由本系统维护**：开局以 `−entry_fee` 初始化累加器，每次成功提交 `+price(d)`；与本局 `RunLog.eaten` 同源。HUD 只读该快照；结算的 `running_net(k)` 是同一公式的最终复核。放弃、退出或故障时丢弃累加器，不跨局。
+23. **实时净值的唯一运行期副本由本系统维护**：开局以 `−entry_fee` 初始化 `running_net` 累加器，每次成功提交吃菜时 `+price(d)`，与本局 `RunLog.eaten` 同源；`shortfall = max(0, −running_net)`。该累加器是本局运行期净值的**唯一权威副本**，随本局只读快照发布。结算与入场费只定义**纯函数** `running_net(k)` / `shortfall(k)`，并在结算时用同一份 `RunLog` 复核；HUD 只读本系统快照的 `running_net` / `shortfall`（或调用结算的两个纯函数），**不得维护第三份累加器、不得自行求和**。放弃、退出或故障时连同快照一起丢弃，不跨局。
 24. **终止通知**：在每一条终止路径调用一次 `胃容量.end_run(reason)`，`reason ∈ {ended, discarded, failed, faulted}`——结算交接完成、放弃/退出、初始化失败、运行期故障。这是容量的权威局边界，覆盖「从未开始」的 `Failed` 路径。
 
 ### RunConfig 与 RunResult 的归属（回答场景与流程管理 Open Question）
@@ -99,12 +99,12 @@
 | `Ending` | `RunLog` 组装成功且顶层为 `Run` | `Settling` | — |
 | `Ending` | `RunLog` 就绪但顶层暂停 | `Ending` | 等待恢复；不调用 `settle` |
 | `Ending` | 不变式失败 | `Faulted` | 记录违反字段 |
-| `Settling` | `settle` 成功 | `Handoff` | 广播 `run_settled(RunResult)` |
+| `Settling` | `settle` 成功 | `Handoff` | 广播 `run_settled(RunResult)`（预通知，不落盘） |
 | `Settling` | `settle` 返回结构化错误 | `Faulted` | 记录错误码 |
 | `Handoff` | `request_transition(Run → Menu, RunResult)` 接受 | `Idle` | 清空本局全部状态；交给界面流程 |
 | `Handoff` | 请求被拒绝 | `Handoff` | 保留结果，下一可用帧重发 |
 | `任何局内状态` | 顶层离开 `Run` / `Paused` 且非本系统交接 | `Idle` | 广播 `run_discarded`；不结算、不写纪录 |
-| `Initializing` | `run_id` 分配溢出 | `Faulted` | 记录 `RUN_ID_OVERFLOW`；请求 `Run → Menu (init_failed + fault)` |
+| `Initializing` | `run_id` 分配溢出 | `Faulted` | 记录 `RUN_ID_OVERFLOW`；请求 `Run → Menu (init_failed + fault)`；`fault.phase = INIT`、`run_id = 0`（ADR-0007 D7） |
 | `Failed` | 返回请求被拒绝 | `Failed` | 下一帧重发；不重复初始化 |
 | `Faulted` | 返回请求被拒绝 | `Faulted` | 下一帧重发；不重试结算 |
 
@@ -122,7 +122,7 @@
 | 菜单波次 | 协调（下游） | `initialize(station_id, seed, turn_budget, menu_vision[, pool_override])`；`consume(dish_id) → {ADVANCED, NO_EATABLE, NONE}`；`visible_dishes`；`advance()` 只承载付费跳波；`end_pickup() → ENDED`；无菜可吃信号 | 硬 |
 | 腻度与口味 | 协调（下游） | `initialize(cloying_resistance)`；`run_started` / `run_ended` 生命周期；吃下前返回 `extra_satiety`、`effective_satiety` 供容量判定，吃下时记录同一组值；组计数 | 硬 |
 | 结算与入场费 | 协调（下游） | `settle(RunLog) → RunResult \| 结构化错误`；每局恰好一次 | 硬 |
-| 局内 HUD | 下游 | 只读本局快照、`running_net` / `shortfall` 与 `run_*` 信号；渲染 `submit_action` 的 `REJECTED(code)` 文案；不得自行求和或推算结束条件 | 硬 |
+| 局内 HUD | 下游 | 只读本局快照与 `run_*` 信号；`running_net` / `shortfall` 取自本系统快照（本系统是运行期唯一累加器），也可调用结算定义的纯函数复核；不得再维护累加器或自行求和；渲染 `submit_action` 的 `REJECTED(code)` 文案；不得自行推算结束条件 | 硬 |
 | 界面流程 | 下游 | 经场景与流程管理发出 `RunConfig`、接收 `RunResult`；重开时组装新的 `RunConfig` | 硬 |
 | 首局引导 | 下游（软） | 读取 `is_first_run`、`pool_override`；可压入 Blocked 上下文，不得改变本局状态 | 软 |
 | 音效反馈 | 下游（软） | 订阅 `run_started` / `run_ended` / `run_settled` / `run_discarded` / `run_faulted` | 软 |
@@ -130,7 +130,7 @@
 
 **接口所有权**：本系统拥有 `run_id`、`run_seed` 的选择、动作提交顺序、结束判定与 `RunLog` 组装；各子系统拥有自己的数值与判定。下游不得自行开始、结束或结算一局，也不得改写 `run_state`。
 
-**信号（过去式命名）**：`run_started(run_id, station_id, seed)`、`action_committed(action, payload)`、`run_ended(run_id, end_reason)`、`run_settled(run_id, RunResult)`、`run_faulted(run_id, code, detail)`、`run_discarded(run_id)`。每个信号对同一 `run_id` 至多发一次，`run_discarded` 在从未开始的局上不发。
+**信号（过去式命名）**：`run_started(run_id, station_id, seed)`、`action_committed(action, payload)`、`run_ended(run_id, end_reason)`、`run_settled(run_id, RunResult)`（仅预通知）、`run_faulted(run_id, code, detail)`、`run_discarded(run_id)`。每个信号对同一 `run_id` 至多发一次，`run_discarded` 在从未开始的局上不发。
 
 **本局只读快照（局内 HUD 读取，本系统不绘制）**：
 
@@ -147,7 +147,7 @@
 | `end_reason` | enum | 未结束为 `NONE` |
 | `run_seed` | int64 | 仅 debug 构建显示 |
 
-快照只读；HUD 不得由快照自行推算结束条件或净利，净利必须走结算的 `running_net`。
+快照只读；`running_net` / `shortfall` 由本系统维护并在此发布，是本局运行期净值的唯一副本。HUD 不得由快照自行推算结束条件，也不得另做一次净利求和；结算只在收据时用其纯函数 `running_net(k)` / `shortfall(k)` 对同一份 `RunLog` 复核。
 
 ## Formulas
 
@@ -259,6 +259,7 @@ The `transition_cost` rule is defined as:
 - **If 容量已满但仍有可见菜且回合未耗尽**：本局**不**结束；玩家可以付费跳波或等下一波，最终由回合耗尽或无可吃菜结束。不得新增“吃撑”结束原因。
 - **If 菜单波次报告 `no_eatable`**：只在最后一波被吃完、玩家结束取餐或本局已无剩余菜时成立；可见菜放不下不触发该信号，不结束本局。
 - **If 可见菜都放不进剩余容量**：`no_eatable` 不成立，本局不结束；玩家可以付费跳波或等下一波。
+- **If 非最后一波且 `turns_remaining = 1` 时请求付费跳波**：拒绝为 `NO_TURNS`，在 `spend_turn()` / `advance()` 之前返回；波次、当前波剩余菜、回合与日志全部不变。允许跳波会让玩家进入一波却没有任何回合可吃，等价于零收益地丢掉当前波。最后一波的结束取餐不受影响。
 - **If 两个结束条件同帧成立**：`TIME_EXHAUSTED` 优先，写死在判定函数里。
 - **If 结束取餐发生在最后一波且仍有回合**：`NO_EATABLE_DISH`，0 回合消耗；这是主动停止，不是错误。
 - **If 结算返回 `ALREADY_SETTLED`**：视为本系统重复调用的 bug，进入 `Faulted`；不产生第二份结果。
@@ -284,9 +285,9 @@ The `transition_cost` rule is defined as:
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 场景与流程管理 | 硬 | `Menu → Run` 取得 `RunConfig`；冻结/恢复通知；`request_transition(Run → Menu, RunResult \| init_failed)`；观察顶层状态识别放弃/退出 | GDD 已写（In Review） |
-| 数据配置 | 硬 | 前提 `Ready`；`get_station(station_id)` 必须存在 | GDD 已写（In Design） |
-| 输入 | 硬 | `ui_accept`、`game_skip_wave`；`ui_pause` 不由本系统读取 | GDD 已写（In Design） |
+| 场景与流程管理 | 硬 | `Menu → Run` 取得 `RunConfig`；冻结/恢复通知；`request_transition(Run → Menu, RunResult \| init_failed)`；观察顶层状态识别放弃/退出 | GDD 已写 |
+| 数据配置 | 硬 | 前提 `Ready`；`get_station(station_id)` 必须存在 | GDD 已写 |
+| 输入 | 硬 | `ui_accept`、`game_skip_wave`；`ui_pause` 不由本系统读取 | GDD 已写 |
 
 **下游依赖方（本系统在运行时协调它们；依赖方向上它们依赖本系统）：**
 
@@ -294,10 +295,10 @@ The `transition_cost` rule is defined as:
 |---|---|---|---|
 | 时间与回合 | 硬 | `initialize(turn_budget) → turns_total`、`spend_turn()`、`turns_remaining`、`turns_used`；`TIME_EXHAUSTED` 判据 | GDD 已写（`design/gdd/time-and-turns.md`） |
 | 胃容量 | 硬 | `initialize(upgrade_snapshot) → capacity_total`、`capacity_used`、`can_fit(effective_satiety)`、`consume(e)` | GDD 已写（`design/gdd/stomach-capacity.md`） |
-| 菜单波次 | 硬 | `initialize(station_id, seed, turn_budget, menu_vision[, pool_override])`；`consume(dish_id) → {ADVANCED, NO_EATABLE}`；`visible_dishes`；`advance()` 只承载付费跳波；无菜可吃信号 | GDD 已写（Designed） |
-| 腻度与口味 | 硬 | `run_started` / `run_ended` 生命周期；吃下时 `extra_satiety`、`effective_satiety` | GDD 已写（Designed） |
-| 结算与入场费 | 硬（回调） | `settle(RunLog) → RunResult \| 结构化错误`；每局一次 | GDD 已写（Designed） |
-| 局内 HUD | 硬 | 只读本局快照与 `run_*` 信号；不得自行求和或判定结束 | GDD 已写（`design/gdd/in-game-hud.md`） |
+| 菜单波次 | 硬 | `initialize(station_id, seed, turn_budget, menu_vision[, pool_override])`；`consume(dish_id) → {ADVANCED, NO_EATABLE, NONE}`；`visible_dishes`；`advance()` 只承载付费跳波；无菜可吃信号 | GDD 已写 |
+| 腻度与口味 | 硬 | `run_started` / `run_ended` 生命周期；吃下时 `extra_satiety`、`effective_satiety` | GDD 已写 |
+| 结算与入场费 | 硬（回调） | `settle(RunLog) → RunResult \| 结构化错误`；每局一次 | GDD 已写 |
+| 局内 HUD | 硬 | 只读本局快照与 `run_*` 信号；`running_net` / `shortfall` 取自本系统快照（运行期唯一累加器）；不得自行求和或判定结束 | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 界面流程 | 硬 | 经场景与流程管理发出 `RunConfig`、接收 `RunResult`；重开时组装新 `RunConfig` | GDD 已写（`design/gdd/ui-flow.md`） |
 | 首局引导 | 软 | `is_first_run`、`pool_override`；可压入 Blocked 上下文 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 | 音效反馈 | 软 | 订阅 `run_started` / `run_ended` / `run_settled` / `run_discarded` / `run_faulted`；`run_settled` 不产生独立 cue，声音由结算的三个事件承载 | GDD 已写（`design/gdd/audio-feedback.md`） |
@@ -313,10 +314,9 @@ The `transition_cost` rule is defined as:
 
 **双向一致核对**：
 
-- 已回指本系统的 GDD：场景与流程管理、数据配置、输入、腻度与口味、菜单波次、结算与入场费。
-- **数据配置的行归属（不在本文件修改）**：`data-config.md` 的交互表把 `StationData.entry_fee` 记为「餐局流程读取」，但本设计中入场费由结算读取；本系统只解析 `station_id`。需在一致性检查时修正该行。
-- **索引缺口（不在本文件修改）**：`systems-index.md` 第 9 行（腻度与口味）与第 10 行（菜单波次）的 `Depends On` 尚未列出「餐局流程」，而两份 GDD 都已把本系统记为硬上游；需由编排会话统一补正。
-- **索引第 5 行**：`Status` 应由 `Not Started` 改为 `Designed`，`Design Doc` 应指向 `design/gdd/run-flow.md`；由编排会话统一处理。
+- 已回指本系统的 GDD：场景与流程管理、数据配置、输入、时间与回合、胃容量、菜单波次、腻度与口味、结算与入场费、局内 HUD、界面流程、首局引导、音效反馈。存档按设计无直接调用，不要求回指。
+- **索引已对齐（不在本文件修改）**：`systems-index.md` 第 5 行已记录 `Design Doc = design/gdd/run-flow.md`、`Status = Approved`、`Depends On = 场景与流程管理, 数据配置, 输入`；第 9 行（腻度与口味）与第 10 行（菜单波次）也已列出「餐局流程」。本节不再包含待编排会话处理的事项。
+- **数据配置的行归属已对齐**：`data-config.md` 已把 `entry_fee` 的读取记在结算与入场费名下，本系统只解析 `station_id`，与本 GDD 一致。
 
 ## Visual/Audio Requirements
 
@@ -347,7 +347,7 @@ The `transition_cost` rule is defined as:
 
 本系统不拥有任何屏幕，但对界面流程与局内 HUD 提出约束：
 
-1. **HUD 只读快照**：局内 HUD 必须读取本系统发布的 `run_state` 快照与 `run_*` 信号，不得自行推算“是否结束”、不得另写一份总值或净利求和（结算与入场费规则 19）。
+1. **HUD 只读快照**：局内 HUD 必须读取本系统发布的 `run_state` 快照与 `run_*` 信号。`running_net` / `shortfall` 由本系统维护并随快照发布，是本局运行期净值的唯一副本；HUD 不得自行推算“是否结束”、不得另写一份总值或净利累加（结算与入场费规则 19，只定义纯函数供复核）。
 2. **结束即禁用**：进入 `Ending` 或 `frozen = true` 时，所有吃菜、跳波、结束取餐控件必须禁用；不得出现“点了没反应”。
 3. **结算必须用同一份结果**：收据屏显示的数据必须来自本系统交出的 `RunResult`，不得在界面层重新计算净利、总值或回本判定。
 4. **重开是新局**：结算屏“再来一局”必须发起新的 `RunConfig`；不得复用上一局的种子、升级快照或局内状态，除非调用方显式指定同一个 `seed`。
@@ -355,7 +355,7 @@ The `transition_cost` rule is defined as:
 6. **最终画面保留**：从结束判定到收据出现之间，局内最终状态必须可见，不得先清空再显示收据。
 7. **首局引导**：指导层可以压入 Blocked 上下文并聚焦指定控件，但不得隐藏回合、容量或净利数字；它改变的是可操作性，不是规则。
 8. **无障碍**：不存在限时确认；暂停冻结一切；结束原因必须用文字给出，不能只靠颜色或图标。
-9. **结算阶段不提供放弃**：进入 `Ending` 后，暂停菜单只提供「继续」与「退出」，不提供「放弃本局」。放弃语义只属于仍在 `Active` 的一局；否则会出现“已算完但被放弃”的窗口。
+9. **结算阶段不提供放弃，但退出即弃局**：进入 `Ending` 后，暂停菜单只提供「继续」与「退出」，不提供「放弃本局」。放弃语义只属于仍在 `Active` 的一局；在 `Ending` / `Settling` / `Handoff` 中选择「退出」同样按规则 16 丢弃本局——不交付已算出的 `RunResult`、不写纪录、不出收据。界面流程的退出确认文案必须写明「退出将放弃本局，不记录成绩」，不得暗示会保留或稍后结算。
 
 > **📌 UX Flag — 餐局流程**：本系统对局内 HUD 的流程态（活动/冻结/结束/交接）与收据屏的打开时机提出约束。Phase 4 写 epic 之前，先用 `/ux-design` 覆盖 `design/ux/hud.md` 与 `design/ux/settlement.md` 的这些状态；相关 story 引用 UX 规格，不直接引用本 GDD。
 
@@ -366,19 +366,19 @@ The `transition_cost` rule is defined as:
 | 场景与流程管理 | design/gdd/scene-flow.md | 上游：取得 `RunConfig`、冻结/恢复通知、`request_transition`；本 GDD 回答其 `RunConfig` / `RunResult` schema 归属 Open Question |
 | 数据配置 | design/gdd/data-config.md | 上游：`Ready` 前提与 `station_id` 解析 |
 | 输入 | design/gdd/input.md | 上游：`ui_accept`、`game_skip_wave`；`ui_pause` 归场景与流程管理 |
-| 时间与回合 | 未写 | 下游：回合预算、消耗与耗尽判据 |
-| 胃容量 | 未写 | 下游：容量、可吃性判定 |
+| 时间与回合 | design/gdd/time-and-turns.md | 下游：回合预算、消耗与耗尽判据 |
+| 胃容量 | design/gdd/stomach-capacity.md | 下游：容量、可吃性判定 |
 | 菜品数值 | design/gdd/dish-values.md | 间接：由菜单波次、腻度与结算消费，本系统不直接读取 |
 | 腻度与口味 | design/gdd/cloying-and-taste.md | 下游：生命周期事件与吃下时的 `extra_satiety` / `effective_satiety` |
 | 菜单波次 | design/gdd/menu-waves.md | 下游：波次初始化、可见集、跳波与无菜可吃信号 |
 | 结算与入场费 | design/gdd/settlement-and-entry-fee.md | 下游（回调）：`settle(RunLog) → RunResult`；`RunResult` 字段归它所有 |
-| 局内 HUD | 未写 | 下游：只读本局快照与事件 |
-| 界面流程 | 未写 | 下游：组装 `RunConfig`、接收 `RunResult`、重开 |
-| 首局引导 | 未写 | 下游（软）：`is_first_run`、`pool_override`、Blocked 上下文 |
-| 音效反馈 | 未写 | 下游（软）：`run_*` 事件 |
-| 存档 | 未写 | 无直接调用：MVP 无中途存档 |
+| 局内 HUD | design/gdd/in-game-hud.md | 下游：只读本局快照与事件 |
+| 界面流程 | design/gdd/ui-flow.md | 下游：组装 `RunConfig`、接收 `RunResult`、重开 |
+| 首局引导 | design/gdd/first-run-onboarding.md | 下游（软）：`is_first_run`、`pool_override`、Blocked 上下文 |
+| 音效反馈 | design/gdd/audio-feedback.md | 下游（软）：`run_*` 事件 |
+| 存档 | design/gdd/save-system.md | 无直接调用：MVP 无中途存档 |
 
-**待回指（不由本文件修改）**：局内 HUD、界面流程、首局引导、音效反馈的 GDD 写好后，需在各自的 Cross-References 与 Dependencies 中列出「餐局流程」。时间与回合、胃容量、菜单波次、腻度与口味、存档已回指。
+**双向回指（已完成）**：局内 HUD、界面流程、首局引导、音效反馈的 GDD 均已在各自的 Cross-References 与 Dependencies 中列出「餐局流程」；时间与回合、胃容量、菜单波次、腻度与口味、结算与入场费亦已回指。存档按设计无直接调用，不要求回指。本节无待办。
 
 ## Acceptance Criteria
 
@@ -399,6 +399,7 @@ The `transition_cost` rule is defined as:
 9. **GIVEN** 同一帧收到两个动作输入，**WHEN** 处理该帧，**THEN** 只有第一个通过完整校验的动作提交，第二个无任何效果；不得双扣回合或双写 `eaten`。
 10. **GIVEN** 非最后一波，**WHEN** 按 `game_skip_wave`，**THEN** 当前波剩余菜作废、推进一波、`turns_used` 加 1。
 11. **GIVEN** 最后一波，**WHEN** 按 `game_skip_wave`（结束取餐），**THEN** 不扣回合、剩余菜作废、`no_eatable` 信号恰好一次、`end_reason = NO_EATABLE_DISH` 并进入 `Ending`。
+11a. **GIVEN** 非最后一波且 `turns_remaining = 1`，**WHEN** 按 `game_skip_wave`，**THEN** 返回 `REJECTED(NO_TURNS)`；当前波索引、当前波剩余菜、`turns_used`、`eaten` 与 `running_net` 均不变，且 `advance()` / `spend_turn()` 未被调用。**GIVEN** 最后一波且 `turns_remaining = 1`，**WHEN** 按同一动作，**THEN** 按 AC 11 正常结束取餐。
 12. **GIVEN** 一次成功动作后 `turns_remaining = 0`，**WHEN** 结束判定，**THEN** `end_reason = TIME_EXHAUSTED`，此后所有动作被拒绝；**GIVEN** 同时 `no_eatable = true`，**THEN** 仍取 `TIME_EXHAUSTED`。
 13. **GIVEN** 初始化完成且 `turns_total = 0`，**WHEN** 初始判定，**THEN** 立即 `TIME_EXHAUSTED`，生成零行 `RunLog` 并正常结算。
 14. **GIVEN** `Ending` 中组装 `RunLog`，**WHEN** 检查字段，**THEN** `run_id`、`station_id`、`entry_fee`、`end_reason`、`eaten` 顺序、`capacity_total`、`capacity_used`、`turns_total`、`turns_used`、`upgrade_snapshot` 全部来自动作发生时刻的记录；`capacity_used` 等于各行 `effective_satiety` 之和。**WHEN** 组装后修改数据配置与腻度状态再读取日志，**THEN** 日志仍是旧值（证明不重算）。
@@ -421,7 +422,7 @@ The `transition_cost` rule is defined as:
 31. **GIVEN** 首局引导压入 Blocked 上下文，**WHEN** 本局继续，**THEN** `run_state` 仍为 `Active`、`run_id` 不变、未额外广播 `run_started` / `run_ended`，结束条件不变。
 32. **GIVEN** 注入 `CAPACITY_MISMATCH` 故障，**WHEN** 离开 `Run`，**THEN** 不产生 `RunResult`、不写纪录，ERROR 日志含 `run_id` 与违反字段，`Run → Menu` payload 为 `init_failed = true` 且带 `fault` 明细，顶层最终停在 `Menu` 而不是卡在 `Run`。
 33. **GIVEN** 一局正常开始与结束，**WHEN** 检查事件，**THEN** `run_started`、`run_ended`、`run_settled` 各恰好一次；`run_discarded` 对该局为 0 次。
-34. **GIVEN** 局内 HUD 显示回合、容量与净利，**WHEN** 每次动作后与快照及结算的 `running_net(k)` 对比，**THEN** 三处数字一致；HUD 的净利来自 `running_net(k)`，不自行为求和。
+34. **GIVEN** 局内 HUD 显示回合、容量与净利，**WHEN** 每次动作后对比本系统快照、HUD 显示值与结算纯函数 `running_net(k)` / `shortfall(k)` 对同一份 `RunLog` 的复核值，**THEN** 三处数字一致；HUD 的净利来自本系统快照的 `running_net` / `shortfall`，不自行维护累加器或求和。
 35. **GIVEN** 数据配置不在 `Ready`，或任一子系统初始化抛出错误，**WHEN** 开局，**THEN** `init_failed`，不广播 `run_started`、不产生 `RunLog` / `RunResult`，最终 `Idle`。
 36. **GIVEN** 最后一波的最后一道菜被吃下，**WHEN** 动作提交后判定，**THEN** `no_eatable` 恰好一次、`end_reason = NO_EATABLE_DISH`、进入 `Ending`；若同时回合耗尽则取 `TIME_EXHAUSTED`。
 37. **GIVEN** `turns_total = 0` 的局在帧 N 经 `Menu → Run` 生效，**WHEN** 同帧请求 `Run → Menu`，**THEN** 请求被拒绝；本系统不重复初始化或结算，留在 `Handoff`，在帧 N+1 重发并被接受。
