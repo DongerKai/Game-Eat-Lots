@@ -226,3 +226,89 @@ Reviewed-Content-Hash: design/gdd/menu-waves.md a9ed433be48d155399168a5519ae0f3c
 Reviewed-Content-Hash: design/gdd/scene-flow.md e1d10bd89706bef8f4cffa93065a9206fb1f54b6
 Reviewed-Content-Hash: design/gdd/systems-index.md 01259cc27663f7a47234e09c674e143fa3e2ba5c
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+
+---
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none（lean 模式，Phase 3b 未运行）
+Blocking items: 2 | Recommended: 10
+Summary: 三项 blocking 中两项已实质解决。首局现在明确按 `RunLog.entry_fee` 计算，并新增 AC 31 覆盖 40 元教学价（82 → +42、2050）；实时累加器的归属已改为餐局流程，`run-flow.md` 规则 23 与 AC 22/24 补齐了初始化、逐次累加与放弃丢弃，HUD 只读快照的边界两侧一致。但 `entry_fee` 迁移仍留有两处同类残留：本文件上游依赖表仍写 `get_station(id) → entry_fee`，注册表的 `net_profit` / `return_ratio` 表达式仍写 `entry_fee(station_id)`——以机器可读契约实现时仍会绕过冻结日志。设计本体、算术与边界未发现新问题。
+Prior verdict resolved: Partial — B2（首局）、B3（实时净利）已解决；B1（`entry_fee` 迁移）主体已解决，上游依赖行与注册表表达式未迁移。
+
+### 复审背景
+
+- 触发：`427409f`（Batch 2/3 修复）与 `be69169`（Batch 4-6 修复）改动本文件及其关联 GDD；上轮评审哈希为 `c4175b0`。
+- 复审范围：**全文重读**（493 行，按标题分段），未按 diff 跳读。
+- 本轮实际改动：规则 2（冻结费）、规则 19（累加器归属）、`net_profit` / `return_ratio` 公式与变量、首局边角案例、Cross-References 数据配置行、HUD 下游依赖行、AC 31、音效事件互斥句。依赖图、公式表其余部分、Edge Cases 其余条目、交互表均未改。
+
+### 完整性（standard 层：5 节必需 + 有数值规则时的 Formulas）
+
+必需 6/6 齐全：Overview、Detailed Design（= Detailed Rules）、Formulas、Edge Cases、Dependencies、Acceptance Criteria。Formulas 对本系统必需：它定义求和、净利、回本判定、回本率、容量、腻度、单位价值与实时净值九组数值规则。
+
+Advisory 缺口（不阻塞，与上轮相同）：Player Fantasy、Tuning Knobs 无独立标题。Game Feel（`:375-382`）实质覆盖前者；唯一运行期旋钮是数据驱动的 `entry_fee`，后者可由一行交叉引用补齐。
+
+### Dependency Graph
+
+上轮已核对 14 份被引 GDD 全部在盘；本轮复核关联文件仍存在，无断链：`data-config.md`、`dish-values.md`、`cloying-and-taste.md`、`stomach-capacity.md`、`time-and-turns.md`、`run-flow.md`、`meta-upgrades.md`、`records-and-milestones.md`、`ui-flow.md`、`in-game-hud.md`、`first-run-onboarding.md`、`audio-feedback.md`、`save-system.md`、`menu-waves.md`、`scene-flow.md`。
+
+跨文档事实复核：
+- ✓ `run-flow.md:51` 规则 23 已接收累加器所有权：开局 `−entry_fee`、每次提交 `+price(d)`、放弃/退出/故障丢弃；`run-flow.md:390` AC 1 保证 `RunLog.entry_fee` 等于 `RunConfig.entry_fee_override`（`null` 时取 `StationData.entry_fee`）。B3 两侧咬合。
+- ✓ `in-game-hud.md:170` 明确 HUD 经快照读 `running_net` / `shortfall`，不读 `entry_fee` 自行计算；与本文件规则 19、UI Requirements 一致。
+- ✓ `audio-feedback.md:38` 规则 12 与 `:302-303` 支持 `settlement_started` 先播、结果 cue 在数字滚动结束时起播；本文件新写的「`settlement_started` 与结果三选一可并存、结果三者互斥」两侧一致。
+- ✓ `first-run-onboarding.md:38`、`:297-302`、`:458` 的 40 元教学价、总值 82、净利 +42、回本率 205.0% 与 AC 31 完全一致。
+- ⚠ `data-config.md:81,182` 仍写「结算读取 `entry_fee`」；`run-flow.md:316` 与 OQ10（`:456`）仍写「本设计中入场费由结算读取」。按 `run-flow.md:40,64,387` 与本文件规则 2，实际是餐局流程解析并冻结、结算只读 `RunLog.entry_fee`。属跨文档措辞同步，路由 `/consistency-check`。
+
+### Registry Values
+
+对全文做了 145 行 registry 术语扫描（`total_value`、`net_profit`、`broke_even`、`return_ratio`、`effective_unit_value`、`running_net`、`shortfall`、`capacity_used`、`wasted_capacity`、`cloy_extra_total`、`unit_value`、`calibration_ratio`、`extra_satiety`、`effective_satiety`、`run_id_alloc`、`end_reason`、`capacity_total`、`record_is_better`、`replacement_hint`、`first_run_entry_fee`、`station_canteen_entry_fee`、`entry_fee`，大小写不敏感，`_` 按 `[_ ]`）。
+
+数值无冲突：`station_canteen_entry_fee = 85`（`entities.yaml:1183-1193`）与全文及所有算例一致；`first_run_entry_fee = 40`（`:1276-1287`）与首局边角、AC 31 一致；`extra_satiety [0,3]`、`effective_satiety [1,9]`、`capacity_used` / `wasted_capacity` 与 `:193-208` 一致。
+
+表达式冲突 2 处（见 Required 2）：`net_profit`（`:620`）与 `return_ratio`（`:647`）仍写 `entry_fee(station_id)`，与规则 2、`:137`、`:170` 的 `R.entry_fee` 相反。上轮的窄输出域问题（`:603`、`:619`、`:646`、`:660`、`:675`、`:690`）仍在。
+
+### 上一轮 blocking 复核
+
+| # | 上轮 blocking | 结论 | 证据 |
+|---|---|---|---|
+| B1 | `entry_fee` 出处只迁移了一半 | **部分解决** | 已改：规则 2（`:26`）、`net_profit` 表达式与变量源（`:137`、`:143`）、`return_ratio`（`:170`）、交互表数据配置行（`:95`）、Cross-References（`:414`）、HUD 下游依赖行（`:338`）。未改：上游依赖表仍写 `get_station(id) → entry_fee`（`:324`），注册表两条表达式仍写 `entry_fee(station_id)`（`:620`、`:647`），AC 25 / F6 仍以档口措辞描述费用（见 Recommended 1）。 |
+| B2 | 首局声称数值不变、override 无测试 | **已解决** | 边角案例 `:315` 改为「按本局 `RunLog.entry_fee` 计算，首局可传 `entry_fee_override = 40`，净利/回本率随 override 变化」；新增 AC 31（`:475`）：`entry_fee = 40`、总值 82 → `+42`、`2050`、`broke_even = true`，并断言同一 `eaten` 改为 85 不产出该组值。算术与 `first-run-onboarding.md:302,458` 一致。 |
+| B3 | 实时 `running_net` 无开局初始化 | **已解决** | 规则 19（`:43`）把累加器交给餐局流程：开局 `−entry_fee`、每次提交 `+price(d)`、结算用同一公式复核；`run-flow.md:51` 规则 23 落实实现，`run-flow.md:411-413` AC 22/24 覆盖放弃丢弃与重开清零；`in-game-hud.md:170` 明确 HUD 只读快照、不读 `entry_fee`。本文件 States（`:47`）仍声明不持有局内状态，与委派一致。 |
+
+### Required Before Implementation
+
+1. **[BLOCKING] Dependencies（`:324`）— 上游数据配置行仍声明直接读入场费。** 该行仍写 ``get_station(id)` → `entry_fee``，与本文件规则 2（`:26`）、交互表（`:95`）、Cross-References（`:414`）矛盾。结算不调用 `get_station` 取费；它只读 `RunLog.entry_fee`，档口记录仅是餐局流程的默认来源。改为 ``get_station(id)` → 存在性与 `display_name`；`get_dish(id)` → `price`、`satiety`；`entry_fee` 由餐局流程冻结进 `RunLog``。这是上一轮 B1 点名但本轮未触碰的一行，按接口表实现依赖接线会重新引入直接读站点的路径。
+2. **[BLOCKING] 注册表（`entities.yaml:620`、`:647`）— 公式表达式仍按站点取费。** `net_profit` 写 `total_value(R) - entry_fee(station_id)`，`return_ratio` 写 `total_value(R) / entry_fee(station_id)`；本文件已改为 `R.entry_fee`。注册表是机器可读契约，下游按它实现仍会绕过冻结日志，首局会算成 85。改为 `total_value(R) - entry_fee` / `total_value(R) / entry_fee`，并在 `notes` 注明 `entry_fee` 来自 `RunLog.entry_fee`。注册表编辑属编排会话；本条只报告，不代改。
+
+### Recommended Revisions
+
+1. **AC 25（`:466`）与 F6（`:435`）改用 `RunLog.entry_fee` 措辞。** 现在写的是「将档口 `entry_fee` 改为 37 / 0」。按规则 2，结算只读日志；应改为「把 F2 的 `RunLog.entry_fee` 设为 37（档口仍为 85）」与「F2 的日志，`RunLog.entry_fee = 0`」。AC 31 已覆盖 override 路径，故此条是精度问题而非覆盖率缺口。
+2. **`running_net` / `shortfall` 变量表（`:257-261`）补 `entry_fee` 行。** 两条公式使用裸 `entry_fee`，但变量表只列 `k`、`running_net(k)`、`shortfall(k)`；补一行 `entry_fee | int | 0–INT32_MAX | RunLog.entry_fee（开局冻结）`，与 `net_profit` 的 `R.entry_fee` 行对齐。
+3. **`end_reason` 出处（`:99`）。** 交互表仍把 `end_reason` 列在时间与回合名下；`time-and-turns.md:43` 明确它不保存、不排序 `end_reason`，`run-flow.md:40` 与注册表把它归餐局流程。删掉时间行的 `end_reason`，RunLog 表（`:65`）已正确。
+4. **边界值域（`:180`、`:239`）。** `return_ratio` 的 `(0, +∞)` 排除空局（`total_value = 0` 时为 0，F3 `:297`）；`effective_unit_value` 的 `(0, price_max]` 排除零价菜，而同一块声明 `price ≥ 0`（`:126`）。改为 `[0, +∞)` 与 `[0, price_max]`，并说明空局显示 `0.0%`。
+5. **注册表输出域宽于/窄于实际（`:603`、`:619`、`:646`、`:660`、`:675`、`:690`）。** `total_value`、`net_profit`、`running_net`、`shortfall`、`return_ratio`、`effective_unit_value` 的 `output_range` 窄于 GDD 声明的 int64 域；或加注「registry 记实用带，GDD 记防御上限」。编排会话处理。
+6. **关闭已回答的 Open Questions。** OQ2（`:488`）→ `run-flow.md:36` 不提供提前结账；OQ3（`:489`）→ `records-and-milestones.md:31,309` 按净利排名；OQ4（`:490`）→ `entities.yaml` 的 `replacement_hint`（`:1128-1141`）。标注「已回答」即可。
+7. **跨文档取费措辞（路由 `/consistency-check`）。** `data-config.md:81,182` 与 `run-flow.md:316,456`（OQ10）仍写「结算读取 `entry_fee`」。实际链路是餐局流程解析 `RunConfig.entry_fee_override` / `StationData.entry_fee` 并冻结进 `RunLog.entry_fee`（`run-flow.md:390` AC 1），结算只读日志。
+8. **交互表硬度与缺行（`:91-107`）。** 音效反馈本文件记软（`:107`），但 `audio-feedback.md:110,354` 记「硬（事件契约）；产品意义上软」；首局引导记软（`:106`），但 `first-run-onboarding.md:126,363` 记「硬（B4）」。菜单波次只出现在 Dependencies（`:342`），场景与流程管理在规则/边角中多次引用却无交互行；补行或注明经餐局流程间接。
+9. **Scope signal。** `systems-index.md:206` 记 `S`；本 GDD 有 6 个硬上游、8 个下游、九组公式，按评审尺度为 `L`。索引编辑属编排会话。
+10. **音效事件的发射者与时机（新增，回应 `audio-feedback.md:546` OQ1）。** 本文件只定义事件语义，`audio-feedback.md` 假设「结算在 `settle` 成功、收据数据可用时发 `settlement_started`，结果语义同时到达」。补一句发射时机（`settle` 成功同帧发 `settlement_started`；`broke_even` / `loss` 同帧到达，由音频延后到滚动结束），即可关闭音频侧 OQ1。
+
+### Nice-to-Have
+
+- 不变式 1（`:273`）写 `capacity_used = RunLog.capacity_used`，读起来像自比较；写成 `Σ effective_satiety = RunLog.capacity_used`。
+- `scene-flow.md` 被引为 `Run → Menu` payload 的承担者（`:31`、`:417`），但该文件 0 次提及本系统；补一条间接依赖说明或注明它只搬运 payload。
+- Tuning Knobs / Player Fantasy：各补一行交叉引用即可，不要求新增整节。
+
+### Verdict: NEEDS REVISION
+
+设计本体与算术成立，B2、B3 已解决；B1 的公式、规则与 Cross-References 已迁移，但依赖接口表与注册表表达式仍保留站点取费，属同一契约的未完成迁移。两条 blocking 都是单点文本/注册表修改，不需要重新设计。
+
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 5734623b4a60d9072657ef631c8ae61f05359f21
+Reviewed-Content-Hash: design/registry/entities.yaml f8361d463dc6172ce3c22a462bccce6d2037d35c
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md ed8848ea7c41823db26e22fb7d5df5f998fc0234
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 3f99e25a3d35bd4922c0717adc033569a50abafb
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 654e48d14dbf85fdbab3b923e590a4f356dd0218
+Reviewed-Content-Hash: design/gdd/audio-feedback.md f6ac7fbd915341f63761529b664028eec6b216c0
+Reviewed-Content-Hash: design/gdd/data-config.md 0be338a35d8e5fa9ded4c219b29801021835938a
