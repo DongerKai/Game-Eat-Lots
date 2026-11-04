@@ -31,7 +31,7 @@
 5. **同帧派发**：事件广播的同一帧内完成 cue 请求；不得 `await` 播放结束、不得延迟到下一帧、不得用定时器补播。唯一的例外是结算结果 cue：它必须等到收据数字滚动结束（或玩家跳过）才起播，以保证“声音与落定的数字同帧”而不是与被滚动的数字重叠。
 6. **永不阻塞**：音频路径不得门控输入、画面或状态转移。设备忙、流缺失、总线不可用时的统一行为是**丢弃并记录**，不是等待、不是重试、不是降级到别的 cue。
 7. **四级优先级**：`Critical(4) > Lifecycle(3) > Gameplay(2) > UI(1)`。Critical 只给结算的两个结果语义（`broke_even` / `loss`）；Lifecycle 给开局 / 结束 / 丢弃 / 故障 / 收据打印；Gameplay 给吃菜 / 跳波 / 拒绝 / 数字滚动；UI 给点击 / 暂停 / 恢复 / 菜单。
-8. **并发上限与抢占**：全局最多 10 个 voice；每级上限 `Critical 1 / Lifecycle 2 / Gameplay 3 / UI 3`。无空位时，只有**严格更高**优先级可以抢占该级中**最旧**的 voice；同级或更低优先级的请求被丢弃。**Critical 只能被另一个 Critical 抢占**，不能被任何低优先级抢占；被替换的 Critical 立即停止并记为 `stolen`。一个 voice 起播后的前 50 ms 不可被抢占，避免截断造成的咔哒声。
+8. **并发上限与抢占**：全局最多 10 个 voice；每级上限 `Critical 1 / Lifecycle 3 / Gameplay 3 / UI 3`。无空位时，只有**严格更高**优先级可以抢占该级中**最旧**的 voice；同级或更低优先级的请求被丢弃。**Critical 只能被另一个 Critical 抢占**，不能被任何低优先级抢占；被替换的 Critical 立即停止并记为 `stolen`。一个 voice 起播后的前 50 ms 不可被抢占，避免截断造成的咔哒声。
 9. **冷却**：每个 cue 有独立的最小重触发间隔（见 Formulas）；间隔内的请求记为 `dropped:cooldown`，且**不刷新**冷却起点。结果 cue 与“每局一次”的生命周期 cue 不受冷却约束，由“每 `run_id` 一次”保证不重复。吃菜提交不用冷却，改用“同一 `action_id` 每帧至多一次”的去重，避免把确认反馈丢掉。
 10. **变体轮换是确定的**：同一 cue 有多个变体时按固定顺序轮换（round-robin），不使用随机数；同一事件序列必须产生同一 cue 序列，以便回放与自动化测试。轮换游标在会话内单调前进，不因暂停、静音或丢弃而重置。
 11. **音量由四段相加**：`cue_volume_db = clamp(base_db + bus_offset_db + master_gain_db + sfx_gain_db, -80, 0)`。`base_db` 属于声音规范（数据驱动），`bus_offset_db` 属于混音路由（SFX / UI 两条总线），后两项来自玩家设置。任何 cue 不得以正增益播放。
@@ -74,7 +74,9 @@
 | `sfx.career.complete` | `career_completed`（#14） | 完成同帧 | 一次性收尾 | Lifecycle | — | 1 / 会话 |
 | `sfx.num.land` | 数字滚动结束 / 跳过 | 落定同帧 | 数字停住 | Gameplay | — | 1 / 次滚动 |
 
-**同帧多事件的裁定顺序**（仅用于同一帧内多个 cue 竞争同一 voice 的情形）：`run_faulted` > 结算结果（`loss` 优先于 `broke_even`）> `settlement_started` > `run_ended` > `run_discarded` > `run_started`。低优先级 cue 不因裁定顺序而跳过冷却或去重检查。
+**同帧多事件的裁定顺序**（仅用于同一帧内多个 cue 竞争同一 voice 的情形）：`run_faulted` > 结算结果（`loss` 优先于 `broke_even`）> `settlement_started` > `career_completed` > `record_broken` > `milestone_earned` > `run_ended` > `run_discarded` > `run_started`。低优先级 cue 不因裁定顺序而跳过冷却或去重检查。
+
+**纪录 cue 的合并**：`record_broken` 与 `milestone_earned` 可并存；`career_completed` 与二者同帧时只播 `career_completed`，其余记为 `suppressed:outcome_priority`；同帧多条 `milestone_earned` 合并为一次 `sfx.milestone`。
 
 **不存在的 cue（刻意不做）**：焦点移动 tick、开局倒计时、背景环境声（Vertical Slice 也不例外）、亏损警报音（`loss` 是低闷收尾，不是警报）、连续吃菜的连击音、时钟滴答、任何意义上的“你本可以”提示音。它们要么制造等待，要么奖励手快，要么把失败包装成奖励，违反支柱 2、3 与 4。
 
@@ -292,7 +294,7 @@ The `duck_db` formula is defined as:
 - **If `run_started` 与 `run_ended` 在同一帧到达**（零回合局，初始化后立即判定结束）：`run_ended` 生效，`run_started` 记 `suppressed:preempted`。一局短到没有内容时，不应先给“进店”再给“结束”两层声音。
 - **If 同一 `run_id` 的 `run_ended` / `run_discarded` / `run_faulted` 到达两次**：第二次 `dropped:dedupe`，不发声。
 - **If `run_settled` 到达**：不产生任何 cue，只用于确认交接完成；结算声音由 `settlement_started` / `broke_even` / `loss` 承载。重复 `run_settled` 同样无声。
-- **If `action_committed` 的 `action` 不在 `{eat, skip_wave, end_meal}` 内**：记 `dropped:invalid`，一条 WARN，不猜测替代 cue。
+- **If `action_committed` 的 `action` 不在 `{eat, skip_wave, end_pickup}` 内**：记 `dropped:invalid`，一条 WARN，不猜测替代 cue。
 - **If 同一帧收到两个吃菜提交**：两个 `sfx.eat.commit` 都准入（Gameplay 上限 3，足够）；第三个起按并发上限处理——同级不互相抢占，超出即丢弃。不得合并成一声，否则玩家无法确认第二口。
 - **If 同一 `action_id` 在同一帧被重复广播**：只发一次 `sfx.eat.commit`，第二次 `dropped:dedupe`。若 payload 没有 `action_id`，按 `(action, dish_id, 帧号)` 去重；仍无法区分时以“每帧每个动作一次”为下限。
 - **If 事件在 `Uninitialized` 阶段到达**（启动早期）：`dropped:not_ready`，不排队、不延后播放。音频不补偿自己没准备好的时间。

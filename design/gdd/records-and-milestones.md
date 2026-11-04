@@ -108,7 +108,7 @@
 | 接口 | 输入 | 输出 | 说明 |
 |---|---|---|---|
 | `load(saved: Dictionary)` | 存档命名空间 | `RecordsLoadReport` | 载入后调用一次；做语义校验并产出警告列表 |
-| `apply_run(result: RunResult)` | 已结算结果 | `RecordsChange` / 错误 | 纯更新：返回新命名空间与本次新达成的里程碑；不写盘 |
+| `prepare_run(result: RunResult)` | 已结算结果 | `RecordsChange` / 错误 | 纯更新：返回新命名空间与本次新达成的里程碑；不写盘 |
 | `snapshot()` | — | `RecordsSnapshot` | 只读视图，供界面与音效读取 |
 | `milestone_progress(id)` | 里程碑 id | `{current, threshold, unit, earned}` | 只读；用于展示「340 / 500」这类进度 |
 | `record_broken(station_id, new_best, previous_best)` | — | 信号 | 新纪录替换旧纪录时发一次；首次建立纪录时 `previous_best = null` |
@@ -117,7 +117,7 @@
 
 **接口所有权**：本系统拥有 `records` 命名空间的全部字段、里程碑与完成条件的语义、比较规则与时间戳。存档只提供存放位置与原子性；界面流程只读；结算不得解释纪录。`RunResult` 的字段与求和规则归结算，本系统不复制一份求和逻辑。
 
-**结算提交编排者的契约**：本系统不决定事务边界。`apply_run` 返回的新 `records` 值必须由同一个编排者与其他命名空间（局外升级的 `progression`、解锁的 `unlocks`）合并为**一次**提交，且该事务在写盘失败时整体延后重试、不逐命名空间回滚。`apply_run` 返回任何错误（`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY`）时，编排者必须中止整笔结算事务，不得提交其他命名空间。编排者身份尚未指定（见 Open Question 1）。
+**结算提交编排者的契约**：本系统不决定事务边界。`prepare_run` 返回的新 `records` 值必须由同一个编排者与其他命名空间（局外升级的 `progression`、解锁的 `unlocks`）合并为**一次**提交，且该事务在写盘失败时整体延后重试、不逐命名空间回滚。`prepare_run` 返回任何错误（`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY`）时，编排者必须中止整笔结算事务，不得提交其他命名空间。编排者身份尚未指定（见 Open Question 1）。
 
 ## Formulas
 
@@ -325,7 +325,7 @@ The `career_complete` formula is defined as:
 
 本系统的只读加载器与数据配置的 `Ready` 门并列：任一失败则不进入游戏。`MilestoneData` 不进入 data-config schema。
 
-**对存档的契约澄清（provisional）**：存档规则 18 规定「纪录写盘失败保留内存并重试」，规则的状态表又规定「一次结算引起的钱包、纪录与解锁变化合并为同一个事务」。两条同时成立时，混合事务的失败策略必须明确：本系统要求**结算来源的事务整体延后重试**（钱包、纪录、解锁一起留在内存），而不是钱包回滚、纪录保留——否则同一份结算结果会在两个命名空间里出现不同的事实。购买来源的事务仍按存档规则 17 回滚，两者按事务来源区分。若 `apply_run` 返回错误，该事务**不提交**（不是延后重试），其他命名空间也不得写入。
+**对存档的契约澄清（provisional）**：存档规则 18 规定「纪录写盘失败保留内存并重试」，规则的状态表又规定「一次结算引起的钱包、纪录与解锁变化合并为同一个事务」。两条同时成立时，混合事务的失败策略必须明确：本系统要求**结算来源的事务整体延后重试**（钱包、纪录、解锁一起留在内存），而不是钱包回滚、纪录保留——否则同一份结算结果会在两个命名空间里出现不同的事实。购买来源的事务仍按存档规则 17 回滚，两者按事务来源区分。若 `prepare_run` 返回错误，该事务**不提交**（不是延后重试），其他命名空间也不得写入。
 
 **对未设计系统的前置契约（provisional）：**
 
@@ -344,7 +344,7 @@ The `career_complete` formula is defined as:
 - **里程碑是账本上的勾**：已达成条目用勾选与日期表示，未达成条目显示进度（`340 / 500`），不显示锁形图标或灰色不可见条目。没有隐藏目标。
 - **完成是唯一的高光时刻**：通关时允许一次完整的横幅与音效（≤ 1.5 秒），此后进入「通关后目标」状态，不再重复庆祝。
 - **亏损纪录不用红色**：回本红只用于正收益；负的最佳局用中性墨色加负号，与结算屏的盈亏语义保持一致。
-- **音效事件**（由音效反馈实现，本系统只定义语义）：`record_broken`（轻短图章声）、`milestone_earned`（翻页/勾选声）、`career_completed`（一次性完整收尾音）。三者互斥，不叠加。本系统对每条新达成里程碑**各发一次** `milestone_earned`；同一帧多次到达时，由音效反馈合并为一次播放。
+- **音效事件**（由音效反馈实现，本系统只定义语义）：`record_broken`（轻短图章声）、`milestone_earned`（翻页/勾选声）、`career_completed`（一次性完整收尾音）。`record_broken` 与 `milestone_earned` 可并存；`career_completed` 与二者同帧时由它收尾（音效侧合并）。本系统对每条新达成里程碑**各发一次** `milestone_earned`；同一帧多次到达时，由音效反馈合并为一次播放。
 
 > `art-director` not consulted — Lean mode（本系统是 Progression 数据层，视觉由既有账本隐喻决定）。进入生产前需人工复核。
 

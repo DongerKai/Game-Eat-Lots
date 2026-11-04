@@ -124,7 +124,7 @@
 | 局内 HUD | 上游（协作） | `get_anchor_rect(anchor_id) -> Rect2`、`focused_dish_id`、当前波可见数与波序；气泡绘制在 HUD 之上 | 硬 |
 | 菜品数值 | 上游 | 六道菜 id 的 `price` / `satiety` / `cloying_group` / `unit_value`（只在 `B4` 使用）；不自行重算比值 | 硬 |
 | 结算与入场费 | 上游 | `RunResult.rows[]` 的 `price`、`satiety`、`extra_satiety`、`effective_satiety`、`unit_value`、`effective_unit_value`；`entry_fee`、`total_value`、`net_profit` | 硬（`B4`） |
-| 菜单波次 | 上游（间接） | 接收 `pool_override`；本系统不读波次内部，只读当前波的可见数与波序用于 B2 文案 | 软 |
+| 菜单波次 | 上游（间接） | 接收 `pool_override`；`get_run_menu() -> StringName[]`（本局有效菜单，供 `replacement_hint`）；只读当前波的可见数与波序用于 B2 文案 | 软 |
 | 腻度与口味 | 上游（间接） | 读 `focused_dish_id` 的组计数与 `extra_satiety` 用于 B3 触发与文案；不写计数 | 软 |
 | 界面流程 | 下游 | 取预置（`pool_override` / `entry_fee_override`）；接收 `FirstRunExplanation` 并渲染收据讲解；读取 `onboarding_finished` 决定下一次 `is_first_run` | 硬（UI） |
 | 局外升级 | 下游（仅文案） | `B4` 的「首笔升级建议」读升级目录与当前钱包，只出文字，不购买、不高亮按钮 | 软 |
@@ -184,7 +184,7 @@ The `beat_next` formula is defined as:
 | `focused_dish_id` | StringName \| ⊥ | 可见菜 id / `⊥` | HUD | 当前焦点菜品 |
 | `group_count(g)` | int | 0–`cloy_cap` | 腻度与口味 | 组的当前计数 |
 
-**Output Range:** 上表覆盖的全部节点。**推进事件按输入序列号单调消费**：只接受 `input_seq > last_consumed_seq` 的事件，同一帧到达的两个事件里第二个被丢弃；`ui_accept` 的自动重复已由输入规则 5 排除。B1 的模态分支在动作提交之前调用 `输入.consume_action(ui_accept)` 取走本帧的确认；餐局流程随后轮询同一个动作得到 `false`，因此看不到它。
+**Output Range:** 上表覆盖的全部节点。**推进事件按输入序列号单调消费**：只接受 `input_seq > last_consumed_seq` 的事件，同一帧到达的两个事件里第二个被丢弃；`ui_accept` 的自动重复已由输入规则 5 排除。B0 与 B1 的模态分支都在推进前调用 `输入.consume_action(ui_accept)` 取走本帧的确认；餐局流程与 HUD 随后轮询同一个动作得到 `false`，因此看不到它。
 
 **Example:** B1 中玩家把鼠标移到「清蒸鱼」再按确认 → `focused_dish_id = dish_steamed_fish ≠ ⊥` → 进入 `COACHING`；餐局流程没有收到这次 `ui_accept`，清蒸鱼没有被吃。
 
@@ -337,7 +337,7 @@ uv_gap      = unit_value(best_menu) − worst_eaten.effective_unit_value
 - **If `is_first_run = true` 但存档已有 `runs_settled > 0`**：仍按首局运行（本系统只消费标记），不读存档判断；不产生错误。上线前应由组装方修正标记来源。
 - **If 首局被放弃、退出或故障**：立即弹出 `Blocked`、拆除遮罩与气泡、不产出 `B4`、不广播 `onboarding_finished`、不写任何东西。下一局仍是首局是合法结果。
 - **If 气泡打开期间玩家暂停**：`Paused` 生效时输入栈被清空，`Blocked` 失效；恢复回 `Run` 时本系统重新压入同一白名单。**若重新压入返回 `false`**：不重试，把当前 beat 降级为无遮罩的停靠提示，玩家可以直接操作——绝不出现「气泡还在但按键无效」的卡死。
-- **If 玩家在同一帧连按两次 `ui_accept`**：只推进一个 beat；第二个事件被丢弃。B1 不会因此连跳到 `COACHING` 并误触一次吃菜（吃菜在 `Blocked` 下本就到不了餐局流程）。
+- **If 玩家在同一帧连按两次 `ui_accept`**：只推进一个 beat；第二个事件被丢弃。B0 与 B1 都在推进前调用 `输入.consume_action(ui_accept)`，HUD 的 `submit_action` 在同一帧拿不到该动作，因此不会误触一次吃菜。
 - **If 玩家用鼠标：焦点为空**：B1 的推进条件要求 `focused_dish_id ≠ ⊥`；气泡文案提示「把鼠标移到一道菜上，或用方向键选一道」。不自动替玩家选菜、不因无焦点超时。
 - **If HUD 尚未完成首帧布局，锚点矩形为空**：本系统在 `run_started` 同帧压 `Blocked`（防止误操作），但把气泡绘制推迟到锚点可用的第一帧，最多等 2 帧；仍为空则按 `bubble_rect` 的底部停靠。
 - **If 玩家第一波直接跳过、最后一波结束取餐、一道没吃**：B2 在进入 `Coaching` 时已展示；B3 未触发、不进入必需集合；B4 在 `run_settled` 后交付空局文案（「这一局你没有吃」），不给替换建议；结算的零行收据照常显示。
@@ -460,7 +460,7 @@ uv_gap      = unit_value(best_menu) − worst_eaten.effective_unit_value
 **Beat 序列**
 
 5. **GIVEN** 首局开局首帧，**WHEN** 画面呈现，**THEN** B0 气泡打开、锚定顶栏净利位，**回合、容量、净利三个读数仍可见且未被遮罩压暗**。**截图留存**。
-6. **GIVEN** B0 打开，**WHEN** 玩家按 `ui_accept`，**THEN** 进入 B1，B0 只出现一次；`turns_remaining` 与 `capacity_used` 不变。
+6. **GIVEN** B0 打开，**WHEN** 玩家按 `ui_accept`，**THEN** 进入 B1，B0 只出现一次；`turns_remaining`、`capacity_used` 与 `eaten_count` 均不变，餐局流程未收到该次确认。
 7. **GIVEN** B1 打开且无焦点，**WHEN** 玩家按 `ui_accept`，**THEN** 不推进、不吃菜，气泡提示需要先选一道菜。
 8. **GIVEN** B1 打开且有焦点，**WHEN** 玩家按 `ui_accept`，**THEN** 进入 `Coaching`、`eaten_count` 不变、餐局流程未收到该次确认。
 9. **GIVEN** 进入 `Coaching`，**WHEN** 画面稳定，**THEN** B2 作为非模态提示显示在底部，不挡任何菜品卡、不改变输入上下文。**截图留存**。
@@ -501,7 +501,7 @@ uv_gap      = unit_value(best_menu) − worst_eaten.effective_unit_value
 | 1 | 首局教学价 40 怎么落到 `RunConfig`？**已回答（2026-11-04）**：`RunConfig.entry_fee_override` 已定义。 | — | 编排会话 + 餐局流程 / 结算 | 已关闭 |
 | 2 | 菜单波次只读 `StationData.dish_pool`，`RunConfig.pool_override` 目前无处落地。**已回答（2026-11-04）**：`initialize(...)` 与健康检查已接受 `pool_override`。 | — | 编排会话 + 菜单波次 | 已关闭 |
 | 3 | `Blocked` 上下文只放行 `ui_pause`。**已回答（2026-11-04）**：`push_context` 已有 `allow` 白名单，`consume_action` 解决确认键争用。 | — | 编排会话 + 输入 | 已关闭 |
-| 4 | 收据讲解由界面流程渲染还是由本系统覆盖层渲染？界面流程尚未设计。 | 本系统只交付 `FirstRunExplanation` payload，界面流程负责排版与关闭时机；本系统不假设收据的锚点。 | 界面流程 | 界面流程 GDD 完成时 |
+| 4 | 收据讲解由界面流程渲染还是由本系统覆盖层渲染？**已回答（2026-11-04）**：界面流程渲染 `FirstRunExplanation`（含教学价说明、替换建议、首笔升级建议），订阅 `onboarding_finished`；本系统不假设收据锚点。 | 本系统只交付 `FirstRunExplanation` payload。 | 界面流程 | 已关闭 |
 | 5 | 「跳过/完成」是否需要持久化，而不只是由 `runs_settled == 0` 推断？ | MVP 先用 `runs_settled == 0`：完成一局（含跳过后的那一局）自动结束首局；放弃则下次仍是首局。若试玩反馈「跳过还要再看」不可接受，再加一个 `onboarding` 命名空间。 | 界面流程 + 存档 | Vertical Slice 试玩后 |
 | 6 | 六道菜池是否应该让容量刚好卡住（本设计）还是留有余量（全都能吃）？ | 采用卡住：只有卡住才会出现一次真实取舍，教学才有对象。代价是玩家必须放弃一道，收据讲解用「装不下」而非「选错了」的口径。 | systems-designer | 试玩验证 |
 | 7 | `B4` 的「首笔升级建议」是否要在收据上高亮按钮？ | 只出文字、不高亮、不预选。高亮会把「推荐」变成「默认选择」，与局外升级的「不自动购买」边界冲突。 | 界面流程 + 局外升级 | `/ux-design` 收据屏时 |

@@ -589,8 +589,11 @@ formulas:
     variables:
       - M
       - seed
+      - pool
+      - C0
+      - T
     output_range: [0, 1]
-    expression: "(all waves non-empty) and (waves partition M) and (wave_reachable_opt >= ceil(0.9 * opt_value(M, C, T)))"
+    expression: "(all waves non-empty) and (waves partition M) and (0.9 * opt_value(pool, C0, T) <= wave_reachable_opt <= 1.1 * opt_value(pool, C0, T))"
     notes: "Boolean gate for a generated partition. MVP threshold 94 (0.9 x 104). Reroll up to 20 seeds; accept the best with a warning rather than blocking the run."
   - name: total_value
     status: active
@@ -617,8 +620,8 @@ formulas:
       - total_value
       - entry_fee
     output_range: [-99999, 999999]
-    expression: "total_value(R) - entry_fee(station_id)"
-    notes: "Signed int64. Never clamped. Wallet application (including whether loss is charged) is owned by 局外升级, not by settlement."
+    expression: "total_value(R) - entry_fee"
+    notes: "Signed int64. Never clamped. entry_fee is RunLog.entry_fee (frozen at run start from RunConfig.entry_fee_override or StationData.entry_fee); settlement never re-reads the station. Wallet application (including whether loss is charged) is owned by 局外升级, not by settlement."
     added: "2026-11-03"
     revised: ""
 
@@ -644,8 +647,8 @@ formulas:
       - total_value
       - entry_fee
     output_range: [0, 999]
-    expression: "total_value(R) / entry_fee(station_id); undefined when entry_fee = 0"
-    notes: "Actual run value over fee, not the design-time calibration upper bound. Display via return_percent_x10 = floor(1000 * total / fee), one decimal percent. Fee 0 renders 免单."
+    expression: "total_value(R) / entry_fee; undefined when entry_fee = 0"
+    notes: "entry_fee is RunLog.entry_fee (frozen at run start). Actual run value over fee, not the design-time calibration upper bound. Display via return_percent_x10 = floor(1000 * total / fee), one decimal percent. Fee 0 renders 免单."
     added: "2026-11-03"
     revised: ""
 
@@ -776,7 +779,7 @@ formulas:
       - V
       - L
     output_range: "Fresh | Loaded | Migrated | Recovered | ReadOnly | Blocked"
-    expression: "ReadOnly if L = live and readable(P); Blocked if L = live; Fresh if P empty and B empty; Blocked if readable(P) and version(P) > V; Loaded if readable(P) and valid(P) and version(P) = V; Migrated if readable(P) and valid(P) and version(P) < V and migrate succeeds; Blocked if readable(P) and valid(P) and version(P) < V and migrate fails; Recovered if backup valid and migratable; else Blocked"
+    expression: "Blocked if readable(P) and version(P) > V; ReadOnly if L = live and readable(P); Blocked if L = live; Fresh if P empty and B empty; Loaded if readable(P) and valid(P) and version(P) = V; Migrated if readable(P) and valid(P) and version(P) < V and migrate succeeds; Blocked if readable(P) and valid(P) and version(P) < V and migrate fails; Recovered if backup valid and migratable; else Blocked"
     notes: "Load decision for the save system. P = primary file, B = backup, V = SAVE_SCHEMA_VERSION, L = lock state. valid(x) means structurally legal under the schema of its declared version(x), so a version-0 fixture can migrate. ReadOnly = a live lock over any readable file (browse, no write, no migration). A readable primary whose migration fails is Blocked, never Recovered; a higher-than-current version never falls back to the backup."
     added: "2026-11-03"
     revised: ""

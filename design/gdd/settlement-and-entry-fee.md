@@ -321,7 +321,7 @@ The `shortfall` formula is defined as:
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 数据配置 | 硬 | `get_station(id)` → `entry_fee`；`get_dish(id)` → `price`、`satiety`；前提 `Ready`；int64 求和规则 | GDD 已写 |
+| 数据配置 | 硬 | `get_station(id)` → 存在性与 `display_name`；`get_dish(id)` → `price`、`satiety`；`entry_fee` 由餐局流程冻结进 `RunLog`；前提 `Ready`；int64 求和规则 | GDD 已写（`design/gdd/data-config.md`） |
 | 菜品数值 | 硬 | `price(d)`、`unit_value(d)`（静态单位价值 = `price / satiety`）；本系统不重算 | GDD 已写（Approved 2026-11-03） |
 | 腻度与口味 | 硬 | 每个 `EatenEntry` 的 `extra_satiety` 与 `effective_satiety`（吃下时记录，结算不重放） | GDD 已写（Designed 2026-11-03） |
 | 胃容量 | 硬 | `capacity_total`；可吃性判定在结算之前完成 | GDD 已写（`design/gdd/stomach-capacity.md`） |
