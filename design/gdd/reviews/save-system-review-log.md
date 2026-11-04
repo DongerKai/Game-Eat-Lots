@@ -1437,3 +1437,23 @@ Reviewed-Content-Hash: design/gdd/ui-flow.md 22c40c147277af09d1d3c9e3c8be149bfe0
 Reviewed-Content-Hash: design/gdd/systems-index.md b59ef2478102399659f8ae8b533c98a63a1c90b0
 Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
 ```
+
+---
+
+## Review — 2026-11-04 — Verdict: APPROVED
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean)
+Blocking items: 0 | Recommended: 4
+Summary: 上一轮四个锁盲出口全部关闭：规则 12、转移表的新建生涯/删除行、Edge 239/253 与 UI 4 均以 `lock_live` 门控；`retry_load()` 现在覆盖存活锁下的任意原因。剩余事项是接口与测试描述的完整性，不阻断实现。注册表在本次复审末尾为菜单波次条目做过同步，存档自己的条目未变。
+Prior verdict resolved: Yes
+Findings:
+- [RECOMMENDED] 对外接口: `delete_career()` 行未重申 `lock_live = false` 前置条件（规则 23 已定义）。
+- [RECOMMENDED] Acceptance Criteria: AC 30 仍只列「迁移失败 / 持锁不可读」，未覆盖新支持的「存活锁 + 版本过高」重试路径。
+- [RECOMMENDED] 载入公式: `ReadOnly` 分支只测试 `readable(P)`，未定义可读但结构非法、或内存迁移失败的归属（carried）。
+- [RECOMMENDED] Registry: `save_bytes.output_range` 下界为 0，但 `B_base = 1024`（carried）。
+
+Reviewed-Content-Hash: design/gdd/save-system.md e2c1577cef86a4a400c5a617fde995fb85d6d0c2
+Reviewed-Content-Hash: design/registry/entities.yaml 08de917004eb720428b21dee6a0359c90b31c5ec
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/ui-flow.md 4106b3e9f404f2c7610053bb8b5b19f72c1b186d

@@ -906,3 +906,43 @@ Reviewed-Content-Hash: design/gdd/ui-flow.md 22c40c147277af09d1d3c9e3c8be149bfe0
 Reviewed-Content-Hash: design/gdd/save-system.md 16b4a4a8fc45095392100202545509c7305a244f
 Reviewed-Content-Hash: design/gdd/systems-index.md b59ef2478102399659f8ae8b533c98a63a1c90b0
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+
+---
+
+## Review — 2026-11-04 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean)
+Blocking items: 1 | Recommended: 4
+Summary: 上一轮两项 blocking 在 GDD 正文中已关闭——「不计腻度」的四处口径统一，三轴 DP 改为逐波重置并补齐转移（MVP 924 携带态）。唯一剩余 blocking 不在 GDD，而在注册表：`wave_reachable_opt` 仍描述旧的菜序 DP。
+Prior verdict resolved: Yes
+Findings:
+- [BLOCKING] Registry: `wave_reachable_opt.notes` 仍写 "DP over (dish position, remaining capacity, remaining turns)"，与 GDD 的逐波重置 `(waves processed, capacity used, turns used)` 不符；expression 未写明每吃一道计 1 回合。
+- [RECOMMENDED] dish-values: ±10% 上界重掷契约仍与本 GDD 的「只卡下界」冲突（carried）。
+- [RECOMMENDED] Formulas: 设计期容量 25 与生成期 `C0 = 20` 的关系仍未写（carried）。
+- [RECOMMENDED] Formulas: 924 携带态 × 每波至多 16 个子集与「≤ 10⁴ 节点」的计数口径需说明。
+- [RECOMMENDED] Registry: `wave_advance_cost = 1` 与公式 `advance_cost ∈ {0,1}` 需区分「付费跳过代价」与「推进代价」。
+
+Reviewed-Content-Hash: design/gdd/menu-waves.md a7ed4b78ce361c02dac574838660f2c6b50918cf
+Reviewed-Content-Hash: design/registry/entities.yaml 66d713b708546a4f5beb044b8abe9f93d7fd04e1
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md ea6e49d52b2a08d72dc75c2b295cf54ba5b88279
+Reviewed-Content-Hash: design/gdd/time-and-turns.md 090c7e7fcd313a7c38092e9bf07cdd12b77dd34f
+
+---
+
+## Review — 2026-11-04 — Verdict: APPROVED（确认 pass）
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean)
+Blocking items: 0 | Recommended: 4（沿用上一条）
+Summary: 注册表 `wave_reachable_opt` 已同步为逐波重置 DP：924 携带态、每吃一道 1 回合、非末波跳过再 +1、回合耗尽免费结束。GDD 正文未改动；上一条的 recommended 项保留，不阻断。
+Prior verdict resolved: Yes
+Findings:
+- none（上一条 blocking #1 已由注册表同步关闭）
+
+Reviewed-Content-Hash: design/gdd/menu-waves.md a7ed4b78ce361c02dac574838660f2c6b50918cf
+Reviewed-Content-Hash: design/registry/entities.yaml 08de917004eb720428b21dee6a0359c90b31c5ec
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md ea6e49d52b2a08d72dc75c2b295cf54ba5b88279
+Reviewed-Content-Hash: design/gdd/time-and-turns.md 090c7e7fcd313a7c38092e9bf07cdd12b77dd34f

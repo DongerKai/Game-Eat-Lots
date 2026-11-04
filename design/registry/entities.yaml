@@ -575,10 +575,10 @@ formulas:
       - C0
       - T
     output_range: "[0, opt_value(pool, C0, T)]"
-    expression: "max sum(price(d)) over legal wave play sequences (subsets per wave; each skip costs 1 turn; eats + skips <= T; sum(satiety) <= C0)"
-    notes: "Generation-time only. The health check ignores cloying and uses static satiety, so this is an upper bound on the true reachable value, used only to reject obviously bad partitions. Bounded DP over (dish position, remaining capacity, remaining turns), <= 1e4 nodes. 104 with no skips, 100 with one, 95 with two."
+    expression: "max sum(price(d)) over legal wave play sequences (subset S_i per wave; each eaten dish costs 1 turn; a non-final wave with S_i != W_i costs 1 more turn to skip the rest; sum(satiety) <= C0; eats + skips <= T; free end when turns are exhausted mid-run)"
+    notes: "Generation-time only. The health check ignores cloying and uses static satiety, so this is an upper bound on the true reachable value, used only to reject obviously bad partitions. Wave-reset DP carrying (waves processed, capacity used, turns used): (wave_count + 1) x 21 x 11 = 924 carry states for MVP (4 x 21 x 11), one knapsack per wave merged at wave boundaries, <= 1e4 nodes. 104 with no skips, 100 with one, 95 with two."
     added: "2026-11-03"
-    revised: ""
+    revised: "2026-11-04"
 
   - name: wave_healthy
     status: active

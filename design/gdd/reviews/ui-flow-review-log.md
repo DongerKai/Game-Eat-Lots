@@ -1147,3 +1147,23 @@ Reviewed-Content-Hash: design/gdd/in-game-hud.md 654e48d14dbf85fdbab3b923e590a4f
 Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 1cafff5e7ad8aab8912e716d98b69cea02cbbc43
 Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 5aafb0674e6a0bc5bd6a370c275e95a2f01ebfa9
 Reviewed-Content-Hash: design/gdd/systems-index.md b59ef2478102399659f8ae8b533c98a63a1c90b0
+
+---
+
+## Review — 2026-11-04 — Verdict: APPROVED
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean)
+Blocking items: 0 | Recommended: 4
+Summary: 锁优先的 `Blocked` 契约现在在固定清单、转移表、Edge 402/419 与 AC 26 上一致；`存档.retry_load()` 的前置条件也已覆盖存活锁 + 版本过高。剩余事项是接口清单完整性与重试后的界面归属。注册表在本次复审末尾为菜单波次条目做过同步，界面流程不拥有注册表条目。
+Prior verdict resolved: Yes
+Findings:
+- [RECOMMENDED] Dependencies: 存档行仍未列出 `lock_live` 与 `retry_load()`（carried）。
+- [RECOMMENDED] Core Rules 20: `retry_load()` 返回非 `Blocked` 时模态与屏幕的去向未定义（carried）。
+- [RECOMMENDED] Core Rules 24 / 存档: `ReadOnly` 或存活锁下「删除生涯」入口未说明禁用/隐藏；存档会拒绝该请求。
+- [RECOMMENDED] Dependencies: `场景与流程管理` 行仍标 "In Review"，索引已是 Approved。
+
+Reviewed-Content-Hash: design/gdd/ui-flow.md 4106b3e9f404f2c7610053bb8b5b19f72c1b186d
+Reviewed-Content-Hash: design/registry/entities.yaml 08de917004eb720428b21dee6a0359c90b31c5ec
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/save-system.md e2c1577cef86a4a400c5a617fde995fb85d6d0c2
