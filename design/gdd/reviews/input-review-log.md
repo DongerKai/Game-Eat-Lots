@@ -312,3 +312,92 @@ Reviewed-Content-Hash: design/gdd/systems-index.md 63d73495be76b5b37ed9bac50452c
 Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
 Reviewed-Content-Hash: docs/engine-reference/godot/breaking-changes.md 4bc55e16796664ff88c7582c9f08e3530f7c94d4
 Reviewed-Content-Hash: docs/engine-reference/godot/current-best-practices.md a45cd2c39a8ec53eaa3e924f39f93594e62085fd
+
+---
+
+## Review — 2026-11-04 — Verdict: APPROVED
+Review mode: lean · Workflow: standard
+Scope signal: S
+Specialists: none（lean — Phase 3b not run）
+Blocking items: 0 | Recommended: 11
+Summary: The sole prior blocker is fixed. Rule 2 (`input.md:37`) now reads "Blocked 取 `ui_pause` 与 `allow` 追加的动作" and the two dependency descriptions (`:78`, `:170`) say the same, so rule 12, the States table, the `Blocked` edge case and AC 12 no longer disagree with it: `ui_pause` survives a non-empty `allow`, and 首局引导 can pause during a modal beat. The four blockers retired in earlier rounds remain fixed, and the `consume_action` addition from `be69169` (rule 12, AC 11) matches 首局引导, which already calls it. The design body is unchanged and consistent with the registry and with 界面流程 / 餐局流程 / 局内 HUD / 首局引导 / 场景与流程管理. The 11 remaining items are stale cross-document wording and range sync (5), three imprecise ACs, two missing ACs, and one new contract question about `consume_action`; none blocks implementation.
+Prior verdict resolved: Yes
+
+### Prior blocking — verified
+
+| Prior blocking fix | Current state | Result |
+|---|---|---|
+| Rule 2 must say `ui_pause` plus `allow` (additive), not "only the allow whitelist" | `input.md:37` now "Blocked 取 `ui_pause` 与 `allow` 追加的动作"; agrees with rule 12 (`:56`), States (`:62`), Edge Cases (`:155`), AC 12 (`:223`) | ✓ resolved in `a7ac320` |
+| The two dependency descriptions (`:77`, `:169`) must say the same | `:78` and `:170` both now "`ui_pause` 始终允许，`allow` 追加…" | ✓ resolved in `a7ac320` |
+
+Re-verified unchanged and still correct: Esc dual binding + Paused precedence (`:37`, `:65`, AC 2 `:213`); AC 11's enumerated API surface (`:222`, now including `consume_action`); `game_skip_wave` rename with the hover precondition dropped (`:35`, `:152`, `:168`); equal-top `push_context` always pushing and signalling (`:56`); dual focus drawn simultaneously (`:43`, `:146`, AC 8 `:219`).
+
+### Completeness (standard tier: 5 required + Formulas when the system defines numeric rules)
+
+6/6 present: Overview, Detailed Design (= Detailed Rules), Formulas, Edge Cases, Dependencies, Acceptance Criteria. Formulas remains required — the system defines `nav_steps` and `stick_engaged`. Advisory (unchanged, not counted): no `## Player Fantasy` heading (Game Feel covers the substance) and Tuning Knobs is a `### 调参起点` subsection of Formulas.
+
+### Dependency Graph
+
+| Declared dependency | Direction | File | State |
+|---|---|---|---|
+| 场景与流程管理 | downstream reads + requests | `design/gdd/scene-flow.md` | ✓ exists; back-links input at `:76` |
+| 界面流程 | downstream reads + requests | `design/gdd/ui-flow.md` | ✓ exists; back-links input |
+| 餐局流程 | downstream reads | `design/gdd/run-flow.md` | ✓ exists; `:118`,`:288` back-link but explicitly exclude `ui_pause` (Recommended 2) |
+| 局内 HUD | downstream reads | `design/gdd/in-game-hud.md` | ✓ exists; back-links input |
+| 首局引导 | downstream reads + requests | `design/gdd/first-run-onboarding.md` | ✓ exists; `:123`,`:360` back-link and use `allow` |
+| 音效反馈 | downstream reads | `design/gdd/audio-feedback.md` | ✓ exists but states it does not subscribe (Recommended 6) |
+| Upstream | — | none | ✓ input is the foundation layer |
+
+No broken links; all six declared downstream GDDs exist.
+
+### Registry Values
+
+`design/registry/entities.yaml` has two entries sourced from this GDD:
+
+| Entry | Registry | This GDD | Result |
+|---|---|---|---|
+| `stick_engaged` | `(m >= E) or (stick_engaged_prev and m >= R)`, `[0,1]`, E=0.60 / R=0.40, `R <= E - 0.10` | `:108`, `:120`, `:136-137` identical | ✓ |
+| `nav_steps` | `output_range: [1, 999]`, note "unbounded in formula; 999 is the practical clamp" | `:98` `1–∞` | ⚠ range only (Recommended 7) |
+
+No other registry entry names this system.
+
+### Findings
+
+All 11 are RECOMMENDED; none is blocking.
+
+1. [RECOMMENDED] Acceptance Criteria 12 (`:223`): states the additive rule in prose but never exercises it. Push `Blocked` with `allow=[ui_accept]` and assert `ui_pause` still fires — the regression fixed in `a7ac320` has no test.
+2. [RECOMMENDED] Interactions (`:76`) / Dependencies (`:168`): 餐局流程 is listed as reading `ui_pause`, but `run-flow.md:118,288` says it does not (场景与流程管理 owns it) and `run-flow.md:448` OQ 2 already asks for this row to be fixed. Drop `ui_pause` from both rows here.
+3. [RECOMMENDED] Acceptance Criteria 15 (`:226`): cites a `project.yaml` target-frame-rate key that does not exist (`project.yaml` has only `framework:` / `engine:`); `scene-flow.md:102` uses a 60 Hz constant instead. Point the AC at that constant, or restate the frame budget as a test-fixture value.
+4. [RECOMMENDED] Acceptance Criteria 9 (`:220`): "源码搜索 `device ==` 命中 0 次" also forbids the engine-recommended `device == InputEvent.DEVICE_ID_MOUSE` (`breaking-changes.md:24`, `current-best-practices.md:148-150`). Narrow the scan to `device == 0`, the pattern rule 9 actually bans.
+5. [RECOMMENDED] Cross-References (`:206`): still "None — this system references no other GDD" with "reverse links still to be added", though `scene-flow.md` is cited in Edge Cases (`:143-144`) and all six downstream GDDs exist. List the real paths and drop the stale "pending" claim.
+6. [RECOMMENDED] Interactions (`:79`), Dependencies (`:171`) and Visual/Audio (`:184`): 音效反馈 is a soft consumer of action events, but `audio-feedback.md:116,377,475` says it does not subscribe to input at all. Align — remove the edge or mark it design-time only.
+7. [RECOMMENDED] Formulas (`:98`): `nav_steps` output range `1–∞` vs registry `[1, 999]`. Match one; the registry note already documents the clamp.
+8. [RECOMMENDED] Detailed Design (`:37`): same-frame `ui_accept` + `ui_cancel` precedence is still undefined; rule 2 resolves only the Esc dual binding. `ui-flow.md:147` ("同帧冲突") cites "输入 规则 2" for this case, so either define it here or have ui-flow stop citing rule 2 for it.
+9. [RECOMMENDED] Acceptance Criteria 19 (`:230`): covers push from `Run` only; the equal-top push defined in rule 12 (`Modal` on `Modal`, depth 2) has no AC, and that is exactly ui-flow's depth-2 modal case.
+10. [RECOMMENDED] Acceptance Criteria 3 (`:214`): uses `focus_owner` while rule 8 defines `get_focus_owner()` (`:43`); align the name.
+11. [RECOMMENDED] Detailed Design (rule 12 table, `:54`) / AC 11 (`:222`): `consume_action` is new in `be69169` and its effect on `is_action_just_pressed` is unstated. 首局引导 relies on that effect — `first-run-onboarding.md:187` says the run flow "随后轮询同一个动作得到 `false`" — so consuming must suppress the polled action for the rest of the frame, not only return `false` to a second `consume_action`. State that, and add an AC: consume `ui_accept`, then assert `is_action_just_pressed(ui_accept) == false` and a second `consume_action` returns `false`. This is the only new item this round; the other ten were carried over.
+
+Advisory (unchanged, not counted): `ui_pause` is allowed in every `Blocked`, including `Boot` (`:62`), but scene-flow has no `Boot → Paused` transition (`scene-flow.md:47,56,67`), so a press during boot is rejected and WARNING-logged. Pre-existing; a no-op-without-log rule would fix it if boot-time Esc spamming is expected.
+
+### Verdict
+
+**APPROVED** (0 blocking · 11 recommended). The one prior blocker and the two dependency descriptions are fixed exactly as asked in `a7ac320`; the remaining findings are documentation and test hygiene — none changes the input contract or blocks an implementer.
+
+- Suggested `systems-index` status: **Approved** (row 2 is currently `In Review`). Not edited here — the orchestrator owns the index.
+- This GDD was not modified; only this log entry was appended.
+Reviewed-Content-Hash: design/gdd/input.md 9432d857ed18dc216dc5a038f81608ae9e10d975
+Reviewed-Content-Hash: design/registry/entities.yaml f8361d463dc6172ce3c22a462bccce6d2037d35c
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+Reviewed-Content-Hash: design/gdd/ui-flow.md 21482b6d00538b95af113995e613b8df29985a8a
+Reviewed-Content-Hash: design/gdd/run-flow.md ed8848ea7c41823db26e22fb7d5df5f998fc0234
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 654e48d14dbf85fdbab3b923e590a4f356dd0218
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 3f99e25a3d35bd4922c0717adc033569a50abafb
+Reviewed-Content-Hash: design/gdd/audio-feedback.md f6ac7fbd915341f63761529b664028eec6b216c0
+Reviewed-Content-Hash: design/gdd/scene-flow.md 4efc24d198112aa612551f5b3e5bdeeac28cd52e
+Reviewed-Content-Hash: design/gdd/menu-waves.md ce532d3265df1ed7555ba5aa46383be35bbee4a1
+Reviewed-Content-Hash: design/gdd/systems-index.md c0b526ff05088d426598f5dc34e3bd9e3153cf59
+Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
+Reviewed-Content-Hash: docs/engine-reference/godot/breaking-changes.md 4bc55e16796664ff88c7582c9f08e3530f7c94d4
+Reviewed-Content-Hash: docs/engine-reference/godot/current-best-practices.md a45cd2c39a8ec53eaa3e924f39f93594e62085fd
+Reviewed-Content-Hash: docs/engine-reference/godot/modules/input.md 3406b1b813858898696e510ea0accfcc7df98af8
