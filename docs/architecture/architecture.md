@@ -6,8 +6,8 @@
 - Last Updated: 2026-11-04
 - Engine: Godot 4.7 (pinned; installed version NOT DETERMINED — no editor on this machine)
 - GDDs Covered: 18 (all designed systems; #19 在线挑战 and #20 同屏合作 are Not Started)
-- ADRs Referenced: ADR-0001 内容数据格式；ADR-0002 持久化格式；ADR-0003 场景与屏幕架构；ADR-0004 服务组合与信号；ADR-0005 输入上下文栈；ADR-0006 确定性随机；ADR-0007 局内状态与结算事务；ADR-0008 设置与本地化；ADR-0009 音频播放与暂停（均为 Accepted，2026-11-04）
-- Architecture Review: 2026-11-04 — FAIL — 56 covered / 4 partial / 44 gaps。机械修复已应用（2026-11-04）：ADR-0005 `Depends On: None` 解除 0003↔0005↔0004 依赖环；ADR-0001 补入 ADR-0009 的第六清单；ADR-0009 补 `## GDD Requirements Addressed`。9 份 ADR 已于 2026-11-04 全部接受（Accepted），但评审报告的 `Reviewed-Content-Hash` 早于该状态变更；依赖报告结论前需重跑 `/architecture-review full`。44 gaps 仍待处理（见 `docs/architecture/architecture-review-2026-11-04.md`）
+- ADRs Referenced: ADR-0001 内容数据格式；ADR-0002 持久化格式；ADR-0003 场景与屏幕架构；ADR-0004 服务组合与信号；ADR-0005 输入上下文栈；ADR-0006 确定性随机；ADR-0007 局内状态与结算事务；ADR-0008 设置与本地化；ADR-0009 音频播放与暂停（均为 Accepted，2026-11-04）；ADR-0010…0020 覆盖 44 条缺口的系统 ADR（均 Proposed）
+- Architecture Review: 2026-11-04 — FAIL — 56 covered / 4 partial / 44 gaps。机械修复已应用（2026-11-04）：ADR-0005 `Depends On: None` 解除 0003↔0005↔0004 依赖环；ADR-0001 补入 ADR-0009 的第六清单；ADR-0009 补 `## GDD Requirements Addressed`。9 份 ADR 已接受，11 份系统 ADR 已写但尚未被评审计入；重跑 `/architecture-review full` 前，报告结论与 `Reviewed-Content-Hash` 均早于这两批变更（见 `docs/architecture/architecture-review-2026-11-04.md`）
 - TD-ARCHITECTURE: 2026-11-04 — skipped — lean mode
 - LP-FEASIBILITY: 2026-11-04 — skipped — lean mode
 
@@ -253,6 +253,9 @@ class DataConfig:
     func get_dish(id: StringName) -> Result[DishData, QueryError]
     func get_upgrade(id: StringName) -> Result[UpgradeData, QueryError]
     func get_station(id: StringName) -> Result[StationData, QueryError]
+    func get_cue(id: StringName) -> Result[AudioCueData, QueryError]
+    func has_cue(id: StringName) -> bool
+    func cue_catalog() -> AudioCueCatalogResource
     func get_balance() -> BalanceData
 
 class SceneFlow:
@@ -348,9 +351,12 @@ class Records:
 
 ## ADR Audit
 
-Nine Foundation/Feature ADRs are written and `Accepted`; none of the Required
-ADRs remains unwritten. The TR registry holds all 104 table requirements; ADR
-linkage below is authoritative.
+Twenty ADRs are written: nine `Accepted` (ADR-0001…0009) and eleven `Proposed`
+(ADR-0010…0020). The eleven Required system ADRs from the 2026-11-04 review now
+exist but have not yet been counted by a review, so the last matrix still reads
+56 covered / 4 partial / 44 gaps until `/architecture-review full` is re-run.
+The TR registry holds all 104 table requirements; ADR linkage below is
+authoritative.
 
 | ADR | Engine Compat | Version | GDD Linkage | Conflicts | Valid |
 |---|---|---|---|---|---|
@@ -359,15 +365,26 @@ linkage below is authoritative.
 | ADR-0003 场景与屏幕架构 | ✅ | ✅ 4.7 | ✅ TR-scene-flow-001..005, TR-ui-flow-001..003, TR-in-game-hud-002 | None | ✅ Accepted — engine verification pending |
 | ADR-0004 服务组合与信号机制 | ✅ | ✅ 4.7 | ✅ TR-audio-feedback-001/005, TR-run-flow-006, TR-save-system-006, TR-scene-flow-003/005, TR-ui-flow-004 | None | ✅ Accepted — engine verification pending |
 | ADR-0005 输入上下文栈语义 | ✅ | ✅ 4.7 | ✅ TR-input-001..006, TR-first-run-onboarding-002, TR-in-game-hud-004, TR-scene-flow-002, TR-ui-flow-001 | None | ✅ Accepted — engine verification pending |
-| ADR-0006 确定性随机、种子派生与健康校验预算 | ✅ | ✅ 4.7 | ✅ TR-menu-waves-001..006, TR-dish-values-003, TR-run-flow-002 | None | ✅ Accepted — engine verification pending |
-| ADR-0008 机器级设置与本地化管线 | ✅ | ✅ 4.7 | ✅ TR-ui-flow-006, TR-ui-flow-003（呈现侧） | None | ✅ Accepted — engine verification pending |
+| ADR-0006 确定性随机、种子派生与健康校验预算 | ✅ | ✅ 4.7 | ✅ TR-menu-waves-001..006, TR-dish-values-003 | None | ✅ Accepted — engine verification pending |
 | ADR-0007 局内状态所有权与结算事务边界 | ✅ | ✅ 4.7 | ✅ TR-run-flow-001/002/005, TR-settlement-001/004, TR-ui-flow-004, TR-meta-upgrades-005, TR-records-002 | None | ✅ Accepted — engine verification pending |
+| ADR-0008 机器级设置与本地化管线 | ✅ | ✅ 4.7 | ✅ TR-ui-flow-006, TR-ui-flow-003（呈现侧） | ⚠️ 与 ADR-0009 的总线写入措辞冲突（E4） | ✅ Accepted — engine verification pending |
 | ADR-0009 音频播放、池化与暂停语义 | ✅ | ✅ 4.7 | ✅ TR-audio-feedback-001..007, TR-ui-flow-007 | None | ✅ Accepted — engine verification pending |
+| ADR-0010 菜品数值与整数数值契约 | ✅ | ✅ 4.7 | ✅ TR-dish-values-001..005 | — | ⚠️ Proposed — not yet reviewed |
+| ADR-0011 回合预算、扣减所有权与耗尽判定 | ✅ | ✅ 4.7 | ✅ TR-time-and-turns-001..004 | — | ⚠️ Proposed — not yet reviewed |
+| ADR-0012 胃容量快照、容量账本与耗尽判定 | ✅ | ✅ 4.7 | ✅ TR-stomach-capacity-001..005 | — | ⚠️ Proposed — not yet reviewed |
+| ADR-0013 局内动作管线与结束判定 | ✅ | ✅ 4.7 | ✅ TR-run-flow-002..007 | — | ⚠️ Proposed — not yet reviewed |
+| ADR-0014 腻度折扣与口味偏好状态机 | ✅ | ✅ 4.7 | ✅ TR-cloying-and-taste-001..005 | — | ⚠️ Proposed — not yet reviewed |
+| ADR-0015 结算纯函数：单位价值、入场费与回本判定 | ✅ | ✅ 4.7 | ✅ TR-settlement-002/003/005 | — | ⚠️ Proposed — not yet reviewed |
+| ADR-0016 局外升级树、钱包事务与升级快照 | ✅ | ✅ 4.7 | ✅ TR-meta-upgrades-001..004, TR-meta-upgrades-006/007 | — | ⚠️ Proposed — not yet reviewed |
+| ADR-0017 解锁与档口购买事务 | ✅ | ✅ 4.7 | ✅ TR-unlocks-001..005 | — | ⚠️ Proposed — not yet reviewed |
+| ADR-0018 纪录、里程碑判定与生涯完成 | ✅ | ✅ 4.7 | ✅ TR-records-003/005/006 | — | ⚠️ Proposed — not yet reviewed |
+| ADR-0019 HUD 数据绑定、布局与呈现契约 | ✅ | ✅ 4.7 | ✅ TR-in-game-hud-001..006, TR-run-flow-007 | — | ⚠️ Proposed — not yet reviewed |
+| ADR-0020 首局引导 beat 机、阻断输入与跳过 | ✅ | ✅ 4.7 | ✅ TR-first-run-onboarding-001..005 | — | ⚠️ Proposed — not yet reviewed |
 
-**Traceability coverage:** 56 of 104 requirements covered by an Accepted ADR,
-4 partial, 44 gaps. All nine ADRs were accepted on 2026-11-04; the coverage
-mapping is unchanged from the review, which predates acceptance. The
-per-requirement matrix is authoritative:
+**Traceability coverage:** 56 of 104 requirements are covered by an Accepted ADR,
+4 partial, 44 gaps. The figure reflects the last full review, which predates the
+eleven system ADRs; re-run `/architecture-review full` to credit ADR-0010…0020.
+The per-requirement matrix is authoritative:
 `docs/architecture/requirements-traceability.md` (review:
 `docs/architecture/architecture-review-2026-11-04.md`).
 
@@ -390,6 +407,20 @@ Grouped by layer, Foundation first. Each group lists the TR areas it must cover;
 7. **Run state ownership and settlement transaction boundary** — who owns `run_id`, `RunLog`, the single `Save.commit`, and the receipt orchestration order. Covers `TR-run-flow-*`, `TR-settlement-*`, `TR-ui-flow-004`. **Written: ADR-0007 (Accepted).**
 8. **Settings persistence and localization pipeline** — machine-level file format/path/write timing, `tr()` key strategy, CJK font fallback, 150% scaling. Covers `TR-ui-flow-006`, `TR-ui-flow-003` presentation aspects. **Written: ADR-0008 (Accepted).**
 9. **Audio playback, pooling and pause semantics** — bus graph, voice pool, cue catalog location, pause behaviour. Covers `TR-audio-feedback-001..007`. **Written: ADR-0009 (Accepted).**
+
+**System decisions written after the 2026-11-04 review — `Proposed`**
+
+10. **Dish values and the integer numeric contract** — covers `TR-dish-values-001..005`. **Written: ADR-0010 (Proposed).**
+11. **Turn budget, deduction ownership and exhaustion** — covers `TR-time-and-turns-001..004`. **Written: ADR-0011 (Proposed).**
+12. **Stomach capacity snapshot and ledger** — covers `TR-stomach-capacity-001..005`. **Written: ADR-0012 (Proposed).**
+13. **In-run action pipeline and end judgement** — covers `TR-run-flow-002..007`. **Written: ADR-0013 (Proposed).**
+14. **Cloying discount and taste preference state machine** — covers `TR-cloying-and-taste-001..005`. **Written: ADR-0014 (Proposed).**
+15. **Settlement pure functions** — covers `TR-settlement-002/003/005`. **Written: ADR-0015 (Proposed).**
+16. **Meta-upgrade tree and wallet transaction** — covers `TR-meta-upgrades-001..004, 006/007`. **Written: ADR-0016 (Proposed).**
+17. **Unlocks and station purchase** — covers `TR-unlocks-001..005`. **Written: ADR-0017 (Proposed).**
+18. **Records, milestones and career completion** — covers `TR-records-003/005/006`. **Written: ADR-0018 (Proposed).**
+19. **HUD data binding and layout** — covers `TR-in-game-hud-001..006, TR-run-flow-007`. **Written: ADR-0019 (Proposed).**
+20. **First-run onboarding beat machine** — covers `TR-first-run-onboarding-001..005`. **Written: ADR-0020 (Proposed).**
 
 **Can defer to implementation**
 

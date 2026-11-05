@@ -607,6 +607,7 @@ Godot 4 提供的多声部播放器，理论上一个节点播全部。但它的
 | `TR-audio-feedback-004`（音量公式与钳制） | D9（voice 上一次计算；总线 0 dB）、D2（无双重衰减）、D12（日志 `volume_db`） |
 | `TR-audio-feedback-005`（暂停静默；清 `pending_outcome`；mute/无设备 drop） | D3（同帧 0 ms 停池）、D4（唯一转场例外）、D9（mute 立即静音）、D5 第 2/3/4 步 |
 | `TR-audio-feedback-006`（1 万条日志；封闭词表） | D12（字段、容量、枚举、额外只读视图） |
+| `TR-audio-feedback-007`（内容缺陷启动阻断；运行期播放失败静默降级） | D7（目录与 `CueMap` 校验）、D8（`DATA_FAILED` 启动门）、D14（运行期降级） |
 | `TR-ui-flow-007`（音频语义事件） | D7 `CueMap` 的事件侧；`ui_button_activated` / `number_roll_*` / `receipt_closed` 由 UI 发出，音频只消费 |
 
 **建议的 TR 文本修订**（`tr-registry.yaml` 由编排者单写，本 ADR 不改）：

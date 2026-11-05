@@ -45,17 +45,17 @@ requirements:
   - id: TR-data-config-001
     system: data-config
     gdd: design/gdd/data-config.md
-    requirement: "Four typed Resource catalogs (`DishData`/`UpgradeData`/`StationData`/`BalanceData`) loaded and validated at boot; any failure → `Failed`, no partial load"
+    requirement: "Six typed Resource record types (`DishData`/`UpgradeData`/`StationData`/`BalanceData`/`MilestoneData`/`AudioCueCatalogResource`) loaded and validated through one boot gate; the milestone catalog is owned by Records and the audio cue catalog is DataConfig's sixth manifest; any failure → `Failed`, no partial load"
     created: 2026-11-04
-    revised: ""
+    revised: "2026-11-04"
     status: active
 
   - id: TR-data-config-002
     system: data-config
     gdd: design/gdd/data-config.md
-    requirement: "Query API `get_dish/get_upgrade/get_station/get_balance` returns immutable records; no runtime mutation"
+    requirement: "Query API `get_dish/get_upgrade/get_station/get_balance/get_cue/has_cue/cue_catalog` returns immutable records; no runtime mutation"
     created: 2026-11-04
-    revised: ""
+    revised: "2026-11-04"
     status: active
 
   - id: TR-data-config-003

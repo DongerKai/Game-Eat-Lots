@@ -440,7 +440,7 @@ func set_blocked(blocked: bool) -> void      # Blocked 强制模态期间冻结�
 - **`queue_free()` 误用产生一帧旧画面。** 缓解：代码审查门禁 + 一条无头测试：替换根后立即读取 `ScreenHost.get_child_count()`，必须为 1。
 - **`Blocked` 强制模态期间底层屏幕仍可通过鼠标点击操作。** 缓解：遮罩 `MOUSE_FILTER_STOP` + `ScreenView.set_blocked(true)` 禁用底层动作按钮 + AC 26 的“其他控件不可操作”。
 - **4.7 拉伸设置与 HUD 独立缩放冲突。** `canvas_items` 作用于根视口，包括 `CanvasLayer`；HUD 的 `hud_ui_scale` 若要与界面不同步缩放，可能需要 `SubViewport` 或反向缩放。缓解：列入 `Verification Required` 第 ④ 条，由 HUD 实现决定手段，本 ADR 只固定工程级拉伸设置。
-- **`gui_get_focus_owner()` / `focus_neighbor_*` 在 4.7 未经验证。** 缓解：`Verification Required` 第 ① 条；未验证前不得把本 ADR 标记为 Accepted。
+- **`gui_get_focus_owner()` / `focus_neighbor_*` 在 4.7 未经验证。** 缓解：`Verification Required` 第 ① 条。本 ADR 已接受；在该验证完成前，涉及 `focus_neighbor_*` 回落的实现按待验证处理。
 - **`reduce_motion` 的读取来源未定。** 设置模型归界面流程，过渡归 `SceneFlow`；本 ADR 规定 `UIRoot` 在每次切换前把 `reduce_motion` 折算为 `FADE_OUT = FADE_IN = 0` 传给 `FadeLayer`，不要求 `SceneFlow` 读设置（`ui-flow.md` Open Question 2 的一种实现）。
 - **禁用控件让焦点邻居失效并回落到几何解析。** 升级页的按钮会动态禁用、主菜单的“开始营业”会因档口无法解析而禁用。缓解：`FocusSpec.apply()` 每次重建都跳过不可用目标（D5），并加一条测试：把所有中间项禁用后，导航仍按声明顺序前进。
 - **暂停可能同时冻住界面。** 若暂停用 `SceneTree.paused` 实现，`PauseOverlay` 与过渡会一起停止。缓解：D2 第 4 条要求整条 UI 路径 `PROCESS_MODE_ALWAYS`，并在 `Verification Required` ⑧ 实机验证。

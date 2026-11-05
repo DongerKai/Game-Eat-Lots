@@ -42,7 +42,7 @@ Accepted
 | **Knowledge Risk** | MEDIUM — 本 ADR **不引入任何 4.5–4.7 新 API**。风险集中在本 ADR 依赖的两处既有结论：`SaveSystem.commit` 的同步性与失败词汇（ADR-0002）、`state_changed` / `run_settled` 的同步派发（ADR-0004）。`Engine.get_process_frames()` 与 `Array` / `Dictionary.duplicate(true)` 是 4.0 起的稳定 API |
 | **References Consulted** | `docs/engine-reference/godot/VERSION.md`、`current-best-practices.md`、`breaking-changes.md`；`design/gdd/run-flow.md`、`settlement-and-entry-fee.md`、`meta-upgrades.md`、`records-and-milestones.md`、`unlocks-and-stations.md`、`save-system.md`、`ui-flow.md`、`scene-flow.md`；`docs/architecture/architecture.md`、ADR-0002、ADR-0003、ADR-0004 |
 | **Post-Cutoff APIs Used** | 无。刻意不使用 `Resource.duplicate_deep()`（4.5）：收据快照只复制 `Array` / `Dictionary`，用长期存在的 `duplicate(true)` 即可；也不依赖任何 4.7 的信号顺序承诺 |
-| **Verification Required** | ① `Engine.get_process_frames()` 在无头运行中与收据挂载同帧（用于断言 `receipt_open_latency_frames = 0`）；② `Dictionary.duplicate(true)` 对 `RunResult.rows` 这类嵌套数组确实深拷贝，修改副本不污染 `RunResult`；③ `SaveSystem.commit` 在主线程同步返回（ADR-0002 的验证项）；④ `run_settled` / `state_changed` 在 `emit()` 内同步调用处理器（ADR-0004 的验证项） |
+| **Verification Required** | ① `Engine.get_process_frames()` 在无头运行中与收据挂载同帧（用于断言 `receipt_open_latency_frames = 0`）；② `Dictionary.duplicate(true)` 对 `RunResult.rows` 这类嵌套数组确实深拷贝，修改副本不污染 `RunResult`；快照只存纯值（`Dictionary` / `Array` / `int`），不持有 `Resource` 引用；③ `SaveSystem.commit` 在主线程同步返回（ADR-0002 的验证项）；④ `run_settled` / `state_changed` 在 `emit()` 内同步调用处理器（ADR-0004 的验证项） |
 
 > ⚠️ **引擎知识缺口**：4.5–4.7 均在 LLM 训练截止之后，且本机没有安装编辑器。
 > 本 ADR 的运行时结论都建立在 ADR-0002 / ADR-0004 的同步假设上；那两条的
