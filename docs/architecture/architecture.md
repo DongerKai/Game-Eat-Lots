@@ -359,7 +359,7 @@ linkage below is authoritative.
 | ADR-0003 场景与屏幕架构 | ✅ | ✅ 4.7 | ✅ TR-scene-flow-001..005, TR-ui-flow-001..003, TR-in-game-hud-002 | None | ✅ Accepted — engine verification pending |
 | ADR-0004 服务组合与信号机制 | ✅ | ✅ 4.7 | ✅ TR-audio-feedback-001/005, TR-run-flow-006, TR-save-system-006, TR-scene-flow-003/005, TR-ui-flow-004 | None | ✅ Accepted — engine verification pending |
 | ADR-0005 输入上下文栈语义 | ✅ | ✅ 4.7 | ✅ TR-input-001..006, TR-first-run-onboarding-002, TR-in-game-hud-004, TR-scene-flow-002, TR-ui-flow-001 | None | ✅ Accepted — engine verification pending |
-| ADR-0006 确定性随机、种子派生与健康校验预算 | ✅ | ✅ 4.7 | ✅ TR-menu-waves-001..006, TR-dish-values-003, TR-run-flow-002/003 | None | ✅ Accepted — engine verification pending |
+| ADR-0006 确定性随机、种子派生与健康校验预算 | ✅ | ✅ 4.7 | ✅ TR-menu-waves-001..006, TR-dish-values-003, TR-run-flow-002 | None | ✅ Accepted — engine verification pending |
 | ADR-0008 机器级设置与本地化管线 | ✅ | ✅ 4.7 | ✅ TR-ui-flow-006, TR-ui-flow-003（呈现侧） | None | ✅ Accepted — engine verification pending |
 | ADR-0007 局内状态所有权与结算事务边界 | ✅ | ✅ 4.7 | ✅ TR-run-flow-001/002/005, TR-settlement-001/004, TR-ui-flow-004, TR-meta-upgrades-005, TR-records-002 | None | ✅ Accepted — engine verification pending |
 | ADR-0009 音频播放、池化与暂停语义 | ✅ | ✅ 4.7 | ✅ TR-audio-feedback-001..007, TR-ui-flow-007 | None | ✅ Accepted — engine verification pending |
