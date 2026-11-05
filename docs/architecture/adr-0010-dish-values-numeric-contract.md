@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 > **谁可以把状态改为 `Accepted`：用户，或 `technical-director` 在用户明确确认后。其他 agent 与任何 skill 都不能自行设置。**
 

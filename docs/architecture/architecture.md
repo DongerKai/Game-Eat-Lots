@@ -6,8 +6,8 @@
 - Last Updated: 2026-11-05
 - Engine: Godot 4.7 (pinned; installed version NOT DETERMINED — no editor on this machine)
 - GDDs Covered: 18 (all designed systems; #19 在线挑战 and #20 同屏合作 are Not Started)
-- ADRs Referenced: ADR-0001 内容数据格式；ADR-0002 持久化格式；ADR-0003 场景与屏幕架构；ADR-0004 服务组合与信号；ADR-0005 输入上下文栈；ADR-0006 确定性随机；ADR-0007 局内状态与结算事务；ADR-0008 设置与本地化；ADR-0009 音频播放与暂停（均为 Accepted，2026-11-04）；ADR-0010…0020 覆盖 44 条缺口的系统 ADR（均 Proposed，2026-11-05 已评审计入）
-- Architecture Review: 2026-11-05 — CONCERNS — 评审时 57 covered / 46 Proposed-only / 1 partial / 0 gaps；ADR-0007 对齐后矩阵为 58 / 46 / 0 / 0。结论仍为 CONCERNS，因为 46 条需求只由 Proposed ADR 覆盖（见 `docs/architecture/architecture-review-2026-11-05.md`）
+- ADRs Referenced: ADR-0001 内容数据格式；ADR-0002 持久化格式；ADR-0003 场景与屏幕架构；ADR-0004 服务组合与信号；ADR-0005 输入上下文栈；ADR-0006 确定性随机；ADR-0007 局内状态与结算事务；ADR-0008 设置与本地化；ADR-0009 音频播放与暂停（均为 Accepted，2026-11-04）；ADR-0010…0020 覆盖 44 条缺口的系统 ADR（2026-11-05 全部 Accepted）
+- Architecture Review: 2026-11-05 — CONCERNS — 评审时 57 covered / 46 Proposed-only / 1 partial / 0 gaps；随后 ADR-0007 对齐、ADR-0010…0020 全部接受，矩阵为 104 / 0 / 0 / 0。复审前不宣告 PASS；引擎验证仍待执行（见 `docs/architecture/architecture-review-2026-11-05.md`）
 - TD-ARCHITECTURE: 2026-11-04 — skipped — lean mode
 - LP-FEASIBILITY: 2026-11-04 — skipped — lean mode
 
@@ -418,14 +418,13 @@ class OnboardingHost extends CanvasLayer:
 
 ## ADR Audit
 
-Twenty ADRs are written: nine `Accepted` (ADR-0001…0009) and eleven `Proposed`
-(ADR-0010…0020). The 2026-11-05 `/architecture-review full` re-run counted all
-twenty: 57 covered / 46 Proposed-only / 1 partial / 0 gaps. After that run,
-ADR-0007 gained the `frozen` field and `action_availability()`, closing the last
-partial, so the matrix now reads 58 / 46 / 0 / 0. The verdict remains CONCERNS
-because 46 requirements rest on `Proposed` ADRs; acceptance is per-ADR.
-The TR registry holds all 104 table requirements; ADR linkage below is
-authoritative.
+Twenty ADRs are written, all `Accepted` (ADR-0001…0020). The 2026-11-05
+`/architecture-review full` re-run counted them at 57 covered / 46 Proposed-only /
+1 partial / 0 gaps; the last partial closed when ADR-0007 gained `frozen` and
+`action_availability()`, and ADR-0010…0020 were accepted on 2026-11-05. The
+matrix now reads 104 covered / 0 proposed / 0 partial / 0 gaps. Engine
+verification remains pending for all twenty. The TR registry holds all 104 table
+requirements; ADR linkage below is authoritative.
 
 | ADR | Engine Compat | Version | GDD Linkage | Conflicts | Valid |
 |---|---|---|---|---|---|
@@ -438,21 +437,21 @@ authoritative.
 | ADR-0007 局内状态所有权与结算事务边界 | ✅ | ✅ 4.7 | ✅ TR-run-flow-001/002/005/007, TR-settlement-001/004, TR-ui-flow-004, TR-meta-upgrades-005, TR-records-002；partial：TR-run-flow-006, TR-settlement-005, TR-save-system-006 | None | ✅ Accepted — engine verification pending |
 | ADR-0008 机器级设置与本地化管线 | ✅ | ✅ 4.7 | ✅ TR-ui-flow-006, TR-ui-flow-003（呈现侧） | None（E4 已解决：cue gain 只算不写总线） | ✅ Accepted — engine verification pending |
 | ADR-0009 音频播放、池化与暂停语义 | ✅ | ✅ 4.7 | ✅ TR-audio-feedback-001..007, TR-ui-flow-007 | None | ✅ Accepted — engine verification pending |
-| ADR-0010 菜品数值与整数数值契约 | ✅ | ✅ 4.7 | ✅ TR-dish-values-001..005 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
-| ADR-0011 回合预算、扣减所有权与耗尽判定 | ✅ | ✅ 4.7 | ✅ TR-time-and-turns-001..004 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
-| ADR-0012 胃容量快照、容量账本与耗尽判定 | ✅ | ✅ 4.7 | ✅ TR-stomach-capacity-001..005 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
-| ADR-0013 局内动作管线与结束判定 | ✅ | ✅ 4.7 | ✅ TR-run-flow-003/004 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
-| ADR-0014 腻度折扣与口味偏好状态机 | ✅ | ✅ 4.7 | ✅ TR-cloying-and-taste-001..005 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
-| ADR-0015 结算纯函数：单位价值、入场费与回本判定 | ✅ | ✅ 4.7 | ✅ TR-settlement-002/003/005 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
-| ADR-0016 局外升级树、钱包事务与升级快照 | ✅ | ✅ 4.7 | ✅ TR-meta-upgrades-001..004, TR-meta-upgrades-006/007 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
-| ADR-0017 解锁与档口购买事务 | ✅ | ✅ 4.7 | ✅ TR-unlocks-001..005 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
-| ADR-0018 纪录、里程碑判定与生涯完成 | ✅ | ✅ 4.7 | ✅ TR-records-003/005/006 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
-| ADR-0019 HUD 数据绑定、布局与呈现契约 | ✅ | ✅ 4.7 | ✅ TR-in-game-hud-001/003/005/006（002→ADR-0003，004→ADR-0005） | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
-| ADR-0020 首局引导 beat 机、阻断输入与跳过 | ✅ | ✅ 4.7 | ✅ TR-first-run-onboarding-001..005 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
+| ADR-0010 菜品数值与整数数值契约 | ✅ | ✅ 4.7 | ✅ TR-dish-values-001..005 | None | ✅ Accepted — engine verification pending |
+| ADR-0011 回合预算、扣减所有权与耗尽判定 | ✅ | ✅ 4.7 | ✅ TR-time-and-turns-001..004 | None | ✅ Accepted — engine verification pending |
+| ADR-0012 胃容量快照、容量账本与耗尽判定 | ✅ | ✅ 4.7 | ✅ TR-stomach-capacity-001..005 | None | ✅ Accepted — engine verification pending |
+| ADR-0013 局内动作管线与结束判定 | ✅ | ✅ 4.7 | ✅ TR-run-flow-003/004 | None | ✅ Accepted — engine verification pending |
+| ADR-0014 腻度折扣与口味偏好状态机 | ✅ | ✅ 4.7 | ✅ TR-cloying-and-taste-001..005 | None | ✅ Accepted — engine verification pending |
+| ADR-0015 结算纯函数：单位价值、入场费与回本判定 | ✅ | ✅ 4.7 | ✅ TR-settlement-002/003/005 | None | ✅ Accepted — engine verification pending |
+| ADR-0016 局外升级树、钱包事务与升级快照 | ✅ | ✅ 4.7 | ✅ TR-meta-upgrades-001..004, TR-meta-upgrades-006/007 | None | ✅ Accepted — engine verification pending |
+| ADR-0017 解锁与档口购买事务 | ✅ | ✅ 4.7 | ✅ TR-unlocks-001..005 | None | ✅ Accepted — engine verification pending |
+| ADR-0018 纪录、里程碑判定与生涯完成 | ✅ | ✅ 4.7 | ✅ TR-records-003/005/006 | None | ✅ Accepted — engine verification pending |
+| ADR-0019 HUD 数据绑定、布局与呈现契约 | ✅ | ✅ 4.7 | ✅ TR-in-game-hud-001/003/005/006（002→ADR-0003，004→ADR-0005） | None | ✅ Accepted — engine verification pending |
+| ADR-0020 首局引导 beat 机、阻断输入与跳过 | ✅ | ✅ 4.7 | ✅ TR-first-run-onboarding-001..005 | None | ✅ Accepted — engine verification pending |
 
-**Traceability coverage:** 58 of 104 requirements are covered by an Accepted ADR,
-46 by a Proposed ADR only, 0 partial, 0 gaps. The per-requirement matrix is
-authoritative: `docs/architecture/requirements-traceability.md` (review:
+**Traceability coverage:** 104 of 104 requirements are covered by an Accepted ADR,
+0 partial, 0 gaps. The per-requirement matrix is authoritative:
+`docs/architecture/requirements-traceability.md` (review:
 `docs/architecture/architecture-review-2026-11-05.md`).
 
 ## Required ADRs
@@ -475,19 +474,19 @@ Grouped by layer, Foundation first. Each group lists the TR areas it must cover;
 8. **Settings persistence and localization pipeline** — machine-level file format/path/write timing, `tr()` key strategy, CJK font fallback, 150% scaling. Covers `TR-ui-flow-006`, `TR-ui-flow-003` presentation aspects. **Written: ADR-0008 (Accepted).**
 9. **Audio playback, pooling and pause semantics** — bus graph, voice pool, cue catalog location, pause behaviour. Covers `TR-audio-feedback-001..007`. **Written: ADR-0009 (Accepted).**
 
-**System decisions written after the 2026-11-04 review — `Proposed`**
+**System decisions written after the 2026-11-04 review — `Accepted`**
 
-10. **Dish values and the integer numeric contract** — covers `TR-dish-values-001..005`. **Written: ADR-0010 (Proposed).**
-11. **Turn budget, deduction ownership and exhaustion** — covers `TR-time-and-turns-001..004`. **Written: ADR-0011 (Proposed).**
-12. **Stomach capacity snapshot and ledger** — covers `TR-stomach-capacity-001..005`. **Written: ADR-0012 (Proposed).**
-13. **In-run action pipeline and end judgement** — covers `TR-run-flow-003/004`; 002/005/006/007 belong to ADR-0007. **Written: ADR-0013 (Proposed).**
-14. **Cloying discount and taste preference state machine** — covers `TR-cloying-and-taste-001..005`. **Written: ADR-0014 (Proposed).**
-15. **Settlement pure functions** — covers `TR-settlement-002/003/005`. **Written: ADR-0015 (Proposed).**
-16. **Meta-upgrade tree and wallet transaction** — covers `TR-meta-upgrades-001..004, 006/007`. **Written: ADR-0016 (Proposed).**
-17. **Unlocks and station purchase** — covers `TR-unlocks-001..005`. **Written: ADR-0017 (Proposed).**
-18. **Records, milestones and career completion** — covers `TR-records-003/005/006`. **Written: ADR-0018 (Proposed).**
-19. **HUD data binding and layout** — covers `TR-in-game-hud-001/003/005/006`; 002 belongs to ADR-0003 and 004 to ADR-0005. **Written: ADR-0019 (Proposed).**
-20. **First-run onboarding beat machine** — covers `TR-first-run-onboarding-001..005`. **Written: ADR-0020 (Proposed).**
+10. **Dish values and the integer numeric contract** — covers `TR-dish-values-001..005`. **Written: ADR-0010 (Accepted).**
+11. **Turn budget, deduction ownership and exhaustion** — covers `TR-time-and-turns-001..004`. **Written: ADR-0011 (Accepted).**
+12. **Stomach capacity snapshot and ledger** — covers `TR-stomach-capacity-001..005`. **Written: ADR-0012 (Accepted).**
+13. **In-run action pipeline and end judgement** — covers `TR-run-flow-003/004`; 002/005/006/007 belong to ADR-0007. **Written: ADR-0013 (Accepted).**
+14. **Cloying discount and taste preference state machine** — covers `TR-cloying-and-taste-001..005`. **Written: ADR-0014 (Accepted).**
+15. **Settlement pure functions** — covers `TR-settlement-002/003/005`. **Written: ADR-0015 (Accepted).**
+16. **Meta-upgrade tree and wallet transaction** — covers `TR-meta-upgrades-001..004, 006/007`. **Written: ADR-0016 (Accepted).**
+17. **Unlocks and station purchase** — covers `TR-unlocks-001..005`. **Written: ADR-0017 (Accepted).**
+18. **Records, milestones and career completion** — covers `TR-records-003/005/006`. **Written: ADR-0018 (Accepted).**
+19. **HUD data binding and layout** — covers `TR-in-game-hud-001/003/005/006`; 002 belongs to ADR-0003 and 004 to ADR-0005. **Written: ADR-0019 (Accepted).**
+20. **First-run onboarding beat machine** — covers `TR-first-run-onboarding-001..005`. **Written: ADR-0020 (Accepted).**
 
 **Can defer to implementation**
 
@@ -650,10 +649,10 @@ Extracted from 18 GDDs | 104 requirements | 104 registered in
 | Area | Requirements | Covered (Accepted) | Proposed only | Partial | Gaps |
 |---|---|---|---|---|---|
 | Foundation (data, input, scene, save) | 24 | 24 | 0 | 0 | 0 |
-| Core (run, turns, capacity, dish values) | 21 | 5 | 15 | 0 | 0 |
-| Feature (cloying, waves, settlement, meta, unlocks, records) | 34 | 12 | 22 | 0 | 0 |
-| Presentation (HUD, UI, audio, onboarding) | 25 | 17 | 8 | 0 | 0 |
-| **Total** | **104** | **58** | **46** | **0** | **0** |
+| Core (run, turns, capacity, dish values) | 21 | 21 | 0 | 0 | 0 |
+| Feature (cloying, waves, settlement, meta, unlocks, records) | 34 | 34 | 0 | 0 | 0 |
+| Presentation (HUD, UI, audio, onboarding) | 25 | 25 | 0 | 0 | 0 |
+| **Total** | **104** | **104** | **0** | **0** | **0** |
 
 The 2026-11-05 `/architecture-review full` produced
 `docs/architecture/requirements-traceability.md`, which carries the full

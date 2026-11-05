@@ -8,12 +8,13 @@ Engine: Godot 4.7 (pinned 4.7.2; editor NOT INSTALLED — no engine verification
 > Rows come from each ADR's `## GDD Requirements Addressed` section. **Status is qualified by each
 > ADR's own `## Status`**: an artifact addressed only by a `Proposed` ADR is 🟡, not ✅.
 > The 2026-11-05 re-run is the first to count ADR-0010…ADR-0020; the 2026-11-04 report predates them.
+> ADR-0010…ADR-0020 were accepted on 2026-11-05, so every entry below now rests on an Accepted ADR.
 
 ## Coverage Summary
 
 - Total requirements: 104
-- Covered by an **Accepted** ADR: 58 (55.8%)
-- Covered by a **Proposed** ADR only: 46 (44.2%)
+- Covered by an **Accepted** ADR: 104 (100.0%)
+- Covered by a **Proposed** ADR only: 0 (0.0%)
 - Partial: 0 (0.0%)
 - Gaps: 0 (0.0%)
 - Not assessed: 0 (every ADR is readable and has a `## Status`)
@@ -21,17 +22,18 @@ Engine: Godot 4.7 (pinned 4.7.2; editor NOT INSTALLED — no engine verification
 | Layer | Total | ✅ Accepted | 🟡 Proposed | ⚠️ Partial | ❌ Gap |
 |---|---|---|---|---|---|
 | Foundation | 24 | 24 | 0 | 0 | 0 |
-| Core | 21 | 5 | 16 | 0 | 0 |
-| Feature | 34 | 12 | 22 | 0 | 0 |
-| Presentation | 25 | 17 | 8 | 0 | 0 |
-| **Total** | **104** | **58** | **46** | **0** | **0** |
+| Core | 21 | 21 | 0 | 0 | 0 |
+| Feature | 34 | 34 | 0 | 0 | 0 |
+| Presentation | 25 | 25 | 0 | 0 | 0 |
+| **Total** | **104** | **104** | **0** | **0** | **0** |
 
 Layer assignment follows `docs/architecture/architecture.md`'s System Layer Map, which moves
 `save-system` from the systems index's Core to Foundation.
 
 The dated review (`architecture-review-2026-11-05.md`) recorded 57 / 46 / 1 / 0. After it,
 ADR-0007 D1 gained the `frozen` snapshot field and `action_availability()`, closing the last
-partial (`TR-run-flow-007`) without changing any requirement text.
+partial (`TR-run-flow-007`) without changing any requirement text. ADR-0010…ADR-0020 were
+then accepted on 2026-11-05, moving the matrix to 104 / 0 / 0 / 0.
 
 ## Full Matrix
 
@@ -63,30 +65,30 @@ partial (`TR-run-flow-007`) without changing any requirement text.
 | `TR-save-system-007` | save-system.md | save-system | Deterministic serialization: sorted map keys, lossless int64, byte-identical round trip excluding `last_saved_at` | ADR-0002 | ✅ Covered |
 | `TR-run-flow-001` | run-flow.md | run-flow | Run lifecycle `Idle/Initializing/Active/Ending/Settling/Handoff/Failed/Faulted`; exactly one `run_id` per run | ADR-0007 | ✅ Covered |
 | `TR-run-flow-002` | run-flow.md | run-flow | Init order: turns → capacity → menu waves → cloying in one frame; failure → `init_failed`, no `RunResult` | ADR-0006, ADR-0007 | ✅ Covered |
-| `TR-run-flow-003` | run-flow.md | run-flow | `submit_action(eat/skip_wave/end_pickup, dish_id)` with fixed validation order and atomic commit; non-final paid skip is rejected as `NO_TURNS` when `turns_remaining = 1` before any turn/advance mutation | ADR-0013 | 🟡 Covered (Proposed) |
-| `TR-run-flow-004` | run-flow.md | run-flow | Only two end reasons (`TIME_EXHAUSTED`, `NO_EATABLE_DISH`); fixed priority; state frozen after `Ending` | ADR-0013 | 🟡 Covered (Proposed) |
+| `TR-run-flow-003` | run-flow.md | run-flow | `submit_action(eat/skip_wave/end_pickup, dish_id)` with fixed validation order and atomic commit; non-final paid skip is rejected as `NO_TURNS` when `turns_remaining = 1` before any turn/advance mutation | ADR-0013 | ✅ Covered |
+| `TR-run-flow-004` | run-flow.md | run-flow | Only two end reasons (`TIME_EXHAUSTED`, `NO_EATABLE_DISH`); fixed priority; state frozen after `Ending` | ADR-0013 | ✅ Covered |
 | `TR-run-flow-005` | run-flow.md | run-flow | `RunLog` assembled from action-time values; `settle(RunLog)` once; `RunResult` handed off once; `run_settled` is a pre-notification and persistence happens only after the `Run -> Menu` delivery is accepted | ADR-0007 | ✅ Covered |
 | `TR-run-flow-006` | run-flow.md | run-flow | Signals `run_started/action_committed/run_ended/run_settled/run_faulted/run_discarded`, at most once per `run_id`; `run_faulted.detail` carries `phase in {INIT, RUN}` and `run_id = 0` means allocation failed (never started) | ADR-0004, ADR-0007 | ✅ Covered |
 | `TR-run-flow-007` | run-flow.md | run-flow | Read-only run snapshot for HUD incl. `run_state`, `frozen`, `running_net`, `shortfall`, `action_seq` | ADR-0007 | ✅ Covered |
-| `TR-time-and-turns-001` | time-and-turns.md | time-and-turns | `initialize(turn_budget)` once per run; `INVALID_TURN_BUDGET` on bad input, no clamping | ADR-0011 | 🟡 Covered (Proposed) |
-| `TR-time-and-turns-002` | time-and-turns.md | time-and-turns | `spend_turn()` cost exactly 1; `can_spend_turn()` pure; no overdraft, no refund | ADR-0011 | 🟡 Covered (Proposed) |
-| `TR-time-and-turns-003` | time-and-turns.md | time-and-turns | `is_exhausted()` reports only; end-reason ownership stays in run-flow | ADR-0011 | 🟡 Covered (Proposed) |
-| `TR-time-and-turns-004` | time-and-turns.md | time-and-turns | Budget frozen for the run; changes apply next `initialize` | ADR-0011 | 🟡 Covered (Proposed) |
-| `TR-stomach-capacity-001` | stomach-capacity.md | stomach-capacity | `initialize(upgrade_snapshot)` exactly once per run; `end_run(reason)` is the authoritative run boundary on every termination path | ADR-0012 | 🟡 Covered (Proposed) |
-| `TR-stomach-capacity-002` | stomach-capacity.md | stomach-capacity | `capacity_total = C0 + capacity_bonus`, range `[1,999]`; invalid/missing snapshot fails, no default 0 | ADR-0012 | 🟡 Covered (Proposed) |
-| `TR-stomach-capacity-003` | stomach-capacity.md | stomach-capacity | `can_fit(e)` / `consume(e)` use integer `effective_satiety`, inclusive boundary, monotonic used capacity | ADR-0012 | 🟡 Covered (Proposed) |
-| `TR-stomach-capacity-004` | stomach-capacity.md | stomach-capacity | No “full” end state; capacity only gates individual dishes | ADR-0012 | 🟡 Covered (Proposed) |
-| `TR-stomach-capacity-005` | stomach-capacity.md | stomach-capacity | Read-only accessors only; no signals, no second counter | ADR-0012 | 🟡 Covered (Proposed) |
-| `TR-dish-values-001` | dish-values.md | dish-values | `unit_value(d) = price/satiety` is the single cross-dish comparison scale; no downstream recomputation | ADR-0010 | 🟡 Covered (Proposed) |
-| `TR-dish-values-002` | dish-values.md | dish-values | Static 12-dish catalog; balance audits (`menu_healthy`, `opt_value`) run in design/CI only | ADR-0010 | 🟡 Covered (Proposed) |
-| `TR-dish-values-003` | dish-values.md | dish-values | No runtime aggregation, optimum solving, or `opt_value` exposure | ADR-0010 | 🟡 Covered (Proposed) |
-| `TR-dish-values-004` | dish-values.md | dish-values | Deterministic `uv_cmp` ordering (unit value desc, id asc) | ADR-0010 | 🟡 Covered (Proposed) |
-| `TR-dish-values-005` | dish-values.md | dish-values | Result-style `QueryError {caller, dish_id, reason}`; no zero/placeholder returns | ADR-0010 | 🟡 Covered (Proposed) |
-| `TR-cloying-and-taste-001` | cloying-and-taste.md | cloying-and-taste | Per-`cloying_group` integer counters reset per run; explicit canonical group order array | ADR-0014 | 🟡 Covered (Proposed) |
-| `TR-cloying-and-taste-002` | cloying-and-taste.md | cloying-and-taste | `effective_satiety = satiety + max(0, min(count, cloy_cap) − floor(resistance))`, computed before increment | ADR-0014 | 🟡 Covered (Proposed) |
-| `TR-cloying-and-taste-003` | cloying-and-taste.md | cloying-and-taste | `酸`/`冰` cleanse decrements the highest other group once; ties by canonical order | ADR-0014 | 🟡 Covered (Proposed) |
-| `TR-cloying-and-taste-004` | cloying-and-taste.md | cloying-and-taste | `initialize(cloying_resistance)` before `run_started`; no persistence in MVP | ADR-0014 | 🟡 Covered (Proposed) |
-| `TR-cloying-and-taste-005` | cloying-and-taste.md | cloying-and-taste | Expose `extra_satiety`, `cleanse_target`, group counts to HUD before selection | ADR-0014 | 🟡 Covered (Proposed) |
+| `TR-time-and-turns-001` | time-and-turns.md | time-and-turns | `initialize(turn_budget)` once per run; `INVALID_TURN_BUDGET` on bad input, no clamping | ADR-0011 | ✅ Covered |
+| `TR-time-and-turns-002` | time-and-turns.md | time-and-turns | `spend_turn()` cost exactly 1; `can_spend_turn()` pure; no overdraft, no refund | ADR-0011 | ✅ Covered |
+| `TR-time-and-turns-003` | time-and-turns.md | time-and-turns | `is_exhausted()` reports only; end-reason ownership stays in run-flow | ADR-0011 | ✅ Covered |
+| `TR-time-and-turns-004` | time-and-turns.md | time-and-turns | Budget frozen for the run; changes apply next `initialize` | ADR-0011 | ✅ Covered |
+| `TR-stomach-capacity-001` | stomach-capacity.md | stomach-capacity | `initialize(upgrade_snapshot)` exactly once per run; `end_run(reason)` is the authoritative run boundary on every termination path | ADR-0012 | ✅ Covered |
+| `TR-stomach-capacity-002` | stomach-capacity.md | stomach-capacity | `capacity_total = C0 + capacity_bonus`, range `[1,999]`; invalid/missing snapshot fails, no default 0 | ADR-0012 | ✅ Covered |
+| `TR-stomach-capacity-003` | stomach-capacity.md | stomach-capacity | `can_fit(e)` / `consume(e)` use integer `effective_satiety`, inclusive boundary, monotonic used capacity | ADR-0012 | ✅ Covered |
+| `TR-stomach-capacity-004` | stomach-capacity.md | stomach-capacity | No “full” end state; capacity only gates individual dishes | ADR-0012 | ✅ Covered |
+| `TR-stomach-capacity-005` | stomach-capacity.md | stomach-capacity | Read-only accessors only; no signals, no second counter | ADR-0012 | ✅ Covered |
+| `TR-dish-values-001` | dish-values.md | dish-values | `unit_value(d) = price/satiety` is the single cross-dish comparison scale; no downstream recomputation | ADR-0010 | ✅ Covered |
+| `TR-dish-values-002` | dish-values.md | dish-values | Static 12-dish catalog; balance audits (`menu_healthy`, `opt_value`) run in design/CI only | ADR-0010 | ✅ Covered |
+| `TR-dish-values-003` | dish-values.md | dish-values | No runtime aggregation, optimum solving, or `opt_value` exposure | ADR-0010 | ✅ Covered |
+| `TR-dish-values-004` | dish-values.md | dish-values | Deterministic `uv_cmp` ordering (unit value desc, id asc) | ADR-0010 | ✅ Covered |
+| `TR-dish-values-005` | dish-values.md | dish-values | Result-style `QueryError {caller, dish_id, reason}`; no zero/placeholder returns | ADR-0010 | ✅ Covered |
+| `TR-cloying-and-taste-001` | cloying-and-taste.md | cloying-and-taste | Per-`cloying_group` integer counters reset per run; explicit canonical group order array | ADR-0014 | ✅ Covered |
+| `TR-cloying-and-taste-002` | cloying-and-taste.md | cloying-and-taste | `effective_satiety = satiety + max(0, min(count, cloy_cap) − floor(resistance))`, computed before increment | ADR-0014 | ✅ Covered |
+| `TR-cloying-and-taste-003` | cloying-and-taste.md | cloying-and-taste | `酸`/`冰` cleanse decrements the highest other group once; ties by canonical order | ADR-0014 | ✅ Covered |
+| `TR-cloying-and-taste-004` | cloying-and-taste.md | cloying-and-taste | `initialize(cloying_resistance)` before `run_started`; no persistence in MVP | ADR-0014 | ✅ Covered |
+| `TR-cloying-and-taste-005` | cloying-and-taste.md | cloying-and-taste | Expose `extra_satiety`, `cleanse_target`, group counts to HUD before selection | ADR-0014 | ✅ Covered |
 | `TR-menu-waves-001` | menu-waves.md | menu-waves | Deterministic seeded partition; same `(station_id, seed)` identical across platforms | ADR-0006 | ✅ Covered |
 | `TR-menu-waves-002` | menu-waves.md | menu-waves | `visible_dishes` / `preview_dishes`; preview capped at `wave_size−1` | ADR-0006 | ✅ Covered |
 | `TR-menu-waves-003` | menu-waves.md | menu-waves | `advance_cost` 0 for empty/final wave, 1 otherwise; `end_pickup` free; non-final paid skip rejected at `turns_remaining = 1` with `NO_TURNS` | ADR-0006 | ✅ Covered |
@@ -94,34 +96,34 @@ partial (`TR-run-flow-007`) without changing any requirement text.
 | `TR-menu-waves-005` | menu-waves.md | menu-waves | `wave_healthy` lower bound `0.9 × opt_value`; up to 20 rerolls then best + warning | ADR-0006 | ✅ Covered |
 | `TR-menu-waves-006` | menu-waves.md | menu-waves | `pool_override` accepted by initialize and health check | ADR-0006 | ✅ Covered |
 | `TR-settlement-001` | settlement-and-entry-fee.md | settlement | `settle(RunLog)` once per `run_id`; duplicate returns `ALREADY_SETTLED`; `SettlementTransaction` additionally rejects a repeated application by `run_id + digest`, the two gates do not substitute for each other | ADR-0007 | ✅ Covered |
-| `TR-settlement-002` | settlement-and-entry-fee.md | settlement | `total_value` int64 sum; `net_profit = total_value − entry_fee`; `broke_even` derived; no clamping | ADR-0015 | 🟡 Covered (Proposed) |
-| `TR-settlement-003` | settlement-and-entry-fee.md | settlement | `RunResult` schema: rows in eaten order, `return_ratio` null when fee 0, `upgrade_snapshot` passthrough | ADR-0015 | 🟡 Covered (Proposed) |
+| `TR-settlement-002` | settlement-and-entry-fee.md | settlement | `total_value` int64 sum; `net_profit = total_value − entry_fee`; `broke_even` derived; no clamping | ADR-0015 | ✅ Covered |
+| `TR-settlement-003` | settlement-and-entry-fee.md | settlement | `RunResult` schema: rows in eaten order, `return_ratio` null when fee 0, `upgrade_snapshot` passthrough | ADR-0015 | ✅ Covered |
 | `TR-settlement-004` | settlement-and-entry-fee.md | settlement | Pure function: no I/O, clock, or RNG; checked int64 overflow returns error | ADR-0007 | ✅ Covered |
-| `TR-settlement-005` | settlement-and-entry-fee.md | settlement | Shared `running_net(k)` / `shortfall(k)` definitions for HUD; single summation source | ADR-0007（partial）, ADR-0015 | 🟡 Covered (Proposed) |
-| `TR-meta-upgrades-001` | meta-upgrades.md | meta-upgrades | Wallet is int64 with exactly three flows (run net, purchase, unlock spend); negative allowed; checked overflow | ADR-0016 | 🟡 Covered (Proposed) |
-| `TR-meta-upgrades-002` | meta-upgrades.md | meta-upgrades | Exponential `upgrade_price` from `cost`/`cost_growth`; linear effect per level; hard `max_level` | ADR-0016 | 🟡 Covered (Proposed) |
-| `TR-meta-upgrades-003` | meta-upgrades.md | meta-upgrades | `resolve_upgrade_snapshot()` returns parsed bonuses plus frozen `levels` copy | ADR-0016 | 🟡 Covered (Proposed) |
-| `TR-meta-upgrades-004` | meta-upgrades.md | meta-upgrades | Purchase transaction: validate → memory apply → `save.commit` → success; rollback on write failure | ADR-0016 | 🟡 Covered (Proposed) |
+| `TR-settlement-005` | settlement-and-entry-fee.md | settlement | Shared `running_net(k)` / `shortfall(k)` definitions for HUD; single summation source | ADR-0007（partial）, ADR-0015 | ✅ Covered |
+| `TR-meta-upgrades-001` | meta-upgrades.md | meta-upgrades | Wallet is int64 with exactly three flows (run net, purchase, unlock spend); negative allowed; checked overflow | ADR-0016 | ✅ Covered |
+| `TR-meta-upgrades-002` | meta-upgrades.md | meta-upgrades | Exponential `upgrade_price` from `cost`/`cost_growth`; linear effect per level; hard `max_level` | ADR-0016 | ✅ Covered |
+| `TR-meta-upgrades-003` | meta-upgrades.md | meta-upgrades | `resolve_upgrade_snapshot()` returns parsed bonuses plus frozen `levels` copy | ADR-0016 | ✅ Covered |
+| `TR-meta-upgrades-004` | meta-upgrades.md | meta-upgrades | Purchase transaction: validate → memory apply → `save.commit` → success; rollback on write failure | ADR-0016 | ✅ Covered |
 | `TR-meta-upgrades-005` | meta-upgrades.md | meta-upgrades | `prepare_run_result` computes progression only; orchestrator commits once; `WALLET_OVERFLOW` omits the progression key while records still commit; write failure returns `APPLIED_UNSAVED` and marks both namespaces dirty | ADR-0007 | ✅ Covered |
-| `TR-meta-upgrades-006` | meta-upgrades.md | meta-upgrades | `spend(amount, reason, extra)` generic wallet transaction; `extra` merged into the same commit | ADR-0016 | 🟡 Covered (Proposed) |
-| `TR-meta-upgrades-007` | meta-upgrades.md | meta-upgrades | `menu_vision_useful_max = ceil((wave_size−1)/effect_value)`; no no-effect level sold | ADR-0016 | 🟡 Covered (Proposed) |
-| `TR-unlocks-001` | unlocks-and-stations.md | unlocks | Availability derived: `unlock_cost = 0` or id in `unlocks.stations`; dishes follow the station | ADR-0017 | 🟡 Covered (Proposed) |
-| `TR-unlocks-002` | unlocks-and-stations.md | unlocks | Normalize/backfill free stations and dishes; empty set → `NoPlayableStation`; never delete ids | ADR-0017 | 🟡 Covered (Proposed) |
-| `TR-unlocks-003` | unlocks-and-stations.md | unlocks | Unlock transaction via `meta-upgrades.spend` with `{unlocks}` merged into the same commit | ADR-0017 | 🟡 Covered (Proposed) |
-| `TR-unlocks-004` | unlocks-and-stations.md | unlocks | Fixed validation order incl. `NOT_IN_MENU`, `BUSY`, `INSUFFICIENT_FUNDS` | ADR-0017 | 🟡 Covered (Proposed) |
-| `TR-unlocks-005` | unlocks-and-stations.md | unlocks | Catalog/progress/effective-unlock read APIs; id-sorted output | ADR-0017 | 🟡 Covered (Proposed) |
+| `TR-meta-upgrades-006` | meta-upgrades.md | meta-upgrades | `spend(amount, reason, extra)` generic wallet transaction; `extra` merged into the same commit | ADR-0016 | ✅ Covered |
+| `TR-meta-upgrades-007` | meta-upgrades.md | meta-upgrades | `menu_vision_useful_max = ceil((wave_size−1)/effect_value)`; no no-effect level sold | ADR-0016 | ✅ Covered |
+| `TR-unlocks-001` | unlocks-and-stations.md | unlocks | Availability derived: `unlock_cost = 0` or id in `unlocks.stations`; dishes follow the station | ADR-0017 | ✅ Covered |
+| `TR-unlocks-002` | unlocks-and-stations.md | unlocks | Normalize/backfill free stations and dishes; empty set → `NoPlayableStation`; never delete ids | ADR-0017 | ✅ Covered |
+| `TR-unlocks-003` | unlocks-and-stations.md | unlocks | Unlock transaction via `meta-upgrades.spend` with `{unlocks}` merged into the same commit | ADR-0017 | ✅ Covered |
+| `TR-unlocks-004` | unlocks-and-stations.md | unlocks | Fixed validation order incl. `NOT_IN_MENU`, `BUSY`, `INSUFFICIENT_FUNDS` | ADR-0017 | ✅ Covered |
+| `TR-unlocks-005` | unlocks-and-stations.md | unlocks | Catalog/progress/effective-unlock read APIs; id-sorted output | ADR-0017 | ✅ Covered |
 | `TR-records-001` | records-and-milestones.md | records | `records` namespace schema: per-station best, career aggregates, earned milestones, `completed_at` | ADR-0002 | ✅ Covered |
 | `TR-records-002` | records-and-milestones.md | records | `prepare_run(RunResult)` once per `run_id`; consistency assertions; any error aborts the whole settlement transaction (no other namespace commits); `ALREADY_APPLIED` triggers no commit | ADR-0007 | ✅ Covered |
-| `TR-records-003` | records-and-milestones.md | records | Per-station ranking by `net_profit`; strict improvement only; ties keep the old record | ADR-0018 | 🟡 Covered (Proposed) |
+| `TR-records-003` | records-and-milestones.md | records | Per-station ranking by `net_profit`; strict improvement only; ties keep the old record | ADR-0018 | ✅ Covered |
 | `TR-records-004` | records-and-milestones.md | records | Separate read-only `MilestoneData` loader with four metrics; monotonic lock-in | ADR-0001 | ✅ Covered |
-| `TR-records-005` | records-and-milestones.md | records | UTC timestamps display-only; no logic reads the clock | ADR-0018 | 🟡 Covered (Proposed) |
-| `TR-records-006` | records-and-milestones.md | records | Signals `record_broken`, `milestone_earned`, `career_completed` | ADR-0018 | 🟡 Covered (Proposed) |
-| `TR-in-game-hud-001` | in-game-hud.md | in-game-hud | Read-only projection; one immutable `HudFrame` per event; no polling between frames | ADR-0019 | 🟡 Covered (Proposed) |
+| `TR-records-005` | records-and-milestones.md | records | UTC timestamps display-only; no logic reads the clock | ADR-0018 | ✅ Covered |
+| `TR-records-006` | records-and-milestones.md | records | Signals `record_broken`, `milestone_earned`, `career_completed` | ADR-0018 | ✅ Covered |
+| `TR-in-game-hud-001` | in-game-hud.md | in-game-hud | Read-only projection; one immutable `HudFrame` per event; no polling between frames | ADR-0019 | ✅ Covered |
 | `TR-in-game-hud-002` | in-game-hud.md | in-game-hud | 1280×720 `canvas_items`/expand layout: top bar, card grid, right rail, detail row | ADR-0003, ADR-0019 | ✅ Covered |
-| `TR-in-game-hud-003` | in-game-hud.md | in-game-hud | Card composed from dish/cloying/capacity/wave providers; no sorting, recommendation, or `unit_value` | ADR-0019 | 🟡 Covered (Proposed) |
+| `TR-in-game-hud-003` | in-game-hud.md | in-game-hud | Card composed from dish/cloying/capacity/wave providers; no sorting, recommendation, or `unit_value` | ADR-0019 | ✅ Covered |
 | `TR-in-game-hud-004` | in-game-hud.md | in-game-hud | Focus resolution and `REJECTED(reason)` feedback; non-eatable cards remain focusable | ADR-0005, ADR-0019 | ✅ Covered |
-| `TR-in-game-hud-005` | in-game-hud.md | in-game-hud | Fixed number formats; color always backed by text/symbol | ADR-0019 | 🟡 Covered (Proposed) |
-| `TR-in-game-hud-006` | in-game-hud.md | in-game-hud | `get_anchor_rect(anchor_id)` and three protected rects for onboarding | ADR-0019 | 🟡 Covered (Proposed) |
+| `TR-in-game-hud-005` | in-game-hud.md | in-game-hud | Fixed number formats; color always backed by text/symbol | ADR-0019 | ✅ Covered |
+| `TR-in-game-hud-006` | in-game-hud.md | in-game-hud | `get_anchor_rect(anchor_id)` and three protected rects for onboarding | ADR-0019 | ✅ Covered |
 | `TR-ui-flow-001` | ui-flow.md | ui-flow | Fixed screen inventory; UI stack max depth 2, modal stack max depth 2 | ADR-0003, ADR-0005 | ✅ Covered |
 | `TR-ui-flow-002` | ui-flow.md | ui-flow | Deterministic `back_target` priority; forced `Blocked` modal ignores `ui_cancel` | ADR-0003 | ✅ Covered |
 | `TR-ui-flow-003` | ui-flow.md | ui-flow | Focus order per screen, `initial_focus`, `focus_restore`; at 125/150% text scale the same-frame reflow keeps focus by id and never clips the focus ring | ADR-0003, ADR-0008 | ✅ Covered |
@@ -136,20 +138,19 @@ partial (`TR-run-flow-007`) without changing any requirement text.
 | `TR-audio-feedback-005` | audio-feedback.md | audio-feedback | Pause silences and clears pending outcome; mute/missing-device are drop semantics; `sfx.flow.*` runs out-of-pool so the pause cue can start on the freeze frame | ADR-0004, ADR-0009 | ✅ Covered |
 | `TR-audio-feedback-006` | audio-feedback.md | audio-feedback | Cue request log (ring buffer 10k) with closed reason vocabulary; `priority` stays in the vocabulary but is not emitted in v1 | ADR-0009 | ✅ Covered |
 | `TR-audio-feedback-007` | audio-feedback.md | audio-feedback | Content defects (invalid cue catalog or event map) fail boot through the data gate; playback failures degrade silently at runtime | ADR-0009 | ✅ Covered |
-| `TR-first-run-onboarding-001` | first-run-onboarding.md | first-run-onboarding | Runs only when `RunConfig.is_first_run`; preset `pool_override` six dishes and `entry_fee_override = 40` | ADR-0020 | 🟡 Covered (Proposed) |
+| `TR-first-run-onboarding-001` | first-run-onboarding.md | first-run-onboarding | Runs only when `RunConfig.is_first_run`; preset `pool_override` six dishes and `entry_fee_override = 40` | ADR-0020 | ✅ Covered |
 | `TR-first-run-onboarding-002` | first-run-onboarding.md | first-run-onboarding | Fixed B0–B4 beat sequence; one beat per input; modal beats use `Blocked` allow-list | ADR-0005, ADR-0020 | ✅ Covered |
-| `TR-first-run-onboarding-003` | first-run-onboarding.md | first-run-onboarding | Anchors from HUD `get_anchor_rect`; bubbles never cover the three protected rects | ADR-0020 | 🟡 Covered (Proposed) |
-| `TR-first-run-onboarding-004` | first-run-onboarding.md | first-run-onboarding | `FirstRunExplanation` payload for the receipt; no persistence; `onboarding_finished` once per run | ADR-0020 | 🟡 Covered (Proposed) |
-| `TR-first-run-onboarding-005` | first-run-onboarding.md | first-run-onboarding | Degradation order for missing preset/anchors/unit values; never blocks the run | ADR-0020 | 🟡 Covered (Proposed) |
+| `TR-first-run-onboarding-003` | first-run-onboarding.md | first-run-onboarding | Anchors from HUD `get_anchor_rect`; bubbles never cover the three protected rects | ADR-0020 | ✅ Covered |
+| `TR-first-run-onboarding-004` | first-run-onboarding.md | first-run-onboarding | `FirstRunExplanation` payload for the receipt; no persistence; `onboarding_finished` once per run | ADR-0020 | ✅ Covered |
+| `TR-first-run-onboarding-005` | first-run-onboarding.md | first-run-onboarding | Degradation order for missing preset/anchors/unit values; never blocks the run | ADR-0020 | ✅ Covered |
 
 ## Known Gaps
 
 **None.** Every one of the 104 active requirements is addressed by at least one ADR.
 
-The 44 gaps recorded on 2026-11-04 are closed by ADR-0010…ADR-0020. They are not yet
-*coverage* in the review's sense: 46 requirements rest on ADRs whose `## Status` is
-`Proposed`, so the matrix marks them 🟡 and the verdict is capped at CONCERNS. The route
-out is `/architecture-decision accept ADR-NNNN`, one ADR at a time — not another ADR.
+The 44 gaps recorded on 2026-11-04 are closed by ADR-0010…ADR-0020, and all eleven are now
+`Accepted`. Every one of the 104 requirements is covered by an Accepted ADR; no requirement
+rests on a `Proposed` decision. Engine verification remains a separate, still-open gate.
 
 ## Partial Coverage
 
