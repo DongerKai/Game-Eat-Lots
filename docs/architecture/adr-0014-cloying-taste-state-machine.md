@@ -146,6 +146,14 @@ func cleanse_target(dish_id: StringName, caller: StringName) -> StringNameResult
 func group_counts() -> Array[GroupCount]      # 只读副本，按规范序
 ```
 
+`GroupCount` 是只读值对象；HUD 与首局引导只消费它，不持有内部计数表：
+
+```gdscript
+class GroupCount extends RefCounted
+var group: StringName       # 规范组名
+var count: int              # 本局计数；只含 > 0 的组
+```
+
 `preview(dish)` 的规则：
 
 1. `dish = dish_values.get_dish(dish_id)`；失败原样返回 `DATA_NOT_READY` / `UNKNOWN_DISH`。

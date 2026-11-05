@@ -175,7 +175,7 @@ depth = stack.size()
 - 每帧开始时（`_input` 之前）清空 `_pressed`、`_consumed`，`input_seq += 1`。
 - `_input(event)` 只做三件事：忽略 `event.echo`；按事件类型识别设备；按 D3 的表把事件翻译成「至多一个动作」，并检查该动作是否在当前允许集内。翻译一次即写 `_pressed[action] = true`，同一动作在同一帧的第二次按下被丢弃（这实现「两个设备同时触发同一动作只产生一次动作」）。
 - **同一帧的多个不同动作都保留**：`ui_accept` 与 `ui_cancel` 同帧到达时两者都在 `_pressed` 里，但按 D3/D4 只有一个会被投递或轮询成功——`ui-flow.md` 的「只消费一个动作」由此成立，`InputRouter` 不自行合并。
-- **`ui_pause` 的帧内优先级**：`SceneFlow` 轮询 `ui_pause` 的 `process_priority = -100`，`HudHost` 轮询 `ui_accept` / `game_skip_wave` 的 `process_priority = 0`。同帧同时出现 `ui_accept` 与 `ui_pause` 时，暂停先生效、`RunFlow` 已被冻结，局内动作随之落空。这是确定的、可断言的顺序，而不是「看谁先下一帧」。
+- **`ui_pause` 的帧内优先级**：`SceneFlow` 轮询 `ui_pause` 的 `process_priority = -100`，`OnboardingHost` 的 `process_priority = -50`（`Blocked` 下消费引导动作），`HudHost` 轮询 `ui_accept` / `game_skip_wave` / `ui_cancel` 的 `process_priority = 0`。同帧同时出现 `ui_accept` 与 `ui_pause` 时，暂停先生效、`RunFlow` 已被冻结，局内动作随之落空。这是确定的、可断言的顺序，而不是「看谁先下一帧」。三个常量在启动时断言 `-100 < -50 < 0`。
 - **`input_seq`** 每帧递增一次，暴露给需要「同一帧至多推进一次」的消费者（首局引导的 beat 推进）。它是单调整数，不随上下文重置；消费者记下已消费的序号并只接受更大的值。
 
 ### D6 — 导航重复与摇杆回滞：纯函数 + 同步合成投递
@@ -228,7 +228,7 @@ class StickGate extends RefCounted:
 | `push_context(Blocked, allow)` / `pop_context()` | 首局引导 | 以 `&"Blocked"` 调用 `push_context` 的调用点只允许 `first_run_onboarding.gd` |
 | `consume_action` | 首局引导 | 除 `first_run_onboarding.gd` 外命中即失败 |
 | `is_action_just_pressed(&"ui_pause")` | `SceneFlow` | 除 `scene_flow.gd` 外命中即失败 |
-| `is_action_just_pressed(&"ui_accept")` / `&"game_skip_wave"` | `HudHost`（提交 `RunFlow.submit_action`） | 只允许 `hud_host.gd` |
+| `is_action_just_pressed(&"ui_accept")` / `&"game_skip_wave"` / `&"ui_cancel"` | `HudHost`（提交 `RunFlow.submit_action`；`ui_cancel` 仅用于关闭结束取餐确认面板） | 只允许 `hud_host.gd`；`Menu` / `Modal` 的 `ui_cancel` 仍由 `UIRoot.handle_action` 消费 |
 | 任何上下文赋值 | 无人 | 除 `input_router.gd` 内部外，`context =` / `_base =` / `_stack =` 命中 0 次 |
 
 - **`SceneFlow` 不订阅 `context_changed`**：它是唯一 `request_context` 调用方，回执就是返回值。让它再订阅会形成「自己触发、自己响应」的回环，是重入的常见来源（ADR-0004 D7）。
@@ -424,7 +424,7 @@ class InputTuning extends Resource:
 - **`allow` 白名单与引导 beat 漂移**：`B0` 只放行 `ui_accept` / `ui_cancel`，若文案改动让玩家必须先导航，就会卡住。→ 缓解：`first_run_onboarding.md` AC 13/19 已把「导航是否到达局内」写成负向断言；本 ADR 的 `false` 返回让重压失败可见。
 - **设备热插拔与按住状态**：手柄拔出时若未按「释放」处理，`NavRepeater` 会一直重复。→ 缓解：D8 要求拔出即按释放并 `reset()` 该设备的方向状态；`input.md` 边界用例与 AC 12 覆盖。
 - **`InputTuning` 的两处来源**：资源与代码内默认值可能漂移。→ 缓解：默认值只允许出现在 `input_tuning.gd` 一处，且 `is_valid()` 是唯一校验入口；测试断言「缺资源时的行为等于默认值资源」。
-- **`ui_pause` 的帧内优先级**（`process_priority = -100` 与 `0`）：若 HUD 被改成更小的优先级，同帧暂停会晚于吃菜。→ 缓解：把两个优先级写成常量并在启动时断言，而不是散落在各节点上。
+- **`ui_pause` 的帧内优先级**（`process_priority = -100` / `-50` / `0`）：若 HUD 被改成更小的优先级，同帧暂停会晚于吃菜。→ 缓解：把三个优先级写成常量并在启动时断言 `-100 < -50 < 0`，而不是散落在各节点上。
 
 ## GDD Requirements Addressed
 

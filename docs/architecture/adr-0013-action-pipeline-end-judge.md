@@ -218,6 +218,25 @@ InputRouter / HUD
  └──────────────────────────────────────────────┘
 ```
 
+### 9. 只读可用性投影 `action_availability()`
+
+HUD 需要知道跳过/结束取餐**此刻是否可用、为什么不可用**，但不得复制本 ADR 的门控阈值。`RunFlow` 因此发布一个无副作用的只读投影：
+
+```gdscript
+class ActionAvailability extends RefCounted
+var skip_visible: bool          # 非最后一波且当前波可推进
+var skip_enabled: bool
+var skip_reason: int            # RejectCode 的只读映射；可用时 NONE
+var end_visible: bool           # 最后一波
+var end_enabled: bool
+var end_reason: int
+```
+
+- 判定顺序与本 ADR 决策 4 / 5 的校验表**同源**：`skip_wave` 依次问 `is_final_wave()`、`can_advance()`、`turns_remaining ≥ 2`；`end_pickup` 依次问 `is_final_wave()`、`can_end_pickup()`。
+- 它是投影，不提交、不 `advance()`、不 `spend_turn()`、不 `action_seq += 1`、不发信号；调用次数不受限。
+- `frozen = true` 时两个 `*_enabled` 均为 `false`，`*_reason` 为 `FROZEN`；`run_state != Active` 时为 `NOT_ACTIVE`。
+- HUD 只格式化 `*_reason` 与代价文案，不得自行比较 `turns_remaining ≥ 2` 或 `is_final_wave`（ADR-0019 D3）。
+
 ## Alternatives Considered
 
 ### Alternative 1: 边校验边提交

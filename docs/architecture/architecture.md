@@ -3,11 +3,11 @@
 ## Document Status
 
 - Version: 1
-- Last Updated: 2026-11-04
+- Last Updated: 2026-11-05
 - Engine: Godot 4.7 (pinned; installed version NOT DETERMINED — no editor on this machine)
 - GDDs Covered: 18 (all designed systems; #19 在线挑战 and #20 同屏合作 are Not Started)
-- ADRs Referenced: ADR-0001 内容数据格式；ADR-0002 持久化格式；ADR-0003 场景与屏幕架构；ADR-0004 服务组合与信号；ADR-0005 输入上下文栈；ADR-0006 确定性随机；ADR-0007 局内状态与结算事务；ADR-0008 设置与本地化；ADR-0009 音频播放与暂停（均为 Accepted，2026-11-04）；ADR-0010…0020 覆盖 44 条缺口的系统 ADR（均 Proposed）
-- Architecture Review: 2026-11-04 — FAIL — 56 covered / 4 partial / 44 gaps。机械修复已应用（2026-11-04）：ADR-0005 `Depends On: None` 解除 0003↔0005↔0004 依赖环；ADR-0001 补入 ADR-0009 的第六清单；ADR-0009 补 `## GDD Requirements Addressed`。9 份 ADR 已接受，11 份系统 ADR 已写但尚未被评审计入；重跑 `/architecture-review full` 前，报告结论与 `Reviewed-Content-Hash` 均早于这两批变更（见 `docs/architecture/architecture-review-2026-11-04.md`）
+- ADRs Referenced: ADR-0001 内容数据格式；ADR-0002 持久化格式；ADR-0003 场景与屏幕架构；ADR-0004 服务组合与信号；ADR-0005 输入上下文栈；ADR-0006 确定性随机；ADR-0007 局内状态与结算事务；ADR-0008 设置与本地化；ADR-0009 音频播放与暂停（均为 Accepted，2026-11-04）；ADR-0010…0020 覆盖 44 条缺口的系统 ADR（均 Proposed，2026-11-05 已评审计入）
+- Architecture Review: 2026-11-05 — CONCERNS — 评审时 57 covered / 46 Proposed-only / 1 partial / 0 gaps；ADR-0007 对齐后矩阵为 58 / 46 / 0 / 0。结论仍为 CONCERNS，因为 46 条需求只由 Proposed ADR 覆盖（见 `docs/architecture/architecture-review-2026-11-05.md`）
 - TD-ARCHITECTURE: 2026-11-04 — skipped — lean mode
 - LP-FEASIBILITY: 2026-11-04 — skipped — lean mode
 
@@ -332,6 +332,73 @@ class MetaUpgrades:
 class Records:
     func prepare_run(result: RunResult) -> RecordResult
     func snapshot() -> RecordsSnapshot
+
+class DishValues:
+    func price(dish_id: StringName, caller: StringName) -> IntResult
+    func satiety(dish_id: StringName, caller: StringName) -> IntResult
+    func unit_value(dish_id: StringName, caller: StringName) -> ValueResult
+    func uv_cmp(a: DishData, b: DishData, caller: StringName) -> CompareResult
+    # audit-only (CI / design time): uv_span, menu_healthy, opt_value, calibration_ratio
+
+class Unlocks:
+    signal unlocks_changed(progress: Dictionary)
+    func initialize() -> InitResult
+    func get_load_outcome() -> LoadOutcome
+    func get_station_catalog() -> Array[StationView]
+    func get_available_dishes(station_id: StringName) -> Array[StringName]
+    func can_unlock(id: StringName) -> UnlockCheck
+    func unlock(id: StringName) -> UnlockResult
+    func get_unlock_progress() -> Dictionary
+
+# Presentation
+
+class UIRoot:
+    func reset_for_state(from: int, to: int, payload: Variant) -> void
+    func push_screen(id: int, model: Variant = null) -> bool
+    func replace_root(id: int, model: Variant = null) -> bool
+    func pop_screen() -> bool
+    func push_modal(id: int, model: Variant = null) -> bool
+    func pop_modal(accepted: bool = false) -> bool
+    func handle_action(action: StringName) -> bool
+    func apply_presentation(prefs: PresentationPrefs) -> void
+
+class SettingsModel:
+    func load() -> SettingsLoadReport
+    func get_int(key: StringName) -> int
+    func get_bool(key: StringName) -> bool
+    func set_int(key: StringName, value: int) -> SettingsSetResult
+    func set_bool(key: StringName, value: bool) -> SettingsSetResult
+    func audio() -> AudioSettings
+    func presentation() -> PresentationPrefs
+    func flush(reason: FlushReason) -> FlushResult
+
+class AudioDirector:
+    func configure(policy: AudioPolicy) -> void
+    func request(event: StringName, payload: Dictionary) -> int
+    func on_flow_state(from: int, to: int) -> void
+    func on_settings_changed(audio: AudioSettings) -> void
+    func shutdown() -> void
+
+class HudHost extends CanvasLayer:
+    signal dish_action_rejected(reason: StringName, dish_id: StringName)
+    func attach(source: HudSource, input: InputRouter, run_flow: RunFlow,
+                text: HudTextTable, theme: HudTheme, factory: HudViewFactory) -> void
+    func sync_for_state(from: int, to: int) -> void
+    func apply_presentation(prefs: PresentationPrefs) -> void
+    func get_anchor_rect(anchor_id: StringName) -> Rect2
+    func get_protected_rects() -> Array[Rect2]
+    func get_layout_metrics() -> HudLayoutMetrics
+    func is_degraded() -> bool
+
+class OnboardingHost extends CanvasLayer:
+    signal onboarding_beat_shown(beat_id: StringName)
+    signal onboarding_finished(reason: int)
+    func attach(source: OnboardingSource, input: InputRouter,
+                text: OnboardingTextTable, config: OnboardingConfig,
+                factory: TutorialViewFactory) -> void
+    func configure(plan: FirstRunRunPlan) -> void
+    func is_active() -> bool
+    func current_beat() -> int
 ```
 
 **Invariants**
@@ -352,9 +419,11 @@ class Records:
 ## ADR Audit
 
 Twenty ADRs are written: nine `Accepted` (ADR-0001…0009) and eleven `Proposed`
-(ADR-0010…0020). The eleven Required system ADRs from the 2026-11-04 review now
-exist but have not yet been counted by a review, so the last matrix still reads
-56 covered / 4 partial / 44 gaps until `/architecture-review full` is re-run.
+(ADR-0010…0020). The 2026-11-05 `/architecture-review full` re-run counted all
+twenty: 57 covered / 46 Proposed-only / 1 partial / 0 gaps. After that run,
+ADR-0007 gained the `frozen` field and `action_availability()`, closing the last
+partial, so the matrix now reads 58 / 46 / 0 / 0. The verdict remains CONCERNS
+because 46 requirements rest on `Proposed` ADRs; acceptance is per-ADR.
 The TR registry holds all 104 table requirements; ADR linkage below is
 authoritative.
 
@@ -366,27 +435,25 @@ authoritative.
 | ADR-0004 服务组合与信号机制 | ✅ | ✅ 4.7 | ✅ TR-audio-feedback-001/005, TR-run-flow-006, TR-save-system-006, TR-scene-flow-003/005, TR-ui-flow-004 | None | ✅ Accepted — engine verification pending |
 | ADR-0005 输入上下文栈语义 | ✅ | ✅ 4.7 | ✅ TR-input-001..006, TR-first-run-onboarding-002, TR-in-game-hud-004, TR-scene-flow-002, TR-ui-flow-001 | None | ✅ Accepted — engine verification pending |
 | ADR-0006 确定性随机、种子派生与健康校验预算 | ✅ | ✅ 4.7 | ✅ TR-menu-waves-001..006, TR-dish-values-003 | None | ✅ Accepted — engine verification pending |
-| ADR-0007 局内状态所有权与结算事务边界 | ✅ | ✅ 4.7 | ✅ TR-run-flow-001/002/005, TR-settlement-001/004, TR-ui-flow-004, TR-meta-upgrades-005, TR-records-002 | None | ✅ Accepted — engine verification pending |
-| ADR-0008 机器级设置与本地化管线 | ✅ | ✅ 4.7 | ✅ TR-ui-flow-006, TR-ui-flow-003（呈现侧） | ⚠️ 与 ADR-0009 的总线写入措辞冲突（E4） | ✅ Accepted — engine verification pending |
+| ADR-0007 局内状态所有权与结算事务边界 | ✅ | ✅ 4.7 | ✅ TR-run-flow-001/002/005/007, TR-settlement-001/004, TR-ui-flow-004, TR-meta-upgrades-005, TR-records-002；partial：TR-run-flow-006, TR-settlement-005, TR-save-system-006 | None | ✅ Accepted — engine verification pending |
+| ADR-0008 机器级设置与本地化管线 | ✅ | ✅ 4.7 | ✅ TR-ui-flow-006, TR-ui-flow-003（呈现侧） | None（E4 已解决：cue gain 只算不写总线） | ✅ Accepted — engine verification pending |
 | ADR-0009 音频播放、池化与暂停语义 | ✅ | ✅ 4.7 | ✅ TR-audio-feedback-001..007, TR-ui-flow-007 | None | ✅ Accepted — engine verification pending |
-| ADR-0010 菜品数值与整数数值契约 | ✅ | ✅ 4.7 | ✅ TR-dish-values-001..005 | — | ⚠️ Proposed — not yet reviewed |
-| ADR-0011 回合预算、扣减所有权与耗尽判定 | ✅ | ✅ 4.7 | ✅ TR-time-and-turns-001..004 | — | ⚠️ Proposed — not yet reviewed |
-| ADR-0012 胃容量快照、容量账本与耗尽判定 | ✅ | ✅ 4.7 | ✅ TR-stomach-capacity-001..005 | — | ⚠️ Proposed — not yet reviewed |
-| ADR-0013 局内动作管线与结束判定 | ✅ | ✅ 4.7 | ✅ TR-run-flow-002..007 | — | ⚠️ Proposed — not yet reviewed |
-| ADR-0014 腻度折扣与口味偏好状态机 | ✅ | ✅ 4.7 | ✅ TR-cloying-and-taste-001..005 | — | ⚠️ Proposed — not yet reviewed |
-| ADR-0015 结算纯函数：单位价值、入场费与回本判定 | ✅ | ✅ 4.7 | ✅ TR-settlement-002/003/005 | — | ⚠️ Proposed — not yet reviewed |
-| ADR-0016 局外升级树、钱包事务与升级快照 | ✅ | ✅ 4.7 | ✅ TR-meta-upgrades-001..004, TR-meta-upgrades-006/007 | — | ⚠️ Proposed — not yet reviewed |
-| ADR-0017 解锁与档口购买事务 | ✅ | ✅ 4.7 | ✅ TR-unlocks-001..005 | — | ⚠️ Proposed — not yet reviewed |
-| ADR-0018 纪录、里程碑判定与生涯完成 | ✅ | ✅ 4.7 | ✅ TR-records-003/005/006 | — | ⚠️ Proposed — not yet reviewed |
-| ADR-0019 HUD 数据绑定、布局与呈现契约 | ✅ | ✅ 4.7 | ✅ TR-in-game-hud-001..006, TR-run-flow-007 | — | ⚠️ Proposed — not yet reviewed |
-| ADR-0020 首局引导 beat 机、阻断输入与跳过 | ✅ | ✅ 4.7 | ✅ TR-first-run-onboarding-001..005 | — | ⚠️ Proposed — not yet reviewed |
+| ADR-0010 菜品数值与整数数值契约 | ✅ | ✅ 4.7 | ✅ TR-dish-values-001..005 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
+| ADR-0011 回合预算、扣减所有权与耗尽判定 | ✅ | ✅ 4.7 | ✅ TR-time-and-turns-001..004 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
+| ADR-0012 胃容量快照、容量账本与耗尽判定 | ✅ | ✅ 4.7 | ✅ TR-stomach-capacity-001..005 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
+| ADR-0013 局内动作管线与结束判定 | ✅ | ✅ 4.7 | ✅ TR-run-flow-003/004 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
+| ADR-0014 腻度折扣与口味偏好状态机 | ✅ | ✅ 4.7 | ✅ TR-cloying-and-taste-001..005 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
+| ADR-0015 结算纯函数：单位价值、入场费与回本判定 | ✅ | ✅ 4.7 | ✅ TR-settlement-002/003/005 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
+| ADR-0016 局外升级树、钱包事务与升级快照 | ✅ | ✅ 4.7 | ✅ TR-meta-upgrades-001..004, TR-meta-upgrades-006/007 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
+| ADR-0017 解锁与档口购买事务 | ✅ | ✅ 4.7 | ✅ TR-unlocks-001..005 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
+| ADR-0018 纪录、里程碑判定与生涯完成 | ✅ | ✅ 4.7 | ✅ TR-records-003/005/006 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
+| ADR-0019 HUD 数据绑定、布局与呈现契约 | ✅ | ✅ 4.7 | ✅ TR-in-game-hud-001/003/005/006（002→ADR-0003，004→ADR-0005） | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
+| ADR-0020 首局引导 beat 机、阻断输入与跳过 | ✅ | ✅ 4.7 | ✅ TR-first-run-onboarding-001..005 | — | ⚠️ Proposed — reviewed 2026-11-05, acceptance pending |
 
-**Traceability coverage:** 56 of 104 requirements are covered by an Accepted ADR,
-4 partial, 44 gaps. The figure reflects the last full review, which predates the
-eleven system ADRs; re-run `/architecture-review full` to credit ADR-0010…0020.
-The per-requirement matrix is authoritative:
-`docs/architecture/requirements-traceability.md` (review:
-`docs/architecture/architecture-review-2026-11-04.md`).
+**Traceability coverage:** 58 of 104 requirements are covered by an Accepted ADR,
+46 by a Proposed ADR only, 0 partial, 0 gaps. The per-requirement matrix is
+authoritative: `docs/architecture/requirements-traceability.md` (review:
+`docs/architecture/architecture-review-2026-11-05.md`).
 
 ## Required ADRs
 
@@ -413,13 +480,13 @@ Grouped by layer, Foundation first. Each group lists the TR areas it must cover;
 10. **Dish values and the integer numeric contract** — covers `TR-dish-values-001..005`. **Written: ADR-0010 (Proposed).**
 11. **Turn budget, deduction ownership and exhaustion** — covers `TR-time-and-turns-001..004`. **Written: ADR-0011 (Proposed).**
 12. **Stomach capacity snapshot and ledger** — covers `TR-stomach-capacity-001..005`. **Written: ADR-0012 (Proposed).**
-13. **In-run action pipeline and end judgement** — covers `TR-run-flow-002..007`. **Written: ADR-0013 (Proposed).**
+13. **In-run action pipeline and end judgement** — covers `TR-run-flow-003/004`; 002/005/006/007 belong to ADR-0007. **Written: ADR-0013 (Proposed).**
 14. **Cloying discount and taste preference state machine** — covers `TR-cloying-and-taste-001..005`. **Written: ADR-0014 (Proposed).**
 15. **Settlement pure functions** — covers `TR-settlement-002/003/005`. **Written: ADR-0015 (Proposed).**
 16. **Meta-upgrade tree and wallet transaction** — covers `TR-meta-upgrades-001..004, 006/007`. **Written: ADR-0016 (Proposed).**
 17. **Unlocks and station purchase** — covers `TR-unlocks-001..005`. **Written: ADR-0017 (Proposed).**
 18. **Records, milestones and career completion** — covers `TR-records-003/005/006`. **Written: ADR-0018 (Proposed).**
-19. **HUD data binding and layout** — covers `TR-in-game-hud-001..006, TR-run-flow-007`. **Written: ADR-0019 (Proposed).**
+19. **HUD data binding and layout** — covers `TR-in-game-hud-001/003/005/006`; 002 belongs to ADR-0003 and 004 to ADR-0005. **Written: ADR-0019 (Proposed).**
 20. **First-run onboarding beat machine** — covers `TR-first-run-onboarding-001..005`. **Written: ADR-0020 (Proposed).**
 
 **Can defer to implementation**
@@ -580,14 +647,14 @@ Extracted from 18 GDDs | 104 requirements | 104 registered in
 
 ## Appendix B — Traceability Summary
 
-| Area | Requirements | Covered (Accepted) | Partial | Gaps |
-|---|---|---|---|---|
-| Foundation (data, input, scene, save) | 24 | 23 | 1 | 0 |
-| Core (run, turns, capacity, dish values) | 21 | 4 | 2 | 15 |
-| Feature (cloying, waves, settlement, meta, unlocks, records) | 34 | 12 | 1 | 21 |
-| Presentation (HUD, UI, audio, onboarding) | 25 | 17 | 0 | 8 |
-| **Total** | **104** | **56** | **4** | **44** |
+| Area | Requirements | Covered (Accepted) | Proposed only | Partial | Gaps |
+|---|---|---|---|---|---|
+| Foundation (data, input, scene, save) | 24 | 24 | 0 | 0 | 0 |
+| Core (run, turns, capacity, dish values) | 21 | 5 | 15 | 0 | 0 |
+| Feature (cloying, waves, settlement, meta, unlocks, records) | 34 | 12 | 22 | 0 | 0 |
+| Presentation (HUD, UI, audio, onboarding) | 25 | 17 | 8 | 0 | 0 |
+| **Total** | **104** | **58** | **46** | **0** | **0** |
 
-The 2026-11-04 `/architecture-review` produced
+The 2026-11-05 `/architecture-review full` produced
 `docs/architecture/requirements-traceability.md`, which carries the full
 per-requirement matrix; every provisional ID now has its permanent row.

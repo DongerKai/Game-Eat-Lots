@@ -210,7 +210,7 @@ func ensure_baseline(report: LoadReport) -> int:      # 返回 CommitResult
 |---|---|---|
 | 1 | `_run_flow.set_frozen(to == Paused)`（本局存在时；幂等） | 冻结早于任何界面或音频逻辑，`submit_action` 立刻开始返回 `REJECTED(FROZEN)` |
 | 2 | `_ui.reset_for_state(from, to, payload)` | ADR-0003 D7：收据必须在 HUD 卸载**之前**挂上（`to == Menu` 且 payload 为 `RunResult`） |
-| 3 | `_hud_host.sync_for_state(from, to)`（挂载 / 卸载） | 与第 2 步的先后是硬约束；顺序反过来会闪一帧无收据的空菜单 |
+| 3 | `_hud_host.sync_for_state(from, to)`（挂载 / 卸载） | 与第 2 步的先后是硬约束；顺序反过来会闪一帧无收据的空菜单。`Run ↔ Paused` 的同一调用同时是 HUD 的 `frozen` 变化通知：HUD 不监听 `ui_pause`，只读 `snapshot().frozen`（ADR-0019 D9） |
 | 4 | `_audio.on_flow_state(from, to)` | `AudioDirector` 由 `(from, to)` 推导 `Frozen` / `Shutdown` 与 `flow.*` cue，1 帧内静默（`TR-audio-feedback-005`） |
 | 5 | `_onboarding.on_flow_state(from, to)` | 首局引导需要知道已离开 `Run` / `Paused` 才能重压或拆除 `Blocked` |
 | 6 | `_fade.play(from, to)` | presentation only，最后启动；`reduce_motion` 时长为 0，切换仍已生效 |
@@ -229,8 +229,9 @@ func ensure_baseline(report: LoadReport) -> int:      # 返回 CommitResult
 | `run_started(run_id, station_id, seed)` | `RunFlow` | 四子系统初始化成功、`Active` 之后 | `HudHost` → `Onboarding` → `Audio` | 只读快照；`Onboarding` 可 `push_context(Blocked)` |
 | `action_committed(action, payload)` | `RunFlow` | 动作原子提交之后 | `HudHost` → `Audio` → `Onboarding` | 只读快照 |
 | `run_ended(run_id, end_reason)` | `RunFlow` | 结束判定命中、动作冻结之后 | `HudHost` → `Audio` → `Onboarding` | 只读；不得结算 |
-| `run_settled(run_id, result)` | `RunFlow` | `Handoff` 之后，`RunResult` 就绪 | `UIRoot`（收据编排）、`Audio` | `UIRoot` 发起结算编排（ADR-0007） |
+| `run_settled(run_id, result)` | `RunFlow` | `Handoff` 之后，`RunResult` 就绪 | `UIRoot`（收据编排）→ `Onboarding`（只 `STASH_RESULT`）→ `Audio` | `UIRoot` 发起结算编排（ADR-0007）；`Onboarding` 只暂存结果供首局引导 B4，不写盘、不发信号 |
 | `run_faulted(run_id, code, detail)` / `run_discarded(run_id)` | `RunFlow` | 进入 `Faulted` / 丢弃之后 | `HudHost`、`Onboarding`、`Audio`、`UIRoot`（提示条目） | 只记日志与展示 |
+| `run_config_assembled(config, plan)` | `UIRoot` | `RunConfig` 组装完成、`request_transition(Menu → Run)` 之前 | `AppRoot` → `Onboarding.configure(plan)` | 只读；`plan = get_first_run_preset()` 或 `null`；`RunConfig` 不新增字段（ADR-0020 决策 10） |
 | `save_status_changed(status)` | `SaveSystem` | 每次可写性/保存态变化后 | `UIRoot`（保存指示、禁用写入口）、`MetaUpgrades`、`Unlocks` | 只读；不得触发写盘 |
 | `progression_changed` / `unlocks_changed` | `MetaUpgrades` / `Unlocks` | 事务成功或回填改变集合后 | `UIRoot` → `Audio` | 刷新展示 |
 | `record_broken` / `milestone_earned` / `career_completed` | `Records` | 结算事务已应用后（不是写盘成功后；见 ADR-0007 D5） | `UIRoot`（收据印章）→ `Audio` | 展示 |

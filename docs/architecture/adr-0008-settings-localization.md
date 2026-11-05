@@ -43,7 +43,7 @@ user + agents（technical-director 授权；godot-specialist 引擎校验；ux-d
 | **Depends On** | ADR-0002（持久化格式）— 复用其规范 JSON 规则（整数一律十进制字符串、键排序、无浮点）与五步原子写入原语；ADR-0003（场景与屏幕架构）— `ScreenView` 的 `present → apply → grab_focus` 顺序、`FocusSpec`、`focus_restore` 按 id、`reduce_motion` 关闭过渡。ADR-0001（内容数据格式）— 记录的 `display_name` 字段与 `Ready` 门 |
 | **Enables** | 界面流程（#8）的设置屏、模态与保存指示分支；音效反馈（#9）的音量/静音/减少重复音效消费；局内 HUD（#16）的 `text_scale_percent` / `hud_opacity_percent` / `reduce_motion` 消费；`TR-ui-flow-003` 的呈现侧验收（焦点环、同帧重排、读屏顺序） |
 | **Blocks** | 所有「第一帧就要正确字号与音量」的验收；设置屏（AC 33/34/35）；删除生涯不重置设置（AC 34、存档 AC 25）；任何硬编码中文字符串的 story |
-| **Ordering Note** | 由谁调用 `Settings.load()` 归 ADR-0004（服务组合）；本 ADR 只固定前置条件：**`Settings.load()` 必须在第一屏 `present()` 之前、任何音频总线设置之前完成**。本 ADR 也不决定语言切换入口（MVP 没有），只固定 key 与回退链 |
+| **Ordering Note** | 由谁调用 `Settings.load()` 归 ADR-0004（服务组合）；本 ADR 只固定前置条件：**`Settings.load()` 必须在第一屏 `present()` 之前、任何 cue 起播之前完成**。本 ADR 也不决定语言切换入口（MVP 没有），只固定 key 与回退链 |
 
 ## Context
 
@@ -125,7 +125,7 @@ user + agents（technical-director 授权；godot-specialist 引擎校验；ux-d
 | `hud_opacity_percent` | int | 60…100 | 100 | 钳制 + `VALUE_CLAMPED` |
 
 - `text_scale_percent` 用**吸附**而非钳制：`137` 不是「太小」或「太大」，而是无意义；吸附到 125 并在日志里留一条 warning。
-- 两个音量都是**整数 dB**。`AudioServer.set_bus_volume_db()` 接受 `float`，但那是一次呈现层的类型转换，不进入文件、不进入模型、不参与相等比较；`−80` 由 `muted` 之外的第二个静音路径表达（GDD 明确「−80 视为静音」），消费方按 `max(db, −80)` 处理。
+- 两个音量都是**整数 dB**。模型只保存整数，不做浮点转换；每次起播的 `cue_volume_db` 由 ADR-0009 的播放路径按 `max(db, −80)` 计算，**不写 `AudioServer` 总线音量**（三条总线恒 0 dB，见 ADR-0009 D9）。`−80` 是 `muted` 之外的第二个静音路径（GDD 明确「−80 视为静音」）。
 
 **原子写入**（与 ADR-0002 §4 同序，本文件独立实现一遍同样的五步）：
 
@@ -265,7 +265,7 @@ enum SettingsError { OK, NOT_WRITABLE, IO_ERROR, CORRUPT, VERSION_AHEAD, PAYLOAD
 
 - **不做二次缩放**：菜单屏走 `canvas_items` 拉伸，窗口变大时控件已被引擎放大，`τ` 只作用在字号与上表的文字相关尺寸上；把 `τ` 乘到整个 `Control.scale` 上会造成「窗口 × 字号」双重放大，150% 在 1080p 下等于 225%。
 - **列数重排**：`hud_card_columns = clamp(floor((G + g) / (w_min + g)), 1, 4)`，`w_min = 200 × s × τ`、`g = 16 × s`。@1280、`s = 1`、`G = 912`：τ=1 → 4 列（卡宽 216 px）；τ=1.25 → 3 列；τ=1.5 → 2 列（4 张卡排成 2×2，与 `in-game-hud.md` AC 11 一致）。
-- **重排是同帧的**：`SettingsModel.presentation()` 变化 → 组合根调用 `UIRoot.apply_presentation(prefs)` → 换用预构建的 `Theme` 变体（三个 τ 各一份，启动时构建，避免运行期重建 `Theme` 触发的全树重排抖动）→ 每个活动 `ScreenView.reflow()` → `queue_sort()`。同一帧内完成，下一帧渲染即新字号。
+- **重排是同帧的**：`SettingsModel.presentation()` 变化 → 组合根调用 `UIRoot.apply_presentation(prefs)` 与 `HudHost.apply_presentation(prefs)` → 换用预构建的 `Theme` 变体（三个 τ 各一份，启动时构建，避免运行期重建 `Theme` 触发的全树重排抖动）→ 每个活动 `ScreenView.reflow()` → `queue_sort()`。同一帧内完成，下一帧渲染即新字号。`HudHost` 在 `Run` 挂载时也调用一次 `apply_presentation`，不依赖设置是否变化（ADR-0019 D9）。
 - **不截断**：散句 `Label.autowrap_mode = AUTOWRAP_WORD_SMART`（CJK 按字断行可接受）；金额/回合/百分比 `AUTOWRAP_OFF` + `clip_text = false`，宁可横向滚动也不折行；表格在窄宽度下切换为 `STACKED` 布局（标签在上、金额在下），而不是缩小字号。允许 `ScrollContainer`，不允许「关键信息消失」（AC 35）。
 - **焦点环不被裁切**：任何可聚焦控件的容器必须在四边预留 ≥ 4 px（用外层 `MarginContainer`），或把 `focus` `StyleBox` 做成向内描边。150% 下卡片变高、顶栏变高，但焦点环的 2 px 描边与 4 px 预留是常量，不参与缩放。
 - **焦点保持**：重排后按 id 重新 `grab_focus()`（ADR-0003 D5 的 `focus_restore` 语义），控件消失时落到 `FocusSpec.order` 中相邻可用项；重排**不得**改变 `FocusSpec.order` 或 `initial_focus`——顺序是声明式的，与几何无关，这正是 150% 下方向键仍然符合直觉的原因。
@@ -309,7 +309,7 @@ Boot（组合根，ADR-0004 决定调用点）
 
 SettingsModal（ui-flow）
   ├─ 滑杆/开关 → SettingsModel.set_*()  ── 立即发 changed（当帧生效）
-  │      ├─ AudioFeedback.apply_settings(audio)   → AudioServer 总线
+  │      ├─ AudioFeedback.apply_settings(audio)   → 保存 gain，计算 cue_volume_db（不写总线）
   │      ├─ HudHost.apply_presentation(presentation)
   │      └─ SceneFlow 缓存 prefs（只用于过渡时长）
   └─ 关闭 → flush("modal_close")
@@ -618,7 +618,7 @@ static func theme_variant(percent: int) -> Theme           # 三份预构建之�
 5. `TranslationKeys` + `strings.csv`（先只放 `ui.*` 与 `err.*`）+ CI 双向检查。
 6. `DataConfig` 增加 `DISPLAY_NAME_NOT_A_KEY` 诊断，记录值改为 key；跑一次「全部记录 key 存在」的 CI。
 7. 字体资源与 `.import` 参数 + `Theme` 三档变体 + `hud_card_columns` 重排 + 150% 截图夹具（AC 35）。
-8. 接入组合根：`Boot` 顺序插入 `SettingsModel.load()`，音频总线首帧前应用音量；`SceneFlow` 订阅 `presentation_changed`。
+8. 接入组合根：`Boot` 顺序插入 `SettingsModel.load()`，音频 gain 在首帧前交给 `AudioFeedback`（**不写总线音量**，总线保持 0 dB）；`SceneFlow` 与 `HudHost` 订阅 `presentation_changed`。
 9. `reduce_motion` 连通 ADR-0003 D8 与收据滚动；`hud_opacity_percent` 连通 HUD 面板。
 
 **Rollback plan**：本 ADR 在写代码前确定，回滚即改文档。若规范 JSON 方案被推翻，`SettingsCodec` 是唯一接缝——换成 `ConfigFile` 只需改编码层，模型与消费方不动（但会失去「逐字节可复现」的验收）。若「记录名是 key」被推翻，`TranslationKeys` 与 `tr(record.display_name)` 两处是接缝，可退回「中文字面量 + 只翻译 chrome」，代价是放弃 `tr()` 覆盖率的断言。
@@ -643,7 +643,7 @@ static func theme_variant(percent: int) -> Theme           # 三份预构建之�
 | 14 | `hud_opacity_percent = 60` → 所有 HUD 文本/背景 ≥ 4.5:1（含 ≥ 24 px 大字号） | 对比度实测表 |
 | 15 | `reduce_motion = true` → 顶层过渡 0 s、收据滚动 0 s、指示无淡出，且状态同帧生效 | 帧索引日志 F1 |
 | 16 | 全部文案字符在导出包中可渲染（无豆腐块）；`hinting = 1` 已写入 `.import` | 导出后截图 + `.import` 内容检查 |
-| 17 | 设置载入先于第一屏 `present()` 与首次音频总线设置 | 启动顺序断言 |
+| 17 | 设置载入先于第一屏 `present()` 与首次 cue 起播 | 启动顺序断言；断言 `AudioServer` 三条总线音量从未被写入 |
 
 ## Related
 

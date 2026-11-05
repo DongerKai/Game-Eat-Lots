@@ -97,6 +97,7 @@ Main (res://src/main/main.tscn)                 # 组合根；ADR-0004 决定其
 ├── InputRouter          (Node)                 # 上下文档位 + 焦点/悬停查询（Foundation）
 ├── SaveSystem / MetaUpgrades / Records / ...   # 其余服务（构造方式见 ADR-0004）
 ├── HudHost              (CanvasLayer, layer 10)# 局内 HUD 所有；UIRoot 不持有、不操作
+├── OnboardingHost       (CanvasLayer, layer 15)# 首局引导气泡/遮罩；HUD 之上、屏幕之下；ADR-0020
 ├── UIRoot               (Node)                 # 唯一界面控制器
 │   ├── ScreenHost       (CanvasLayer, layer 20) # 屏幕实例直接作为子节点（最多 2 个）
 │   ├── OverlayHost      (CanvasLayer, layer 25)# PauseOverlay
@@ -108,9 +109,10 @@ Main (res://src/main/main.tscn)                 # 组合根；ADR-0004 决定其
 分层的三条硬规则：
 
 1. **HUD 在 ScreenHost 之下**：这样 `Settling` 时 `ReceiptScreen` 天然覆盖 HUD，不需要改 HUD 的 z 序。
-2. **OverlayHost 在 HUD 之上、ModalHost 之下**：暂停菜单盖住 HUD，但暂停菜单里打开的设置模态盖住暂停菜单。
-3. **FadeLayer 在最高层且 `mouse_filter = MOUSE_FILTER_IGNORE`**：它永远不接收输入，也不参与焦点。`NoticeLayer` 的全屏根节点同样是 `IGNORE`，只有其上的提示条目接收输入，否则它会吞掉所有点击。
-4. **整条 UI 路径必须是 `PROCESS_MODE_ALWAYS`**：`UIRoot`、四个宿主、`FadeLayer`、`InputRouter` 及其输入分发节点。若暂停用 `SceneTree.paused = true` 实现（实现方式归 ADR-0004），默认的 `PROCESS_MODE_INHERIT` 会同时停掉 `PauseOverlay` 的输入与过渡，暂停菜单变成死界面。这条要求与本 ADR 选哪种暂停机制无关，因此无条件成立。
+2. **OnboardingHost 在 HUD 之上、ScreenHost 之下（layer 15）**：引导遮罩只压暗 HUD 之外的区域，不得遮住收据或菜单；它由 `AppRoot` 构造与挂载，`UIRoot` 不持有（ADR-0020 决策 11）。
+3. **OverlayHost 在 HUD 之上、ModalHost 之下**：暂停菜单盖住 HUD，但暂停菜单里打开的设置模态盖住暂停菜单。
+4. **FadeLayer 在最高层且 `mouse_filter = MOUSE_FILTER_IGNORE`**：它永远不接收输入，也不参与焦点。`NoticeLayer` 的全屏根节点同样是 `IGNORE`，只有其上的提示条目接收输入，否则它会吞掉所有点击。
+5. **整条 UI 路径必须是 `PROCESS_MODE_ALWAYS`**：`UIRoot`、四个宿主、`FadeLayer`、`InputRouter` 及其输入分发节点。若暂停用 `SceneTree.paused = true` 实现（实现方式归 ADR-0004），默认的 `PROCESS_MODE_INHERIT` 会同时停掉 `PauseOverlay` 的输入与过渡，暂停菜单变成死界面。这条要求与本 ADR 选哪种暂停机制无关，因此无条件成立。
 
 `UIRoot` 只操作 `ScreenHost` / `OverlayHost` / `ModalHost` / `NoticeHost` 四个宿主；**它没有 `HudHost` 的引用**。Run 场景的挂载与卸载由组合根按 `SceneFlow.state_changed` 驱动，界面流程不感知。
 

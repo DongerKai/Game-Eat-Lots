@@ -268,7 +268,9 @@ enum CommitResult:  OK | COMMIT_FAILED | SAVE_DEFERRED | NOT_WRITABLE | SAVE_TOO
 enum FlushResult:   OK | SAVE_DEFERRED | NOT_WRITABLE | IO_ERROR
 ```
 
-`LoadReport` 字段沿用 GDD：`outcome`、`reason`、`warnings`、`writable`、`lock_live`、`source_version`、`source`（`primary` / `backup` / `none`）。
+`LoadReport` 字段沿用 GDD：`outcome`、`reason`、`warnings`、`writable`、`lock_live`、`source_version`、`source`（`primary` / `backup` / `none`）、`first_run_eligible`。
+
+`first_run_eligible` 按 `save-system.md` 规则 26 计算：`(outcome ∈ {Fresh, Loaded, Migrated}) ∧ records.career.runs_settled == 0`；`Recovered` / `ReadOnly` / `Blocked` 恒为 `false`。Save 只读取 `records` 命名空间的 `runs_settled` 作为报告输入，不解释其余纪录语义；`Recovered` 的 `SETTLED_COUNTER_ROLLED_BACK` 钳制与警告也在此处一次完成。
 
 磁盘契约（对玩家可见、需在 UX 规格中说明）：
 - 主档：`user://save/slot_0/career.json`

@@ -12,22 +12,26 @@ Engine: Godot 4.7 (pinned 4.7.2; editor NOT INSTALLED — no engine verification
 ## Coverage Summary
 
 - Total requirements: 104
-- Covered by an **Accepted** ADR: 57 (54.8%)
+- Covered by an **Accepted** ADR: 58 (55.8%)
 - Covered by a **Proposed** ADR only: 46 (44.2%)
-- Partial: 1 (1.0%)
+- Partial: 0 (0.0%)
 - Gaps: 0 (0.0%)
 - Not assessed: 0 (every ADR is readable and has a `## Status`)
 
 | Layer | Total | ✅ Accepted | 🟡 Proposed | ⚠️ Partial | ❌ Gap |
 |---|---|---|---|---|---|
 | Foundation | 24 | 24 | 0 | 0 | 0 |
-| Core | 21 | 4 | 16 | 1 | 0 |
+| Core | 21 | 5 | 16 | 0 | 0 |
 | Feature | 34 | 12 | 22 | 0 | 0 |
 | Presentation | 25 | 17 | 8 | 0 | 0 |
-| **Total** | **104** | **57** | **46** | **1** | **0** |
+| **Total** | **104** | **58** | **46** | **0** | **0** |
 
 Layer assignment follows `docs/architecture/architecture.md`'s System Layer Map, which moves
 `save-system` from the systems index's Core to Foundation.
+
+The dated review (`architecture-review-2026-11-05.md`) recorded 57 / 46 / 1 / 0. After it,
+ADR-0007 D1 gained the `frozen` snapshot field and `action_availability()`, closing the last
+partial (`TR-run-flow-007`) without changing any requirement text.
 
 ## Full Matrix
 
@@ -63,7 +67,7 @@ Layer assignment follows `docs/architecture/architecture.md`'s System Layer Map,
 | `TR-run-flow-004` | run-flow.md | run-flow | Only two end reasons (`TIME_EXHAUSTED`, `NO_EATABLE_DISH`); fixed priority; state frozen after `Ending` | ADR-0013 | 🟡 Covered (Proposed) |
 | `TR-run-flow-005` | run-flow.md | run-flow | `RunLog` assembled from action-time values; `settle(RunLog)` once; `RunResult` handed off once; `run_settled` is a pre-notification and persistence happens only after the `Run -> Menu` delivery is accepted | ADR-0007 | ✅ Covered |
 | `TR-run-flow-006` | run-flow.md | run-flow | Signals `run_started/action_committed/run_ended/run_settled/run_faulted/run_discarded`, at most once per `run_id`; `run_faulted.detail` carries `phase in {INIT, RUN}` and `run_id = 0` means allocation failed (never started) | ADR-0004, ADR-0007 | ✅ Covered |
-| `TR-run-flow-007` | run-flow.md | run-flow | Read-only run snapshot for HUD incl. `run_state`, `frozen`, `running_net`, `shortfall`, `action_seq` | ADR-0007（partial） | ⚠️ Partial |
+| `TR-run-flow-007` | run-flow.md | run-flow | Read-only run snapshot for HUD incl. `run_state`, `frozen`, `running_net`, `shortfall`, `action_seq` | ADR-0007 | ✅ Covered |
 | `TR-time-and-turns-001` | time-and-turns.md | time-and-turns | `initialize(turn_budget)` once per run; `INVALID_TURN_BUDGET` on bad input, no clamping | ADR-0011 | 🟡 Covered (Proposed) |
 | `TR-time-and-turns-002` | time-and-turns.md | time-and-turns | `spend_turn()` cost exactly 1; `can_spend_turn()` pure; no overdraft, no refund | ADR-0011 | 🟡 Covered (Proposed) |
 | `TR-time-and-turns-003` | time-and-turns.md | time-and-turns | `is_exhausted()` reports only; end-reason ownership stays in run-flow | ADR-0011 | 🟡 Covered (Proposed) |
@@ -149,9 +153,8 @@ out is `/architecture-decision accept ADR-NNNN`, one ADR at a time — not anoth
 
 ## Partial Coverage
 
-| Requirement ID | ADR | Why partial |
-|---|---|---|
-| `TR-run-flow-007` | ADR-0007 | ADR-0007 fixes `RunFlow.snapshot()` as the single publisher, but its field table omits `frozen`; ADR-0019 (Proposed) asserts `frozen` is published and adds `action_availability()`, which ADR-0007/0013 do not define. The complete snapshot field list is still split across ADR-0007, ADR-0019 and `menu-waves.md`. |
+**None.** `TR-run-flow-007` was the last partial; ADR-0007 D1 now lists `frozen` in the snapshot
+field table and publishes `action_availability()`, whose judgement order ADR-0013 §9 fixes.
 
 ## Superseded Requirements
 

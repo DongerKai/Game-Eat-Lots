@@ -105,9 +105,10 @@ Accepted
 |---|---|---|---|
 | `run_id`（int64，1–INT64_MAX） | `RunFlow` | 从 `Menu → Run` 生效到 `Handoff → Idle` | `run_started` / `run_settled` / `run_faulted` 的 payload；`snapshot().run_id` |
 | 生命周期状态（`Idle/Initializing/Active/Ending/Settling/Handoff/Failed/Faulted`） | `RunFlow` | 同上 | `snapshot().run_state`（只读） |
-| `run_seed`、`action_seq`、`running_net`、`shortfall` | `RunFlow` | 同上 | `snapshot()`（只读、不可变副本） |
+| `run_seed`、`action_seq`、`running_net`、`shortfall`、`frozen` | `RunFlow` | 同上 | `snapshot()`（只读、不可变副本） |
 | `RunLog` | `RunFlow` 组装并持有 | `Ending` 组装，`Settling` 交给 `Settlement.settle`，`Handoff` 后释放 | 只作为 `settle(log)` 的参数；`Settlement` 不得保留引用 |
 | `RunResult` | `RunFlow` 持有到交接；交付后归 `UIRoot` 的收据快照 | 结算成功 → 交接完成 | `run_settled` 预通知、`Run → Menu` payload、`ReceiptSnapshot.result` |
+| 跳过 / 结束取餐可用性（`action_availability()`） | `RunFlow`（只读投影，值来自 `MenuWaves` 与 `TimeTurns` 门控） | 同 `Active` | HUD 的唯一入口；返回 `skip_visible` / `skip_enabled` / `skip_reason` / `end_visible` / `end_enabled` / `end_reason`。HUD **不得**自行拼 `turns_remaining ≥ 2` 或 `is_final_wave`；本方法不写任何上游状态 |
 | `last_settled_run_id` | `Settlement`（仅去重，不含其他局内状态） | 进程级 | `settle()` 内部；对外不可见 |
 | `records` / `progression` / `unlocks` 命名空间值 | 各自系统（Records / MetaUpgrades / Unlocks） | 进程级 + 持久化 | `get_namespace()` 只读；新值经 `prepare_*` 返回 |
 
@@ -189,7 +190,7 @@ AppRoot._on_state_changed 第 2 步
 | 4 | 解锁槽位 | MVP / VS：不执行，`unlocks` 键不存在；未来：`Unlocks.prepare_run_rewards(result)` 只返回奖励集合 | 预留接口，当前无失败路径；未来失败 → 整笔中止 |
 | 5 | 合并 | `tx := {records: R'}`；钱包可用时加 `progression: P'`；有奖励解锁时加 `unlocks: U'` | — |
 | 6 | `SaveSystem.commit(tx)` | `CommitResult` | 任何非 `OK`：保留内存新值、`mark_dirty` 每个已构造的命名空间、快速失败，**不回滚** |
-| 7 | 采纳与发信号 | 内存值成为当前值；`Records` 的三个信号、`progression_changed` | — |
+| 7 | 采纳 | 内存值成为当前值（`Records` 三个信号已在第 2 步 `prepare_run` 返回 `APPLIED` 时发出，`progression_changed` 已在第 3 步钱包值实际变化后发出；本步不补发任何信号） | — |
 | 8 | 构建快照 | `ReceiptSnapshot`（见 D6） | — |
 
 **为什么纪录必须排在钱包之前**：`records-and-milestones.md` 规则 3 与规则 11 把纪录一致性断言定义为整个结算事务的**唯一致命闸门**；`ui-flow.md` 规则 10 也写作「先校验纪录，再动钱包」。若先入账钱包，`records` 失败后就必须回滚钱包，而 `save-system.md` 规则 18 明确结算来源不允许回滚。把致命校验放在最前，钱包只在「确定要提交」时才在内存中改写，失败矩阵因此只有「全弃」与「部分键」两种，没有「回滚」。
@@ -492,7 +493,7 @@ func reset_for_state(from: int, to: int, payload: Variant) -> void:
 | `run-flow.md` | TR-run-flow-002：初始化顺序与 `init_failed`，失败不产生 `RunResult` | D7：`phase` 由 `run_started` 推导；`INIT` 不产生 `RunLog` / `RunResult` / 收据 |
 | `run-flow.md` | TR-run-flow-005：`RunLog` 来自动作时刻、`settle` 一次、`RunResult` 交接 | D1 + D3：`RunLog` 只由 `RunFlow` 组装并交给 `Settlement` 一次；`RunResult` 在 `Run → Menu` 交付一次 |
 | `run-flow.md` | TR-run-flow-006：`run_*` 信号每 `run_id` 至多一次 | D3 / D7：`run_settled` 预通知一次；`run_faulted` / `run_discarded` 互斥且各一次 |
-| `run-flow.md` | TR-run-flow-007：只读快照供 HUD | D1：`snapshot()` 是 `run_state` / `running_net` / `shortfall` 的唯一发布面 |
+| `run-flow.md` | TR-run-flow-007：只读快照供 HUD | D1：`snapshot()` 是 `run_id` / `run_state` / `frozen` / `action_seq` / `running_net` / `shortfall` / `run_seed` 的唯一发布面，并新增只读 `action_availability()` 供 HUD 取跳过/结束取餐可用性；HUD 不复制门控阈值 |
 | `run-flow.md` | 规则 16：`Handoff` 中放弃不写纪录；规则 18：`fault.phase` | D3（提交只在交付后）+ D7（阶段推导） |
 | `settlement-and-entry-fee.md` | TR-settlement-001：`settle` 每 `run_id` 一次，重复 `ALREADY_SETTLED` | D1 / D4：`Settlement` 保留 `last_settled_run_id`；`SettlementTransaction` 另有一道 `run_id` 幂等闸 |
 | `settlement-and-entry-fee.md` | TR-settlement-004：纯函数、无 I/O；规则 18：不碰钱包 | D1 / D4：`Settlement` 无 Save / Records / Meta 引用；钱包只由 `MetaUpgrades` 计算 |
@@ -517,7 +518,7 @@ func reset_for_state(from: int, to: int, payload: Variant) -> void:
 | `TR-run-flow-002` | covered | D7：初始化失败 → `INIT`，无结果 |
 | `TR-run-flow-005` | covered | D1 / D3：`RunLog` 组装、`settle` 一次、交付一次 |
 | `TR-run-flow-006` | partial | D3 / D7 规定 `run_settled` / `run_faulted` / `run_discarded` 的边界；信号表全文仍归 RunFlow |
-| `TR-run-flow-007` | partial | D1 固定快照的唯一发布者；字段完整清单归 RunFlow / HUD |
+| `TR-run-flow-007` | covered | D1：快照字段表含 `frozen` 与完整只读字段；`action_availability()` 由 `RunFlow` 发布，HUD 不再复制门控 |
 | `TR-settlement-001` | covered | D1 / D4：结算去重与事务去重 |
 | `TR-settlement-004` | covered | D1 / D4：`Settlement` 无 I/O，事务才有 I/O |
 | `TR-settlement-005` | partial | D1：运行期唯一累加器在 `RunFlow`；纯函数公式归结算 |

@@ -667,9 +667,17 @@ func on_run_discarded(run_id: int) -> void
 
 func get_anchor_rect(anchor_id: StringName) -> Rect2
 func get_protected_rects() -> Array[Rect2]                        # [turns, capacity, net]
+func get_layout_metrics() -> HudLayoutMetrics                     # 首局引导只读消费（ADR-0020 D4）
 func focused_dish_id() -> StringName
 func current_frame() -> HudFrame
 func is_degraded() -> bool
+
+
+class HudLayoutMetrics extends RefCounted
+var safe_margin: float          # 当前窗口像素
+var font_px: int                # 当前 τ 下的正文字号
+var line_height: float
+var detail_row_top: float
 
 
 class HudSource extends RefCounted
@@ -845,15 +853,15 @@ var end_reason: int           # NONE / NO_EATABLE / NOT_FINAL_WAVE
 | # | GDD / ADR 原文 | 本 ADR 的落地 | 需要谁对齐 |
 |---|---|---|---|
 | 1 | `in-game-hud.md` 规则 7：受影响的数字显示 `—`，其余数字保持最后一次合法值并标为只读 | 单字段失败 → 该字段 `UNAVAILABLE` 显示 `—`，其余字段仍取同一份快照的当前值；整次采集/不变式失败 → 保留 `_last_legal_frame` 且 `interactive = false`。不变量 5 只约束 `OK` 字段 | 本 ADR 解释；若产品要求「单字段失败也冻结全部数字」，改 `degraded → interactive=false` |
-| 2 | `TR-run-flow-007` 只列 `run_state` / `frozen` / `running_net` / `shortfall` / `action_seq`；`menu-waves.md` 只给 `visible_dishes` / `preview_dishes` / `hidden_counts`；`≥2` 回合的跳波门控在 ADR-0013 | HUD 需要 `RunFlow.action_availability()` 统一发布 `skip_visible` / `skip_enabled` / `skip_reason` / `end_*`，避免 HUD 复制 `turns_remaining ≥ 2` 或 `is_final_wave` 判定 | ADR-0007 / ADR-0013 必须补只读接口；`requirements-traceability.md` 的 `TR-run-flow-007` 说明可更新 |
-| 3 | ADR-0005 D9 只把 `ui_accept` / `game_skip_wave` 的读者限定为 `HudHost` | 确认面板关闭需要 `ui_cancel`；`Run` 中 Esc 被映射为 `ui_pause`，手柄 B 仍产生 `ui_cancel`。HUD 必须轮询 `ui_cancel` | ADR-0005 D9 表增加 `ui_cancel` 的 `HudHost` 读者 |
-| 4 | ADR-0008 只写「组合根调用 `UIRoot.apply_presentation(prefs)`」 | HUD 也必须收到 `PresentationPrefs`；本 ADR 定义 `HudHost.apply_presentation(prefs)`，由 `AppRoot` 在 `presentation_changed` 与挂载时调用 | ADR-0004 / ADR-0008 的接线清单补一行；不新增设置状态 |
-| 5 | ADR-0004 D8 的 `hud.sync_for_state(from,to)` 只描述挂载/卸载 | 本 ADR 把 `Run ↔ Paused` 的 `sync_for_state` 定义为 `frozen` 变化通知；HUD 不监听 `ui_pause`，不要求新增 `frozen_changed` 信号 | ADR-0004 的 D9/D10 措辞对齐 |
+| 2 | `TR-run-flow-007` 只列 `run_state` / `frozen` / `running_net` / `shortfall` / `action_seq`；`menu-waves.md` 只给 `visible_dishes` / `preview_dishes` / `hidden_counts`；`≥2` 回合的跳波门控在 ADR-0013 | HUD 需要 `RunFlow.action_availability()` 统一发布 `skip_visible` / `skip_enabled` / `skip_reason` / `end_*`，避免 HUD 复制 `turns_remaining ≥ 2` 或 `is_final_wave` 判定 | **已对齐**：ADR-0007 D1 的快照字段表已含 `frozen` 并新增 `action_availability()`；ADR-0013 决策 9 定义只读投影；`TR-run-flow-007` 已改为 covered |
+| 3 | ADR-0005 D9 只把 `ui_accept` / `game_skip_wave` 的读者限定为 `HudHost` | 确认面板关闭需要 `ui_cancel`；`Run` 中 Esc 被映射为 `ui_pause`，手柄 B 仍产生 `ui_cancel`。HUD 必须轮询 `ui_cancel` | **已对齐**：ADR-0005 D9 的读者表已加入 `ui_cancel`（仅 `hud_host.gd`；`Menu` / `Modal` 仍由 `UIRoot` 消费） |
+| 4 | ADR-0008 只写「组合根调用 `UIRoot.apply_presentation(prefs)`」 | HUD 也必须收到 `PresentationPrefs`；本 ADR 定义 `HudHost.apply_presentation(prefs)`，由 `AppRoot` 在 `presentation_changed` 与挂载时调用 | **已对齐**：ADR-0008 §8 与架构图已列 `HudHost.apply_presentation`；本 ADR Key Interfaces 已公开该方法；不新增设置状态 |
+| 5 | ADR-0004 D8 的 `hud.sync_for_state(from,to)` 只描述挂载/卸载 | 本 ADR 把 `Run ↔ Paused` 的 `sync_for_state` 定义为 `frozen` 变化通知；HUD 不监听 `ui_pause`，不要求新增 `frozen_changed` 信号 | **已对齐**：ADR-0004 D8 第 3 步已写明 `Run ↔ Paused` 的同一调用即 HUD 的 `frozen` 变化通知 |
 | 6 | `in-game-hud.md` 规则 9 允许玩家按价格/饱腹排序；`TR-in-game-hud-003` 写「不排序」 | MVP 不实现玩家排序；默认顺序恒为 `visible_dishes`。若未来加入，只能是视图置换，`display_index` 仍记录规范位置 | 本 ADR 解释；UX 规格若要求排序，需先修订 TR 措辞 |
 | 7 | `in-game-hud.md` Edge Case：「最后一波确认面板以『另有 N 道本局剩余』汇总不可见部分」 | `N = sum(hidden_counts)`；最后一波 `hidden_counts` 为空，N = 0，该行不显示；面板不假装知道未揭晓内容 | 游戏设计确认「最后一波 N 恒为 0」是否可接受 |
 | 8 | `in-game-hud.md` Open Question 1：`game_skip_wave` 与 `skip_dish` 命名未决 | HUD 只认 `game_skip_wave`，映射到 `RunFlow` 的 `SKIP_WAVE` / `END_PICKUP`；文案区分「跳过本波」/「结束取餐（免费）」 | game-designer（输入 + 菜单波次）在写 `design/ux/hud.md` 前定名 |
 | 9 | `in-game-hud.md` Formulas 的 `hud_ui_scale` 假定 HUD 独立于 `canvas_items` | 本 ADR 用 `CanvasLayer.transform` 的逆内容缩放实现；4.7 实机未验证，失败时走设计单位降级 | godot-specialist 验证；ADR-0003 Risk 4 同步 |
-| 10 | `in-game-hud.md` 规则 3 的事件表包含 `frozen` 变化，但 ADR-0004 的信号表没有 `frozen_changed` | 冻结经 `sync_for_state(Run↔Paused)` 到达；`run_started` / `action_committed` 等信号处理器不负责冻结 | ADR-0004 D9/D10 措辞 |
+| 10 | `in-game-hud.md` 规则 3 的事件表包含 `frozen` 变化，但 ADR-0004 的信号表没有 `frozen_changed` | 冻结经 `sync_for_state(Run↔Paused)` 到达；`run_started` / `action_committed` 等信号处理器不负责冻结 | **已对齐**：ADR-0004 D8 第 3 步已明确该语义；不新增信号 |
 | 11 | `in-game-hud.md` AC 19：`can_fit = true` 但剩余容量不足时「信任 `can_fit`，不提交动作」 | 调试构建：不提交、记 `HUD_INVARIANT` 4、发 `hud_invariant`；正式构建：不采纳矛盾帧，保留最后合法渲染。显示与提交都不基于矛盾数据 | 本 ADR 解释；与规则 11 的第一句「信任 `can_fit`」在字面上有张力，但 AC 19 与本 ADR 一致 |
 | 12 | `in-game-hud.md` 规则 26：`turns_remaining = 1` 时「跳过本波」不可用并写「最后一回合不能跳波」 | 可用性来自 `RunFlow.action_availability().skip_reason`，HUD 只格式化；按钮仍可获焦并读出原因 | 依赖 GDD Sync Check 第 2 条 |
 

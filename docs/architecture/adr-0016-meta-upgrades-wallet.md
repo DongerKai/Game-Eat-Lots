@@ -113,6 +113,22 @@ func resolve_upgrade_snapshot() -> Dictionary
 func get_catalog(station_id: StringName) -> Array[UpgradeView]
 ```
 
+`UpgradeView` 是只读值对象（`RefCounted`，字段不可改）：
+
+```gdscript
+class UpgradeView extends RefCounted
+var id: StringName
+var display_name_key: StringName
+var description_key: StringName
+var level: int
+var max_level: int
+var current_effect: float        # 已解析效果
+var next_effect: Variant         # 已解析；满级时为 null
+var next_price: Variant          # int；满级或未知时为 null
+var purchasable: bool
+var reason: int                  # 与 can_purchase 同一套 RejectCode
+```
+
 **不提供**：`set_wallet`、`add_wallet`、`set_level`、`set_levels`、`refund`、`grant`、`reset_wallet`。任何新流水都必须先改 GDD 并新增方法。
 
 ### 2. 初始化、可写性与生涯删除
