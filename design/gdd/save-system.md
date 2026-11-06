@@ -45,7 +45,7 @@
 19. **放弃与进入失败不写档** — 放弃一局（`Paused → Menu, abandoned`）、`RunConfig` 解析失败、局中退出都不产生任何存档写入；存档内容与进入本局前逐字段相同（场景与流程管理 AC 10）。
 20. **设置不属于生涯档** — 音量、画面、无障碍等设置存放在独立的机器级配置，不随生涯档删除、不随生涯档备份、不进入云同步。删除生涯不重置设置；重置设置不动生涯。
 21. **单写者** — 同一份生涯档同时只允许一个实例写入。启动时原子创建写锁目录：`.lock/owner.json`（`instance_id` / `pid` / `host` / `started_unix` / `started_at`）与 `.lock/heartbeat`（十进制 unix 秒），持锁期间每 30 s 刷新一次心跳；`pid` 只作排障元数据。检测到存活的另一实例且主档可读、版本 ≤ 当前时，本实例载入结果记为 `ReadOnly`（可只读浏览，写入禁用）；文件不可读或版本 > 当前时记为 `Blocked`。**任何 `L = live` 的 `Blocked` 出口只有「退出」与「重试」**，不提供「新建生涯」——对方可能正处在「主档改名备份 → 临时文件改名主档」的原子窗口内，隔离会破坏对方文件。绝不覆盖对方的文件。进程崩溃遗留锁的回收按确定性判定表：`.lock` 存在但无 `owner.json`，或心跳可读且 `now − heartbeat > 90 s`，回收为 `stale`；心跳不可用（缺失 / 不可读 / 跨机）时，只有 `now − owner.started_unix > 24 h` 才回收，否则按存活处理；`owner.json` 无法解析也按存活处理——宁可只读，不可覆盖。**存活判定不使用 `OS.is_process_running`**：Godot 4.7 对非自身 `create_process()` 启动的实例恒返回 `false`，用它回收会让两个实例同时写同一份档（ADR-0002 §3）。
-22. **时间戳只做元数据** — 存档记录 `created_at` / `last_saved_at`（UTC），仅用于界面显示与载入报告；任何逻辑（排序、冲突、过期、迁移分支）都不得依赖系统时钟，因为时钟可能回拨或被玩家修改。
+22. **时间戳只做元数据** — 存档记录 `created_at` / `last_saved_at`（UTC），仅用于界面显示与载入报告；任何逻辑（排序、冲突、过期、迁移分支）都不得依赖系统时钟，因为时钟可能回拨或被玩家修改。**唯一例外是写锁的存活回收（规则 21）**：只有该判定读取 `.lock/heartbeat` 与 `owner.started_unix` 做时间差运算；这个时间只决定「按存活还是按过期处理」，绝不参与存档内容、排序、冲突解决、迁移或展示。时钟回拨只会让回收更保守（更倾向把锁判为存活），不会误回收正在写的实例。
 23. **删除生涯是显式且可恢复的** — 删除生涯必须由玩家在界面二次确认；存档把现有文件改名隔离而非删除，然后建立新档。隔离文件不自动清理，也不计入备份轮换。另一实例持锁时（`ReadOnly`，或 `lock_live = true` 的 `Blocked`）删除请求被拒绝——隔离同样会破坏对方正在写的文件（规则 21）。
 24. **确定性往返** — 同一份内存状态连续写两次（不改变任何值，排除 `last_saved_at`）产生逐字节相同的文件：map 按键排序、整数按十进制、无随机 id、无平台相关换行。这让 diff 可读，让「往返不变」成为可断言的测试。
 25. **不做防篡改** — 单机信任模型。不加密、不设校验和来阻止编辑；手工编辑过的档按普通结构校验处理，类型或结构不合法就走损坏路径。将来若排行榜需要可信数据，由在线挑战在服务端解决，不由本地存档假装解决（Open Question 5）。
@@ -157,7 +157,7 @@ The `load_outcome` formula is defined as:
 | `P` | SaveFile \| ∅ | 一个文件或不存在 | 文件系统 | 主档 |
 | `B` | SaveFile \| ∅ | 一个文件或不存在 | 文件系统 | 最近一次成功写入前的备份 |
 | `V` | int | 1–INT32_MAX | constant | 当前游戏的 `SAVE_SCHEMA_VERSION` |
-| `L` | enum | `none` / `live` / `stale` | lock file + process probe | 写锁状态；`stale` 视为 `none` |
+| `L` | enum | `none` / `live` / `stale` | lock directory (`.lock/owner.json` + `.lock/heartbeat`) | 写锁状态；`stale` 视为 `none`。由心跳与 `owner.started_unix` 推导，不读取进程状态（规则 21、ADR-0002 §3） |
 | `readable(x)` | bool | {true, false} | calculated | 文件存在、非空、可解析为存档结构 |
 | `valid(x)` | bool | {true, false} | calculated | 在声明的 `version(x)` 对应 schema 下结构合法（不做玩法校验） |
 | `version(x)` | int | 0–INT32_MAX | 文件 | 文件声明的 `schema_version`；0 只用于迁移测试夹具 |
@@ -256,7 +256,7 @@ The `slots_available` formula is defined as:
 - **If 钱包为负或接近 int64 极值**：原样往返，不钳制、不取绝对值。`9007199254740993` 这类超过双精度整数安全范围的值必须无损；若序列化格式做不到，该格式不可用（Open Question 2）。
 - **If 旧档缺少 `records` 中的某个字段**：迁移补默认值（0 或空数组），不视为错误。缺少必填的信封字段（如 `schema_version`）才走损坏路径。
 - **If `last_saved_at` 位于未来或早于 `created_at`**：界面照常显示，不据此做任何判断。时间戳不是逻辑输入。
-- **If 同一用户启动第二个实例**：第二个实例读到存活锁且主档可读、版本 ≤ 当前 → `ReadOnly`，可浏览不可写；文件不可读或版本 > 当前 → `Blocked`（只给退出/重试）。第一个实例不受影响。锁的进程在崩溃后由存活探测 + 24 小时时间戳上限回收，无法判定时按存活处理。
+- **If 同一用户启动第二个实例**：第二个实例读到存活锁且主档可读、版本 ≤ 当前 → `ReadOnly`，可浏览不可写；文件不可读或版本 > 当前 → `Blocked`（只给退出/重试）。第一个实例不受影响。崩溃遗留锁的回收按规则 21 的确定性判定表，不读取进程状态：`.lock` 存在但无 `owner.json`，或心跳可读且 `now − heartbeat > 90 s` → 回收为 `stale`（视为 `none`）；心跳不可用（缺失 / 不可读 / 跨机）时，只有 `now − owner.started_unix > 24 h` 才回收，否则按存活处理；`owner.json` 无法解析也按存活处理。
 - **If 玩家在 dirty 状态下退出**：先 `flush()`；成功则正常退出。失败则显示「进度可能未保存」并允许玩家仍退出——退出已经过确认，不能把玩家困在游戏里；磁盘上的旧档仍然完整。
 - **If 玩家删除生涯**：无存活写锁时，二次确认后隔离旧文件、建立新档；设置文件不受影响。没有确认令牌的删除请求被拒绝；`lock_live = true` 时删除请求直接拒绝（规则 21 / 23）。
 - **If 玩家重置设置**：生涯档不受影响；设置与生涯是两个文件。
@@ -411,8 +411,14 @@ The `slots_available` formula is defined as:
 21. **GIVEN** 存档处于 `Clean` 状态、一局正在进行，**WHEN** 玩家确认放弃本局回到菜单，**THEN** 存档文件哈希与进入本局前相同，没有任何写入。
 22. **GIVEN** 玩家在 `Paused` 中确认退出且存档 dirty，**WHEN** flush 因权限失败，**THEN** 显示「进度可能未保存」，玩家仍可退出，磁盘上的旧档完整可读。
 23. **GIVEN** 同一个存档正被实例 A 持有写锁，**WHEN** 实例 B 启动，**THEN** B 的 `outcome = ReadOnly`、`writable = false`（主档可读），A 继续正常写入，B 不创建临时文件也不覆盖任何文件；**GIVEN** 主档在 A 的原子窗口内暂不可读，**THEN** B 的 `outcome = Blocked`、只提供「退出」与「重试」，不重命名任何文件。
-24b. **GIVEN** 存活锁 + 主档版本 ≤ 当前，**WHEN** 实例 B 载入，**THEN** `outcome = ReadOnly`，用内存中的只读迁移渲染，不写盘；**GIVEN** 存活锁 + 主档版本 > 当前，**THEN** `outcome = Blocked`（版本过高优先于锁），只给退出/重试，不提供只读浏览。
-24. **GIVEN** 一个遗留锁文件、其记录的进程已不存在且时间戳超过 24 小时，**WHEN** 启动，**THEN** 锁被回收，载入正常继续。
+24a. **GIVEN** 存活锁 + 主档版本 ≤ 当前，**WHEN** 实例 B 载入，**THEN** `outcome = ReadOnly`，用内存中的只读迁移渲染，不写盘；**GIVEN** 存活锁 + 主档版本 > 当前，**THEN** `outcome = Blocked`（版本过高优先于锁），只给退出/重试，不提供只读浏览。
+24b. **GIVEN** `.lock/heartbeat` 可读且 `now − heartbeat > 90 s`（`owner.json` 可解析），**WHEN** 启动，**THEN** 锁被回收为 `stale`（视为 `none`），载入正常继续。
+24c. **GIVEN** 心跳缺失或不可读、`owner.started_unix` 距 `now` ≤ 24 小时、主档可读且版本 ≤ 当前，**WHEN** 启动，**THEN** 锁按存活处理，`outcome = ReadOnly`，不重命名任何文件。
+24d. **GIVEN** 心跳缺失或不可读且 `owner.started_unix` 距 `now` > 24 小时，**WHEN** 启动，**THEN** 锁被回收为 `stale`，载入正常继续（主档可读且版本 = 当前 → `Loaded`）。
+24e. **GIVEN** `owner.json` 的 `host` 与当前主机不同（跨机心跳不可用）、`started_unix` 距 `now` ≤ 24 小时，**WHEN** 启动，**THEN** 锁按存活处理，不读 `heartbeat` 作 90 s 判定。
+24f. **GIVEN** 同一跨机锁的 `started_unix` 距 `now` > 24 小时，**WHEN** 启动，**THEN** 才回收为 `stale`——跨机只适用 24 小时回退。
+24g. **GIVEN** `.lock/owner.json` 存在但无法解析，**WHEN** 启动，**THEN** 锁按存活处理，不回收、不重命名任何文件；即使文件时间戳看起来已过期也不回收。
+24h. **GIVEN** `.lock` 目录存在但没有 `owner.json`，**WHEN** 启动，**THEN** 锁被回收为 `stale`（视为 `none`），载入按无锁路径继续。
 25. **GIVEN** 玩家确认删除生涯，**WHEN** 删除完成，**THEN** 旧档被改名为隔离文件而非删除，新档为默认值；设置文件逐字节不变。
 26. **GIVEN** 同一份未改变的内存状态，**WHEN** 连续写入两次（排除 `last_saved_at`），**THEN** 两个文件逐字节相同，map 键顺序一致。
 
