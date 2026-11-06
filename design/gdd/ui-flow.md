@@ -54,7 +54,7 @@
 
 7. **返回是确定的决策，不是默认退出** — `ui_cancel` 的行为由 `back_target`（Formulas）唯一决定，优先级固定为：①有可取消模态 → 关闭模态（模态捕获 `ui_cancel`）；②有强制模态 → 无动作；③有可关闭的非模态提示 → 关闭提示；④收据数字滚动中 → 跳过滚动；⑤`Menu` 子屏 → 弹回主菜单；⑥`Menu` 根屏且为收据 → 返回主菜单；⑦`Menu` 根屏且为主菜单 → 打开退出确认；⑧`Paused` → 打开退出确认；⑨`Error` / `Boot` / `Run` / `Quit` → 无动作。`ui_cancel` 在任何状态下都**不得直接退出游戏**，退出必须经过确认（`Run` / `Paused`）或明确的「退出」控件（`Menu` / `Error`）。强制模态（如存档 `Blocked` 说明）忽略 `ui_cancel`，只接受其列出的出口。
 
-8. **开始一局** — 主菜单的「开始营业」组装 `RunConfig`：`station_id` 取 MVP 唯一档口 `station_canteen`；`upgrade_snapshot = 局外升级.resolve_upgrade_snapshot()` 的**副本**（开局冻结，`局外升级` 规则 13）；`seed = null`；`is_first_run = 存档.load_report().first_run_eligible ∧ 纪录与里程碑.snapshot().career.runs_settled == 0`（载入资格由存档一次性判定：`Fresh` / `Loaded` / `Migrated` 且载入时 `runs_settled = 0` 为真，`Recovered` 恒为假；再与当前纪录快照相与，使首局结算后主菜单立即切换到 85；见 `存档` 规则与 S11）。首局判定由 `FirstRunPlanner` 唯一产出（ADR-0020 决策 2.3）：本节公式只定义它的输入，界面流程与主菜单只读 `plan.is_first_run` / `plan.menu_entry_fee` / `plan.has_entry_fee_override()`，不自行重算。若 `is_first_run`，从 `首局引导.get_first_run_preset()` 取 `pool_override = 六道教学菜池` 与 `entry_fee_override = 40`，否则二者为 `null`。组装完成后调用 `场景与流程管理.request_transition(Menu → Run, RunConfig)`。返回 `false` 时留在主菜单并显示可见原因，不进入加载态、不重试、不伪造成功。主菜单必须在开始按钮旁显示**本次开始实际会扣收的入场费**与当前钱包（可为负），两者只读：入场费按 `effective_entry_fee = is_first_run ? 40 : 数据配置.get_station(station_id).entry_fee`（MVP 非首局为 85）显示，与同一次组装写入 `RunConfig.entry_fee_override` 的值同源；首局结算后 `runs_settled > 0`，主菜单立即改为显示 85。不得只显示 85、直到收据才解释首局 40 与常规 85 的差异。
+8. **开始一局** — 主菜单的「开始营业」组装 `RunConfig`：`station_id` 取 MVP 唯一档口 `station_canteen`；`upgrade_snapshot = 局外升级.resolve_upgrade_snapshot()` 的**副本**（开局冻结，`局外升级` 规则 13）；`seed = null`；`is_first_run`、`pool_override`、`entry_fee_override` 三项一律取自 `FirstRunPlanner` 产出的 `FirstRunRunPlan`（ADR-0020 决策 2.3）。首局判定由 `FirstRunPlanner` 唯一产出，其输入是存档载入资格（`LoadReport.first_run_eligible`：`Fresh` / `Loaded` / `Migrated` 且载入时 `runs_settled = 0` 为真，`Recovered` 恒为假）与当前纪录快照的 `career.runs_settled = 0`，使首局结算后主菜单立即切换到 85（见 `存档` 规则与 S11）。界面流程与主菜单只读 `plan.is_first_run` / `plan.menu_entry_fee` / `plan.has_entry_fee_override()`，按 `plan.run_config_fields()` 组装，不自行重算、不直接读 `首局引导.get_first_run_preset()`：`RunConfig.entry_fee_override = plan.has_entry_fee_override() ? plan.entry_fee_override : null`，`RunConfig.pool_override = plan.is_first_run ? plan.pool_override.duplicate() : null`。组装完成后调用 `场景与流程管理.request_transition(Menu → Run, RunConfig)`。返回 `false` 时留在主菜单并显示可见原因，不进入加载态、不重试、不伪造成功。主菜单必须在开始按钮旁显示**本次开始实际会扣收的入场费**与当前钱包（可为负），两者只读：入场费直接显示 `plan.menu_entry_fee`（首局且 override 可用时为 40，否则为档口值，MVP 85），与同一次组装写入 `RunConfig.entry_fee_override` 的值同源；`entry_fee_override` 不被上游支持时 `plan.menu_entry_fee` 已退化为档口值，菜单与本局同时显示 85，不允许一边 40 一边 85。首局结算后 `runs_settled > 0`，主菜单立即改为显示 85。不得只显示 85、直到收据才解释首局 40 与常规 85 的差异。
 
    **档口可购买性以可选择性为前提**：MVP 主菜单只显示 `station_canteen`、**不显示档口选择器**，因此任何第二档口（含 `station_banquet`，120 元价格不变）都不得显示为可购买。若数据层发布了它，任何解锁入口必须把该档口标为不可购买并显示「需要档口选择器」的原因，直到本系统实现选择器为止；**不存在「已购买但无法选择」的中间态**。本系统拥有能力开关 `supports_station_selection() -> bool`：主菜单是否已提供档口选择器；MVP 固定返回 `false`。解锁与档口用 `gated(s) = ¬supports_station_selection() ∧ s.unlock_cost > 0` 隐藏付费档口、拒绝 `unlock` 为 `FEATURE_GATED`，并把它们排除在可见目录与解锁进度分母之外（`解锁与档口` 规则 17）。开关只在选择器真正上线时改为 `true`，不得为测试之外的任何原因伪造。多档口选择器见 Open Question 6。
 
@@ -162,7 +162,7 @@
 | 音效反馈 | 同级协调（双向） | 界面流程拥有主音量 / 音效音量 / 静音 / 减少重复音效四项设置值；音效反馈消费它们。界面流程发 `settlement_started(run_id)`（收据打开同帧、动画前）、`settlement_aborted(run_id, code)`（事务放弃，禁止结果 cue）、`ui_button_activated(control_id)`、收据 `number_roll_started/finished`、`receipt_closed(reason)`；音效不订阅原始输入、不读 `RunResult` | 硬（事件与设置契约）；播放本身为软 |
 | 数据配置 | 上游（显示只读） | 读：`get_station(station_id)` 的 `display_name`、`entry_fee`；`get_dish(dish_id)` → `display_name`（收据菜名）。**只用于显示，不参与任何玩法判定** | 硬（显示） |
 | 局内 HUD | 同级协调 | 无数据依赖。屏幕归属：HUD 画局内一屏；界面流程画暂停菜单、收据、菜单、升级、设置、错误屏。`Paused` 时暂停菜单覆盖 HUD 但不卸载；`Settling` 时收据覆盖 HUD；HUD 保留到收据出现的那一帧 | 协调 |
-| 首局引导（#18） | 上游（预置/载荷）+ 下游（软） | 读 `get_first_run_preset()`（`pool_override` 六道 + `entry_fee_override = 40`）与 `FirstRunExplanation` 载荷（收据讲解块）；**不订阅 `onboarding_finished` 做首局判定**——`is_first_run` 按 `存档.load_report().first_run_eligible ∧ records.career.runs_settled == 0` 计算；可在控件上叠加讲解与高亮，可请求 `Blocked` 上下文 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
+| 首局引导（#18） | 上游（预置/载荷）+ 下游（软） | 读 `FirstRunPlanner` 产出的 `FirstRunRunPlan`（`is_first_run`、`menu_entry_fee`、`has_entry_fee_override()`、`run_config_fields()`）与 `FirstRunExplanation` 载荷（收据讲解块）；**不直接调用 `get_first_run_preset()`、不订阅 `onboarding_finished` 做首局判定、不自行计算 `is_first_run`**（ADR-0020 决策 2.3）；可在控件上叠加讲解与高亮，可请求 `Blocked` 上下文 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 | 解锁与档口（#13） | 下游（软） | 将来在主菜单提供档口选择器；MVP 只有一个档口，主菜单不显示选择器，第二档口不可购买（规则 8）。本系统提供 `supports_station_selection() -> bool`（MVP `false`），解锁按 `FEATURE_GATED` 隐藏付费档口。接口见 Open Questions 5、6 | 软 |
 
 **接口所有权**：界面流程拥有屏幕集合、屏幕栈、焦点顺序、模态呈现、收据的打开时机与呈现编排、设置模型与界面语义事件。上游拥有各自的数据、判定与状态；任何系统不得直接写界面栈、焦点或模态栈，也不得替界面流程决定收据内容。界面流程不得替上游计算任何玩法数值，也不得把显示值回写成数据。
@@ -432,7 +432,7 @@ The `displayed_value` formula is defined as:
 | 结算与入场费 | 硬 | `RunResult` 的 `rows`、`total_value`、`entry_fee`、`net_profit`、`return_ratio` / `return_percent_x10`、容量/回合/腻度明细；`broke_even` 派生谓词 | GDD 已写（`design/gdd/settlement-and-entry-fee.md`） |
 | 局外升级 | 硬 | `get_wallet()`、`get_catalog()`、`can_purchase(id)`、`resolve_upgrade_snapshot()`、`prepare_run_result(result)`、`purchase(id)`、`progression_changed` | GDD 已写（`design/gdd/meta-upgrades.md`） |
 | 纪录与里程碑 | 硬 | `prepare_run(result)`、`snapshot()`、`milestone_progress(id)`、`record_broken` / `milestone_earned` / `career_completed` | GDD 已写（`design/gdd/records-and-milestones.md`） |
-| 存档 | 硬 | `LoadReport`（`outcome`、`writable`、`warnings`、`first_run_eligible`）、`SaveStatus` / `save_status_changed`、`commit`、`flush()`、`delete_career(confirm_token)` | GDD 已写（`design/gdd/save-system.md`） |
+| 存档 | 硬 | `LoadReport`（`outcome`、`writable`、`warnings`、`lock_live`、`first_run_eligible`）、`SaveStatus` / `save_status_changed`、`retry_load()`、`commit`、`flush()`、`delete_career(confirm_token)` | GDD 已写（`design/gdd/save-system.md`） |
 | 音效反馈 | 硬（设置与事件契约） | 设置值：主音量、音效音量、静音、减少重复音效；界面事件：`settlement_started`、`settlement_aborted`、`ui_button_activated`、收据滚动、`receipt_closed` | GDD 已写（`design/gdd/audio-feedback.md`） |
 | 数据配置 | 硬（显示只读） | `get_station(station_id)` 的 `display_name` / `entry_fee`；`get_dish(dish_id)` → `display_name`。只用于显示，不参与玩法判定 | GDD 已写（`design/gdd/data-config.md`） |
 
@@ -497,7 +497,7 @@ The `displayed_value` formula is defined as:
 |---|---|---|---|---|
 | `BootWaiting` | `Boot` | 等待文案、静态标识；无进度条、无最短展示时长 | 无 | 无 |
 | `ErrorScreen` | `Error` | 可读的错误标题与说明；唯一的「退出」；debug 额外「重新加载数据」、失败文件、记录 id | 「退出」 | `ui_cancel` 无效 |
-| `MainMenu` | `Menu` 根屏 | 档口名、**本次实际入场费**（首局 `is_first_run` 显示 40，否则档口值；MVP 85）、钱包（带符号）；「开始营业」「升级」「纪录」「设置」「退出」；保存指示与非模态提示层；MVP 不显示档口选择器，第二档口不可购买 | 「开始营业」 | `ui_cancel` → 退出确认 |
+| `MainMenu` | `Menu` 根屏 | 档口名、**本次实际入场费**（`plan.menu_entry_fee`：首局 40，否则档口值 MVP 85）、钱包（带符号）；「开始营业」「升级」「纪录」「设置」「退出」；保存指示与非模态提示层；MVP 不显示档口选择器，第二档口不可购买 | 「开始营业」 | `ui_cancel` → 退出确认 |
 | `ReceiptScreen` | `RunResult` 同帧 | 行：菜名、价格、基础饱腹、腻度追加（0 显示 `—`）、实际饱腹、静态单位价值、有效单位价值；合计：总值、入场费（负项）、净利（带符号）、回本判定、回本率、已用/总容量、浪费容量、已用/总回合、腻度额外占用合计；首局额外渲染 `FirstRunExplanation`（教学价说明「首局 40 元，正式食堂 85 元」、替换建议、首笔升级建议）；空局空状态；免单；新纪录印章 + 旧最佳；「新达成」条；钱包；「再来一局」「返回菜单」 | 「再来一局」 | `ui_cancel` → 先跳过滚动，再返回主菜单 |
 | `UpgradeScreen` | `Menu` 子屏 | 每条：名称、等级 `n / max`、当前效果、下一效果、下一价格、可购买性与原因；钱包常驻；购买确认；`COMMIT_FAILED` / `MAX_LEVEL` / `NO_EFFECT` / `NOT_WRITABLE`；推荐高亮 | 第一条可购买项的购买按钮；若无可购买项则为「返回」 | `ui_cancel` → 弹回主菜单 |
 | `RecordsScreen` | `Menu` 子屏 | 每档口一行：档口名、最佳净利（带符号）、回本率（免单显示「免单」）、总值、达成日期、空状态；里程碑按「未达成 / 已达成」分组，含名称、条件、进度 `当前值 / 阈值 单位`、达成日期；完成状态与「距离通关还差 N 项」；完成横幅 | 第一条纪录行；空则为「返回」 | `ui_cancel` → 弹回主菜单 |
@@ -558,7 +558,7 @@ The `displayed_value` formula is defined as:
 
 **开始与重开**
 
-6. **GIVEN** `MenuRoot`，**WHEN** 按「开始营业」，**THEN** 只组装一份 `RunConfig`：`station_id = station_canteen`、`seed = null`、`is_first_run = 存档.load_report().first_run_eligible ∧ 纪录与里程碑.snapshot().career.runs_settled == 0`（与规则 8 / S11 同口径；该值由 `FirstRunPlanner` 唯一产出，界面流程不自行重算）；`is_first_run` 时 `pool_override = 六道教学菜池`、`entry_fee_override = 40`，否则二者为 `null`；`upgrade_snapshot` 是一次 `resolve_upgrade_snapshot()` 的副本；只调用一次 `request_transition(Menu → Run, RunConfig)`；不插入加载屏。
+6. **GIVEN** `MenuRoot`，**WHEN** 按「开始营业」，**THEN** 只组装一份 `RunConfig`：`station_id = station_canteen`、`seed = null`、`is_first_run = plan.is_first_run`、`pool_override = plan.is_first_run ? plan.pool_override.duplicate() : null`、`entry_fee_override = plan.has_entry_fee_override() ? plan.entry_fee_override : null`（三项均取自 `FirstRunPlanner` 的 `FirstRunRunPlan`，界面流程不自行计算 `first_run_eligible ∧ runs_settled == 0`、不直接读 `get_first_run_preset()`）；`upgrade_snapshot` 是一次 `resolve_upgrade_snapshot()` 的副本；只调用一次 `request_transition(Menu → Run, RunConfig)`；不插入加载屏。
 7. **GIVEN** `request_transition(Menu → Run)` 返回 `false`，**WHEN** 开始营业，**THEN** 留在主菜单、显示可见原因、焦点回到「开始营业」；不重试、不进入加载态、不假装成功。
 8. **GIVEN** 档口无法解析或 `RunConfig` 组装失败，**WHEN** 检查主菜单，**THEN** 「开始营业」禁用并显示原因；不发起切换。
 9. **GIVEN** 收据，**WHEN** 按「再来一局」，**THEN** 组装全新 `RunConfig`（第二次 `resolve_upgrade_snapshot()`，对象不同；`is_first_run = false`；`seed = null`）、请求一次 `Menu → Run`、发 `receipt_closed(reason = restart)`；新局获得新的 `run_id`。
@@ -620,7 +620,7 @@ The `displayed_value` formula is defined as:
 44. **GIVEN** 收据关闭 / 返回菜单 / 开始新一局，**WHEN** 检查事件，**THEN** 各发一次 `receipt_closed(reason)`；音效的待播结算结果 cue 被取消。
 45. **GIVEN** 实现完成，**WHEN** 关闭验收，**THEN** `production/qa/evidence/` 中存在以下保留截图：主菜单（1280×720）、收据（含行与合计）、收据空局、免单、新纪录印章、升级页、纪录页、设置屏、暂停覆盖层、`Error` 屏、`Blocked` 模态、150% 字号下的收据与设置屏、键盘焦点与鼠标悬停同时可见。
 46. **GIVEN** 数据中存在第二档口 `station_banquet`（120 元）且主菜单尚未实现档口选择器，**WHEN** 打开主菜单或任一解锁入口，**THEN** 该档口不可购买并显示「需要档口选择器」的原因；不存在可购买但无法选择的按钮，也不存在「已解锁档口」的中间状态。
-47. **GIVEN** `FirstRunPlanner` 产出 `plan.is_first_run = true`（`LoadReport.first_run_eligible ∧ career.runs_settled = 0` 同时成立），**WHEN** 主菜单渲染，**THEN** 开始按钮旁显示入场费 40；**GIVEN** `plan.is_first_run = false`（`runs_settled > 0`，或 `Recovered` 等 `first_run_eligible = false` 的载入态即使 `runs_settled = 0`），**THEN** 同一位置显示档口入场费（MVP 85）；两处显示值都等于 `plan.menu_entry_fee`，并与下一次 `RunConfig.entry_fee_override`（`plan.is_first_run` 时 40，否则 `null`）同源。
+47. **GIVEN** `FirstRunPlanner` 产出 `plan.is_first_run = true` 且 `plan.has_entry_fee_override() = true`（输入为 `LoadReport.first_run_eligible ∧ career.runs_settled = 0` 同时成立），**WHEN** 主菜单渲染，**THEN** 开始按钮旁显示入场费 40；**GIVEN** `plan.is_first_run = false`（`runs_settled > 0`，或 `Recovered` 等 `first_run_eligible = false` 的载入态即使 `runs_settled = 0`），**THEN** 同一位置显示档口入场费（MVP 85）；**GIVEN** 上游不支持 `entry_fee_override`（`plan.is_first_run = true` 但 `plan.has_entry_fee_override() = false`），**THEN** 菜单同样显示 85 且记 WARNING，不存在菜单 40 / 本局 85 的错配；三种情形下显示值都等于 `plan.menu_entry_fee`，并与下一次 `RunConfig.entry_fee_override`（`plan.has_entry_fee_override()` 时 40，否则 `null`）同源。
 
 ## Open Questions
 

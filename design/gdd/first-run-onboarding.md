@@ -132,7 +132,7 @@
 | 结算与入场费 | 上游 | `RunResult.rows[]` 的 `price`、`satiety`、`extra_satiety`、`effective_satiety`、`unit_value`、`effective_unit_value`；`entry_fee`、`total_value`、`net_profit` | 硬（`B4`） |
 | 菜单波次 | 上游（间接） | 接收 `pool_override`；`get_run_menu() -> StringName[]`（本局有效菜单，供 `replacement_hint`）；只读当前波的可见数与波序用于 B2 文案 | 软 |
 | 腻度与口味 | 上游（间接） | 读 `focused_dish_id` 的组计数与 `extra_satiety` 用于 B3 触发与文案；不写计数 | 软 |
-| 界面流程 | 下游 | 取预置（`pool_override` / `entry_fee_override`）；接收 `FirstRunExplanation` 并渲染收据讲解；**不据 `onboarding_finished` 判定首局**——`is_first_run` 只按 `records.career.runs_settled == 0 ∧ LoadReport.first_run_eligible`；主菜单显示的入场费必须与 `entry_fee_override` 一致（S9） | 硬（UI） |
+| 界面流程 | 下游 | 读 `FirstRunPlanner` 产出的 `FirstRunRunPlan`（`is_first_run` / `menu_entry_fee` / `has_entry_fee_override()` / `run_config_fields()`），不直接读预置常量（ADR-0020 决策 2.3）；接收 `FirstRunExplanation` 并渲染收据讲解；**不据 `onboarding_finished` 判定首局**——`is_first_run` 由 `FirstRunPlanner` 唯一产出（输入为 `records.career.runs_settled == 0 ∧ LoadReport.first_run_eligible`）；主菜单显示的入场费必须与 `plan.menu_entry_fee` 及本次写入的 `RunConfig.entry_fee_override` 一致（S9） | 硬（UI） |
 | 局外升级 | 下游（仅文案） | `B4` 的「首笔升级建议」读升级目录与当前钱包，只出文字，不购买、不高亮按钮 | 软 |
 | 存档 | 无直接调用 | 不读写任何命名空间 | — |
 | 音效反馈 | 下游（订阅） | `onboarding_beat_shown(beat_id)`、`onboarding_finished(reason)` | 软 |
@@ -399,7 +399,7 @@ best_menu_fit    = satiety(best_menu) ≤ remaining_at_end
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 界面流程 | 硬（UI） | 取首局预置；渲染 `FirstRunExplanation`；`is_first_run` 只按 `records.career.runs_settled == 0 ∧ LoadReport.first_run_eligible` 判定，`onboarding_finished` 不参与；首局菜单显示 40 而不是 85（S9） | GDD 已写（`design/gdd/ui-flow.md`） |
+| 界面流程 | 硬（UI） | 读 `FirstRunRunPlan`（`plan.menu_entry_fee` / `plan.has_entry_fee_override()` / `plan.run_config_fields()`）；渲染 `FirstRunExplanation`；`is_first_run` 由 `FirstRunPlanner` 唯一产出，`onboarding_finished` 不参与；首局菜单显示 40 而不是 85（S9） | GDD 已写（`design/gdd/ui-flow.md`） |
 | 菜单波次 | 软 | 接收并应用 `pool_override`（当前只读 `StationData.dish_pool`，见 Open Questions） | GDD 已写（`design/gdd/menu-waves.md`） |
 | 局外升级 | 软（仅文案） | `B4` 的首笔升级建议读目录与钱包，只出文字 | GDD 已写（`design/gdd/meta-upgrades.md`） |
 | 音效反馈 | 软 | 订阅 `onboarding_beat_shown` / `onboarding_finished` | GDD 已写（`design/gdd/audio-feedback.md`） |
