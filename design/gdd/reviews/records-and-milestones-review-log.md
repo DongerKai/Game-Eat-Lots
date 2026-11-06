@@ -419,3 +419,30 @@ Closed the `architecture-review-2026-11-05` GDD Revision Flags for this system; 
 Status: substantive edits — the GDD returns to `In Review` per `.claude/rules/design-docs.md`; approval requires a fresh full `/design-review`.
 
 Reviewed-Content-Hash: design/gdd/records-and-milestones.md ce3ec63c69b52c965ac670e2b68c708a43fc8100
+
+---
+
+## Review — 2026-11-06 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 2 | Recommended: 4
+Summary: Flags #3–#6 are correctly written: `return_ratio` is a derived display field over persisted `return_percent_x10`, `upgrade_snapshot` carries the recursive save-safe encoding with only known keys decoded, `pending_events` is a synchronous log rather than a delay queue, and the `"unknown"` sentinel appears in the schema row, the formula variable table and Edge Cases. Two residual contradictions block approval: the `pending_events` row asserts a non-empty array on every `APPLIED` result, which a record-neutral run falsifies, and AC 27 hangs a load-path assertion on a `WHEN prepare_run` clause so the load path is never exercised. Citation style ("ADR-0018 第 N 条") points at GDD Sync Check row numbers, not decision section numbers, which is why the survivors read as if they were already checked against the ADR.
+Prior verdict resolved: No — flags #3–#6 closed, flag #7 partially: the ownership sentence was added but left in an untestable AC
+Findings:
+- [BLOCKING] Result schema, `pending_events` row (`:129`): "与本次信号同序、同内容；`APPLIED` 时非空，其余为空数组" is false. An `APPLIED` run that beats no record and earns no milestone emits zero signals, so a correct implementation returns `[]` and violates the stated range. Required: "与本次信号同序、同内容；无信号时为空数组" plus a note that `APPLIED` may legitimately emit nothing. Source: ADR-0018 §10 (events mirror the emitted signals); ADR-0007 D4 step 2 only requires the field to exist.
+- [BLOCKING] Acceptance Criteria 27 (`:444`): "**GIVEN** 数据配置不在 `Ready` 或里程碑目录含重复 id … **WHEN** 调用 `prepare_run` … **AND** 载入路径只解析已存纪录，不因目录不可用失败" appends a load-path claim to a `prepare_run` AC, so the second clause is never triggered and cannot pass or fail independently. Required: split — keep `MILESTONE_CATALOGUE_INVALID` / `DATA_NOT_READY` on `prepare_run`, and add a separate AC: "GIVEN 里程碑目录非法（启动期加载器已失败），WHEN 载入已存 `records`，THEN `load` 成功、不校验目录、不产生 `MILESTONE_CATALOGUE_INVALID`". Source: ADR-0018 §3 (`load` parses stored records only) and GDD Sync Check #11.
+- [RECOMMENDED] Citations throughout (`:73`, `:82`, `:85`, `:129`, `:444`): "ADR-0018 第 N 条" matches the ADR's **GDD Sync Check row** numbers, not its decision-section numbers (`completed_at` sentinel is decision §3, `return_ratio` and snapshot encoding are §2, `pending_events` is §10). Cite the decision section (`ADR-0018 §2/§3/§10`) and, where useful, the sync-check row separately; the ambiguity is what let the `pending_events` range survive.
+- [RECOMMENDED] `best.upgrade_snapshot` row (`:85`): "落盘时按存档安全编码" blurs ownership — ADR-0018 §2 puts the encoding in this system before it returns `change.records`; the save layer writes the bytes verbatim. Say so explicitly, otherwise both systems can claim or skip the conversion.
+- [RECOMMENDED] Acceptance Criteria: no AC asserts the three encoding claims that flags #3/#4 introduced — that a saved file contains no float in `upgrade_snapshot`, that a known key (`cloying_resistance`) round-trips exactly, and that `return_ratio` is absent from the file while `return_percent_x10` is present.
+- [RECOMMENDED] Edge Cases (`:292`): the `"unknown"` sentinel is covered, but no AC produces it; point an AC at a corrupt `completed_at` and assert `career_complete = true` + `COMPLETED_AT_INVALID`.
+
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md ce3ec63c69b52c965ac670e2b68c708a43fc8100
+Reviewed-Content-Hash: design/registry/entities.yaml 02f5c072fc535530c710fd71d77d31e2dce021ed
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/save-system.md 0656b8687f961899dc87f58af176e917bd6c8729
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 9bf45c1ead7e161599186ca5724fa460b044e314
+Reviewed-Content-Hash: design/gdd/ui-flow.md cf471d2d45476ff8e1db0a5fa4a7fae9a4e146ea
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+Reviewed-Content-Hash: design/gdd/systems-index.md 1119e17f51ee38b2b6fdb56db5d6301d6db94f47
+Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d

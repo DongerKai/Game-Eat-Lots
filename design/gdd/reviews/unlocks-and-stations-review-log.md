@@ -294,3 +294,28 @@ Closed the `architecture-review-2026-11-05` GDD Revision Flags for this system; 
 Status: substantive edit — the GDD returns to `In Review` per `.claude/rules/design-docs.md`; approval requires a fresh full `/design-review`.
 
 Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 729311c1e48fad9d1f935240bba7850da718a1af
+
+---
+
+## Review — 2026-11-06 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 1 | Recommended: 3
+Summary: Flag #8 is written correctly in the GDD: `normalize` now emits `stations = sort({s.id : s ∈ S_eff} ∪ U.stations)`, the prose note explains that a gated-but-owned id stays in the ledger, and the formula agrees with `S_eff`'s `¬gated(s)` filter. The document is otherwise clean and its AC 44 already asserts the gated-purchase case. The single blocker is cross-document: the registry's canonical `normalize` expression still carries the pre-fix `(U.stations − S_ids)` term and omits `¬gated(s)`, so the fact source and the owning GDD now disagree about the exact behaviour the flag was raised to fix. No GDD text change is required — only the registry row.
+Prior verdict resolved: No — flag #8 closed in the GDD, but the registry still encodes the old expression
+Findings:
+- [BLOCKING] `design/registry/entities.yaml:1047` (`unlocks.normalize.expression`): still reads `S_eff = S_free + {s in S : s.id in U.stations}; stations = sort(ids(S_eff) + (U.stations - S_ids))` — the pre-fix form that drops a gated purchased id, and it omits the `¬gated(s)` qualifier on `S_eff`. Required: "`S_eff = S_free + {s in S : s.id in U.stations and not gated(s)}; stations = sort(ids(S_eff) + U.stations); dishes = sort(U.dishes + union(dish_pool of S_eff))`". Source: ADR-0017 §4 and its GDD Sync Check; `design/gdd/unlocks-and-stations.md:195`. Not editable in this review (registries belong to the orchestration session); per Phase 3 a registry line that differs from the owning GDD is required before implementation. Once that row is synced this GDD needs no further edit.
+- [RECOMMENDED] Variables (`:208`): with `U.stations − S_ids` gone, `S_ids` has no consumer left in the formula. Either drop the row or keep it and say it exists only to identify unknown ids in the `dishes` line.
+- [RECOMMENDED] Alignment note (`:200`): the citation "ADR-0017 第 1 条" refers to the ADR's GDD Sync Check row, not decision §4 (which defines `S_eff` and `stations`). Cite §4, as `records-and-milestones` also needs to do for ADR-0018.
+- [RECOMMENDED] Output Range (`:215`): "只增不减：`stations ⊇ U.stations`" is true, but with the new union the guarantee now also holds for ids whose station record was removed from data; state that unknown ids survive transitions unchanged, not merely that they are "原样保留" in the unknown-id sentence.
+
+Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 729311c1e48fad9d1f935240bba7850da718a1af
+Reviewed-Content-Hash: design/registry/entities.yaml 02f5c072fc535530c710fd71d77d31e2dce021ed
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/save-system.md 0656b8687f961899dc87f58af176e917bd6c8729
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md 3fa3e55b62e80ebcb1ed150a57577416f639faf9
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md ce3ec63c69b52c965ac670e2b68c708a43fc8100
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+Reviewed-Content-Hash: design/gdd/systems-index.md 1119e17f51ee38b2b6fdb56db5d6301d6db94f47
+Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d

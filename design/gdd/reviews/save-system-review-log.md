@@ -1469,3 +1469,30 @@ Closed the `architecture-review-2026-11-05` GDD Revision Flags for this system; 
 Status: substantive edit — the GDD returns to `In Review` per `.claude/rules/design-docs.md`; approval requires a fresh full `/design-review`.
 
 Reviewed-Content-Hash: design/gdd/save-system.md 0656b8687f961899dc87f58af176e917bd6c8729
+
+---
+
+## Review — 2026-11-06 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 4 | Recommended: 2
+Summary: Flag #1's core rule is now correct: rule 21 names the atomically created lock directory, `owner.json` + `heartbeat`, the 30 s refresh, the 90 s timeout, the 24 h fallback when the heartbeat is unavailable, and why `OS.is_process_running` is unusable — matching ADR-0002 §3. The revision was not carried through the rest of the document, so three places still describe the old process-probe mechanism and one AC only exercises the fallback cap. All four fixes are text-only; the state model, schema and formulas are unchanged and correct.
+Prior verdict resolved: No — flag #1 is closed in rule 21 only; `:160`, `:259` and `:48` contradict it, and no AC covers the 90 s path
+Findings:
+- [BLOCKING] Variables table, `L` row (`:160`): the source column still reads "lock file + process probe", which is the mechanism rule 21 explicitly rejects. Required: the state is derived solely from `.lock/owner.json` + `.lock/heartbeat` (missing/unparseable owner or future timestamp ⇒ live). Source: ADR-0002 §3.
+- [BLOCKING] Edge Cases, second instance (`:259`): "锁的进程在崩溃后由存活探测 + 24 小时时间戳上限回收" states the wrong primary rule — the 90 s heartbeat timeout reclaims first; 24 h applies only when the heartbeat is unavailable (missing / unreadable / cross-host). Required text: "心跳可读且 `now − heartbeat > 90 s` 则回收；心跳不可用时只有 `now − owner.started_unix > 24 h` 才回收". Source: ADR-0002 §3; GDD rule 21 (`:47`).
+- [BLOCKING] Core Rule 22 (`:48`): "任何逻辑（排序、冲突、过期、迁移分支）都不得依赖系统时钟" is absolute and now contradicts rule 21, whose liveness decision is arithmetic on `heartbeat` / `started_unix`. Required: exempt lock liveness explicitly — the heartbeat is the only permitted clock consumer, and it governs liveness only, never ordering, conflict resolution or migration. Source: ADR-0002 §3.
+- [BLOCKING] Acceptance Criteria 24 (`:415`): the only reclaim AC tests a >24 h legacy lock, so the normal 90 s path, a lock directory without `owner.json`, an unparseable `owner.json` and a cross-host heartbeat are untested. Required: one AC per row of the rule 21 reclaim table (all four outcomes: stale / live / live-on-undecidable). Source: ADR-0002 §3.
+- [RECOMMENDED] Open Questions 9 (`:442`): "存档写锁的探测手段 … 是否值得实现" was answered by ADR-0002 §3 (lock directory + heartbeat, no OS probe). Close it as resolved rather than leaving an open question that invites a redesign.
+- [RECOMMENDED] Rule 21 (`:47`): `started_at` is listed in `owner.json` but never used by the reclaim table; say it is display-only, as `pid` already is.
+
+Reviewed-Content-Hash: design/gdd/save-system.md 0656b8687f961899dc87f58af176e917bd6c8729
+Reviewed-Content-Hash: design/registry/entities.yaml 02f5c072fc535530c710fd71d77d31e2dce021ed
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/ui-flow.md cf471d2d45476ff8e1db0a5fa4a7fae9a4e146ea
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md ce3ec63c69b52c965ac670e2b68c708a43fc8100
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 9bf45c1ead7e161599186ca5724fa460b044e314
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+Reviewed-Content-Hash: design/gdd/systems-index.md 1119e17f51ee38b2b6fdb56db5d6301d6db94f47
+Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
