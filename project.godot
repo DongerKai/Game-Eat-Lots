@@ -8,6 +8,11 @@ config_version=5
 config/name="回本 (Break Even)"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
+[display]
+
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
 [rendering]
 
 renderer/rendering_method="forward_plus"

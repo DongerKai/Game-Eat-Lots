@@ -20,6 +20,8 @@ jobs:
         with:
           lfs: true
 
+      # The action imports the project before test discovery. A fresh clone must
+      # run `godot --headless --path . --import` before any local test run.
       - name: Run GdUnit4 Tests
         uses: godot-gdunit-labs/gdUnit4-action@v1
         with:
