@@ -419,3 +419,20 @@ Closed the `architecture-review-2026-11-05` GDD Revision Flags for this system; 
 Status: substantive edit — the GDD returns to `In Review` per `.claude/rules/design-docs.md`; approval requires a fresh full `/design-review`.
 
 Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 64618fb781859ec62bb672ec286beae53800d304
+
+---
+
+## Review — 2026-11-06 — Verdict: APPROVED
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean)
+Blocking items: 0 | Recommended: 2
+Summary: `return_ratio` 已与 ADR-0015 第 3 / 6 条对齐：范围 `[0, +∞)`、空局合法为 `0.0`、零入场费返回 `null` 且不执行除法；规则 15、`RunResult` 字段表（`:82`）、边角用例与 AC 5 没有残留旧口径，公式、字段表与 ADR 三者一致。剩余两项是变量表类型列的可空写法与注册表回写。
+Prior verdict resolved: Yes — flag 11 关闭；上一轮推荐第 4 条（`(0, +∞)` 排除空局）已落地。
+Findings:
+- [RECOMMENDED] Formulas「回本率」（`:180-181`）：变量表 Type 列仍写 `float64` / `int`，而同段 Output Range 与 `RunResult` 字段表（`:82`）写 `float64 | null` / `int | null`；把类型列改成可空写法，零费用分支才不会被读成不可能。
+- [RECOMMENDED] 注册表（非本文件）：`design/registry/entities.yaml` 的 `return_ratio.output_range` 仍是 `(0, +∞) | null`、note 仍写 `return_ratio > 0`；该条目 `source:` 指向本文件，需同步为 `[0, +∞)`——注册表编辑属编排会话。
+
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
+Reviewed-Content-Hash: design/registry/entities.yaml 02f5c072fc535530c710fd71d77d31e2dce021ed
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43

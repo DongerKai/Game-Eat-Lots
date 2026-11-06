@@ -1179,3 +1179,24 @@ Closed the `architecture-review-2026-11-05` GDD Revision Flags for this system; 
 Status: substantive edit — the GDD returns to `In Review` per `.claude/rules/design-docs.md`; approval requires a fresh full `/design-review`.
 
 Reviewed-Content-Hash: design/gdd/ui-flow.md 331620b919a9203093403fe427f05ba80a75b7b6
+
+---
+
+## Review — 2026-11-06 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean)
+Blocking items: 1 | Recommended: 2
+Summary: 规则 8 与 AC 6 现在同口径，`first_run_eligible ∧ runs_settled == 0` 与 ADR-0020 的 GDD Sync Check 第 2 条一致，`Recovered` 不会重播教学。但同一个判据在 AC 47 仍只写 `runs_settled == 0`：在 `Recovered` 且备份无结算证据（`runs_settled = 0`、`first_run_eligible = false`，`存档` 规则 26 / 边角用例允许的状态）时，AC 47 要求显示 40，规则 8 / AC 6 要求显示 85，且 AC 47 自己「与下一次 `entry_fee_override` 同源」的条款也给出 85——一条 AC 自相矛盾，并与 `first-run-onboarding.md` AC 31 冲突。
+Prior verdict resolved: No — 上一轮 APPROVED（2026-11-04）漏掉了 AC 47；flag 9 的 AC 6 修改本身正确，但同一缺陷还留在相邻一条 AC 上。
+Findings:
+- [BLOCKING] Acceptance Criteria AC 47（`:623`）：`GIVEN career.runs_settled = 0` 单独作为前提要求显示 40；应改为以 `is_first_run`（两项同时成立）为前提，并补 `Recovered` 无证据（`runs_settled = 0 ∧ first_run_eligible = false`）显示 85 的分支。
+- [RECOMMENDED] Interaction 表 / Dependencies 的 `存档` 行（`:161`、`:435`）：`LoadReport` 字段清单漏了 `first_run_eligible`——正是规则 8 / AC 6 现在依赖的字段（`存档` 的依赖行已点名）。
+- [RECOMMENDED] Core Rules 8 / AC 6：按 ADR-0020 D2.3 与 Implementation Guideline 1，`is_first_run` 的唯一生产者是 `FirstRunPlanner`、`UIRoot`/`MainMenu` 禁止自行推导；把这一句写进规则 8，说明菜单消费 `plan.is_first_run`，而非菜单重新推导该合取式。
+
+Reviewed-Content-Hash: design/gdd/ui-flow.md 331620b919a9203093403fe427f05ba80a75b7b6
+Reviewed-Content-Hash: design/registry/entities.yaml 02f5c072fc535530c710fd71d77d31e2dce021ed
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/save-system.md 0656b8687f961899dc87f58af176e917bd6c8729
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md a4ccdc8438300cb4892c8f3b84f5ea39b39eef83
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4

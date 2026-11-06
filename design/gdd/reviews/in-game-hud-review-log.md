@@ -364,3 +364,22 @@ Closed the `architecture-review-2026-11-05` GDD Revision Flags for this system; 
 Status: substantive edit — the GDD returns to `In Review` per `.claude/rules/design-docs.md`; approval requires a fresh full `/design-review`.
 
 Reviewed-Content-Hash: design/gdd/in-game-hud.md 822d364b7350ef2449e862ba3052a3d415f4b98a
+
+---
+
+## Review — 2026-11-06 — Verdict: APPROVED
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean)
+Blocking items: 0 | Recommended: 2
+Summary: 规则 9 现在与 ADR-0019 的 GDD Sync Check 第 6 条及 `TR-in-game-hud-003`「不排序」一致：MVP 不实现玩家主动排序，未来排序只能是视图层置换且 `display_index` 仍记录 `visible_dishes` 的规范位置。信息清单、UI Requirements 组件表、公式与其余 AC 都没有残留「玩家可排序」的承诺。
+Prior verdict resolved: Yes — flag 12 关闭。
+Findings:
+- [RECOMMENDED] Acceptance Criteria 21（`:498`）：「无默认排序控件被激活」仍允许一个「非默认」排序控件被想象出来；把新规则可测化：MVP 的 HUD 不存在任何排序控件或排序动作。
+- [RECOMMENDED] 跨文档（非本文件）：`dish-values.md:312` 的 UI Requirements 仍写「可选排序：允许按价格、饱腹排序」，而 ADR-0019 D4「排序扩展」仍以「GDD 规则 9 允许玩家主动排序」为前提描述本文件；两处都需按「MVP 不实现、未来视图置换」更新，属架构/上游文档维护会话。
+
+Reviewed-Content-Hash: design/gdd/in-game-hud.md fee7199048c3a124fcab2eccae8b88f93d1a69c0
+Reviewed-Content-Hash: design/registry/entities.yaml 02f5c072fc535530c710fd71d77d31e2dce021ed
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/dish-values.md 72cf43fcd49019dd6e5281ed8f6d7df8705a71e0
+Reviewed-Content-Hash: design/gdd/menu-waves.md 4c2da744c1c4b19bc861bd0c09509d6deecbd6b7

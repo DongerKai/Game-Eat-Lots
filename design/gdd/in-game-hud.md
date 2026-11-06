@@ -1,6 +1,6 @@
 # 局内 HUD（In-Game HUD）
 
-> **Status**: In Review
+> **Status**: Approved (2026-11-06)
 > **Author**: user + Claude（autonomous 模式；Lean 模式不派生视觉子代理）
 > **Last Updated**: 2026-11-06
 > **Last Verified**: 2026-11-03

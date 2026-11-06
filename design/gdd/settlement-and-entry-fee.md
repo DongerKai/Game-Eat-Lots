@@ -1,6 +1,6 @@
 # 结算与入场费
 
-> **Status**: In Review
+> **Status**: Approved (2026-11-06)
 > **Author**: game-designer + economy-designer, systems-designer, qa-lead
 > **Last Updated**: 2026-11-06
 > **Last Verified**: 2026-11-03
