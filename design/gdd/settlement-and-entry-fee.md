@@ -1,8 +1,8 @@
 # 结算与入场费
 
-> **Status**: In Design
+> **Status**: In Review
 > **Author**: game-designer + economy-designer, systems-designer, qa-lead
-> **Last Updated**: 2026-11-03
+> **Last Updated**: 2026-11-06
 > **Last Verified**: 2026-11-03
 > **Implements Pillar**: 每口都是算术题 · 没有白吃的菜 · 数字看得见地涨
 
@@ -177,10 +177,10 @@ The `return_ratio` formula is defined as:
 
 | Variable | Type | Range | Source | Description |
 |---|---|---|---|---|
-| `return_ratio` | float64 | (0, +∞) | calculated | 实际总值相对入场费的倍数；1.0 即回本 |
+| `return_ratio` | float64 | [0, +∞) | calculated | 实际总值相对入场费的倍数；1.0 即回本；空局合法为 `0.0` |
 | `return_percent_x10` | int | 0–+∞ | calculated | 以 0.1% 为单位的展示值；1000 表示 100.0% |
 
-**Output Range:** `return_ratio > 0`；`entry_fee = 0` 时返回「无定义」，收据显示「免单」，**不执行除法**。1.0 与回本线重合，玩家可以直接读「超过 100% 就是赚了」。
+**Output Range:** `return_ratio ≥ 0`；空局（`total_value = 0`）合法为 `0.0`。`entry_fee = 0` 时返回「无定义」（`null`），收据显示「免单」，**不执行除法**。1.0 与回本线重合，玩家可以直接读「超过 100% 就是赚了」（ADR-0015 GDD Sync Check）。
 
 **Example:** `104 / 85 = 1.2235…` → 展示 `122.3%`；`54 / 85 = 0.6353…` → `63.5%`；`85 / 85 = 1.0` → `100.0%`。
 

@@ -352,3 +352,15 @@ Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 3f99e25a3d35bd4922c071
 Reviewed-Content-Hash: design/gdd/menu-waves.md ce532d3265df1ed7555ba5aa46383be35bbee4a1
 Reviewed-Content-Hash: design/gdd/scene-flow.md 4efc24d198112aa612551f5b3e5bdeeac28cd52e
 Reviewed-Content-Hash: design/gdd/systems-index.md 15e0bd3d307ed09738b74dd3c099816b497b69e8
+
+---
+
+## Revision — 2026-11-06 — GDD Revision Flags write-back
+
+Closed the `architecture-review-2026-11-05` GDD Revision Flags for this system; this entry records a revision, not a fresh review.
+
+- Flag #12 — rule 9 now states MVP does not implement player sorting; any future sorting is a view-only permutation and `display_index` still records the canonical `visible_dishes` position. Source: ADR-0019 #6.
+
+Status: substantive edit — the GDD returns to `In Review` per `.claude/rules/design-docs.md`; approval requires a fresh full `/design-review`.
+
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 822d364b7350ef2449e862ba3052a3d415f4b98a

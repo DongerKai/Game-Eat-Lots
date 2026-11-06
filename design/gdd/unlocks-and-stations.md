@@ -1,8 +1,8 @@
 # 解锁与档口（Unlocks and Stations）
 
-> **Status**: In Design
+> **Status**: In Review
 > **Author**: user + agents
-> **Last Updated**: 2026-11-04
+> **Last Updated**: 2026-11-06
 > **Last Verified**: 2026-11-03
 > **Implements Pillar**: 数字看得见地涨（局外进度可见）；承载概念文档的 Curiosity 留存钩子（未解锁的档口和菜谱）
 
@@ -192,10 +192,12 @@ effective_unlocks(U, S) =
   let S_free = {s ∈ S : s.unlock_cost = 0}
       S_eff  = S_free ∪ {s ∈ S : s.id ∈ U.stations ∧ ¬gated(s)}
   in (
-      stations = sort( {s.id : s ∈ S_eff} ∪ (U.stations \ S_ids) ),
+      stations = sort( {s.id : s ∈ S_eff} ∪ U.stations ),
       dishes   = sort( U.dishes ∪ ⋃_{s ∈ S_eff} s.dish_pool )
   )
 ```
+
+> **与 ADR-0017 对齐**：`stations` 行全量保留 `U.stations`，不用 `U.stations \ S_ids`。被门禁的已知已购档口虽然不进入 `S_eff`、不把菜写进 `dishes`，其 id 仍留在账本中，与规则 17 和 AC 44 一致（ADR-0017 第 1 条）。
 
 **Variables:**
 

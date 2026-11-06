@@ -407,3 +407,15 @@ Reviewed-Content-Hash: design/gdd/menu-waves.md 4e4854fb6a38c7b0989503d8c261b69c
 Reviewed-Content-Hash: design/gdd/save-system.md f22c2228d60be43669125831bccea834e94d6026
 Reviewed-Content-Hash: design/gdd/scene-flow.md 4efc24d198112aa612551f5b3e5bdeeac28cd52e
 Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 5aafb0674e6a0bc5bd6a370c275e95a2f01ebfa9
+
+---
+
+## Revision — 2026-11-06 — GDD Revision Flags write-back
+
+Closed the `architecture-review-2026-11-05` GDD Revision Flags for this system; this entry records a revision, not a fresh review.
+
+- Flag #11 — `return_ratio` range changed from `(0, +∞)` to `[0, +∞)`; an empty run legally returns `0.0`, while a zero entry fee still returns `null`. Source: ADR-0015 GDD Sync Check.
+
+Status: substantive edit — the GDD returns to `In Review` per `.claude/rules/design-docs.md`; approval requires a fresh full `/design-review`.
+
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 64618fb781859ec62bb672ec286beae53800d304

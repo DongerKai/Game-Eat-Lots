@@ -1167,3 +1167,15 @@ Reviewed-Content-Hash: design/gdd/ui-flow.md 4106b3e9f404f2c7610053bb8b5b19f72c1
 Reviewed-Content-Hash: design/registry/entities.yaml 08de917004eb720428b21dee6a0359c90b31c5ec
 Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
 Reviewed-Content-Hash: design/gdd/save-system.md e2c1577cef86a4a400c5a617fde995fb85d6d0c2
+
+---
+
+## Revision — 2026-11-06 — GDD Revision Flags write-back
+
+Closed the `architecture-review-2026-11-05` GDD Revision Flags for this system; this entry records a revision, not a fresh review.
+
+- Flag #9 — AC 6 now computes `is_first_run = load_report().first_run_eligible ∧ career.runs_settled == 0`, matching rule 8 / S11 instead of `runs_settled == 0` alone. Source: ADR-0020 #2.
+
+Status: substantive edit — the GDD returns to `In Review` per `.claude/rules/design-docs.md`; approval requires a fresh full `/design-review`.
+
+Reviewed-Content-Hash: design/gdd/ui-flow.md 331620b919a9203093403fe427f05ba80a75b7b6

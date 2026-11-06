@@ -403,3 +403,19 @@ Reviewed-Content-Hash: design/gdd/audio-feedback.md f6ac7fbd915341f63761529b6640
 Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 5aafb0674e6a0bc5bd6a370c275e95a2f01ebfa9
 Reviewed-Content-Hash: design/gdd/systems-index.md 15e0bd3d307ed09738b74dd3c099816b497b69e8
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+
+---
+
+## Revision — 2026-11-06 — GDD Revision Flags write-back
+
+Closed the `architecture-review-2026-11-05` GDD Revision Flags for this system; this entry records a revision, not a fresh review.
+
+- Flag #3 — `StationRecord.best.return_ratio` marked as a derived display field (from `return_percent_x10 / 1000.0`), not persisted, because ADR-0002 forbids floats in the save file. Source: ADR-0018 #1.
+- Flag #4 — `best.upgrade_snapshot` now documents the save-safe encoding (floats such as `cloying_resistance` become canonical decimal strings; only known keys are decoded back). Source: ADR-0018 #2.
+- Flag #5 — `RecordsApplyResult` gains `pending_events` (synchronous event log, not a delay queue). Source: ADR-0018 #3.
+- Flag #6 — `completed_at` registers the `"unknown"` sentinel for a corrupt timestamp in the schema, the formula table and Edge Cases. Source: ADR-0018 #4.
+- Flag #7 — AC 27 now attributes `MILESTONE_CATALOGUE_INVALID` to `prepare_run`, and states that load only parses stored records while the catalogue loader fails first at boot. Source: ADR-0018 #11.
+
+Status: substantive edits — the GDD returns to `In Review` per `.claude/rules/design-docs.md`; approval requires a fresh full `/design-review`.
+
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md ce3ec63c69b52c965ac670e2b68c708a43fc8100

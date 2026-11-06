@@ -1,8 +1,8 @@
 # 首局引导（First-Run Onboarding）
 
-> **Status**: In Design
+> **Status**: Approved
 > **Author**: user + Claude（autonomous 模式；systems-designer 与 qa-lead 按 Lean 模式仅复核 Formulas 与 Acceptance Criteria）
-> **Last Updated**: 2026-11-04
+> **Last Updated**: 2026-11-06
 > **Last Verified**: 2026-11-03
 > **Implements Pillar**: 每口都是算术题 · 没有白吃的菜
 
@@ -49,9 +49,11 @@
    |---|---|---|---|---|
    | `B0_WELCOME` | `run_started` 且 `is_first_run` | 模态 | `top:net` | `ui_accept` |
    | `B1_TWO_NUMBERS` | B0 完成 | 模态 | `card:<当前焦点>`，无焦点时 `grid:first_card` | 任意菜品有焦点时按 `ui_accept` |
-   | `B2_CAPACITY` | B1 完成 | 上下文提示 | `bar:capacity` | 下一次 `action_committed`，或 `run_ended` |
-   | `B3_CLOYING` | 焦点落在「所属组计数 ≥ 1」的菜上 | 上下文提示 | `card:<该菜>` + `rail:cloy` | 下一次 `action_committed`，或 `run_ended` |
+   | `B2_CAPACITY` | B1 完成 | 上下文提示 | `bar:capacity`（仅记录讲解对象） | 下一次 `action_committed`，或 `run_ended` |
+   | `B3_CLOYING` | 焦点落在「所属组计数 ≥ 1」的菜上 | 上下文提示 | `card:<该菜>` + `rail:cloy`（仅记录讲解对象） | 下一次 `action_committed`，或 `run_ended` |
    | `B4_RECEIPT` | `run_settled`（`RunResult` 就绪） | 收据 payload | 收据屏（由界面流程摆放） | payload 交付给界面流程 |
+
+   **非模态上下文提示固定停靠（ADR-0020 第 7/8 条）**：`B2` / `B3` 一律固定在详情行上方并 `clamp` 到安全边距，不随锚点移动；「锚点」列只记录讲解对象与降级判定，不决定气泡位置。模态 beat（`B0` / `B1`）仍可按锚点选择上方或下方。
 
    **每条 beat 只讲一件事**：`B0` 讲规则（入场费 40、20 格、10 回合、六道菜）；`B1` 讲**价格（元）与饱腹（格）这两个数**同时看；`B2` 讲容量是硬上限、这一桌装不下全部、菜会一波一波上且跳过不会回来（波数取实际值，不写死「两波」）；`B3` 讲同组第二道多占一格、含 `酸`/`冰` 的菜能解掉一格；`B4` 讲单位价值与一处替换建议。一条气泡不得同时讲两件事。
 

@@ -375,3 +375,11 @@ Reviewed-Content-Hash: design/gdd/ui-flow.md 9c709252b4c631e8fb50d8a2f35a8fb394f
 Reviewed-Content-Hash: design/gdd/save-system.md f22c2228d60be43669125831bccea834e94d6026
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
 Reviewed-Content-Hash: design/gdd/systems-index.md 12d2e7c5b8de635a090b0d1f4589dcab58c729f8
+
+---
+
+## Re-stamp — 2026-11-06 (GDD Revision Flags #10 / #13)
+
+Approval stands. Closed `architecture-review-2026-11-05` flags #10 and #13 for this GDD: the header status now reads `Approved` (matching `systems-index.md`), and rule 5 now confirms ADR-0020's fixed-dock reading for the non-modal B2/B3 prompts (`bar:capacity` records the explanation target only; modal B0/B1 may still choose above/below by anchor). No rule, formula, AC, dependency, contract or balance value changed. Source: ADR-0020 #2/#3/#7/#8.
+
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md a4ccdc8438300cb4892c8f3b84f5ea39b39eef83

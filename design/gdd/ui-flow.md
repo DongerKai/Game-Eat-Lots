@@ -1,8 +1,8 @@
 # 界面流程 (UI Flow)
 
-> **Status**: Designed
+> **Status**: In Review
 > **Author**: user + game-designer（自动设计模式；`systems-designer` 与 `qa-lead` 评审）
-> **Last Updated**: 2026-11-04
+> **Last Updated**: 2026-11-06
 > **Last Verified**: 2026-11-04
 > **Implements Pillar**: 支柱 4「数字看得见地涨」；约束来自支柱 3「时间在走，手不用快」
 
@@ -558,7 +558,7 @@ The `displayed_value` formula is defined as:
 
 **开始与重开**
 
-6. **GIVEN** `MenuRoot`，**WHEN** 按「开始营业」，**THEN** 只组装一份 `RunConfig`：`station_id = station_canteen`、`seed = null`、`is_first_run = (career.runs_settled == 0)`；`is_first_run` 时 `pool_override = 六道教学菜池`、`entry_fee_override = 40`，否则二者为 `null`；`upgrade_snapshot` 是一次 `resolve_upgrade_snapshot()` 的副本；只调用一次 `request_transition(Menu → Run, RunConfig)`；不插入加载屏。
+6. **GIVEN** `MenuRoot`，**WHEN** 按「开始营业」，**THEN** 只组装一份 `RunConfig`：`station_id = station_canteen`、`seed = null`、`is_first_run = 存档.load_report().first_run_eligible ∧ 纪录与里程碑.snapshot().career.runs_settled == 0`（与规则 8 / S11 同口径）；`is_first_run` 时 `pool_override = 六道教学菜池`、`entry_fee_override = 40`，否则二者为 `null`；`upgrade_snapshot` 是一次 `resolve_upgrade_snapshot()` 的副本；只调用一次 `request_transition(Menu → Run, RunConfig)`；不插入加载屏。
 7. **GIVEN** `request_transition(Menu → Run)` 返回 `false`，**WHEN** 开始营业，**THEN** 留在主菜单、显示可见原因、焦点回到「开始营业」；不重试、不进入加载态、不假装成功。
 8. **GIVEN** 档口无法解析或 `RunConfig` 组装失败，**WHEN** 检查主菜单，**THEN** 「开始营业」禁用并显示原因；不发起切换。
 9. **GIVEN** 收据，**WHEN** 按「再来一局」，**THEN** 组装全新 `RunConfig`（第二次 `resolve_upgrade_snapshot()`，对象不同；`is_first_run = false`；`seed = null`）、请求一次 `Menu → Run`、发 `receipt_closed(reason = restart)`；新局获得新的 `run_id`。

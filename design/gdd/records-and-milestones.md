@@ -1,8 +1,8 @@
 # 纪录与里程碑
 
-> **Status**: In Design
+> **Status**: In Review
 > **Author**: game-designer + systems-designer, qa-lead
-> **Last Updated**: 2026-11-04
+> **Last Updated**: 2026-11-06
 > **Last Verified**: 2026-11-03
 > **Implements Pillar**: 数字看得见地涨 · 没有白吃的菜
 
@@ -70,7 +70,7 @@
 | `career.lifetime_net_profit` | int64 | 0 | 终身净利，有符号 |
 | `career.lifetime_value` | int64 | 0 | 终身吃进总值 |
 | `milestones` | map<StringName, MilestoneEntry> | 空表 | 仅存已达成里程碑；未达成不占空间 |
-| `completed_at` | String \| null | null | 完成条件首次达成的时间；锁存后不再改写 |
+| `completed_at` | String \| null | null | 完成条件首次达成的时间；锁存后不再改写。损坏的时间戳写 `"unknown"` 哨兵，保留「已通关」事实，不伪造日期、不回退为未通关（ADR-0018 第 4 条） |
 
 **`StationRecord`**
 
@@ -79,10 +79,10 @@
 | `best.net_profit` | int64 | 该档口最佳局的净利，可为负 |
 | `best.total_value` | int64 | 冻结的总值 |
 | `best.entry_fee` | int | 冻结的入场费 |
-| `best.return_ratio` | float64 \| null | 冻结的回本率；`entry_fee = 0` 时为 null |
+| `best.return_ratio` | float64 \| null | **派生展示字段，不持久化**：由 `best.return_percent_x10 / 1000.0` 得出（0.1% 精度）；`entry_fee = 0` 时为 null。存档只写 `return_percent_x10`，文件内不出现浮点（ADR-0018 第 1 条；ADR-0002） |
 | `best.return_percent_x10` | int \| null | 冻结的展示值（0.1% 单位） |
 | `best.end_reason` | enum | `TIME_EXHAUSTED` / `NO_EATABLE_DISH` |
-| `best.upgrade_snapshot` | Dictionary | 原样冻结的 `RunResult.upgrade_snapshot`（已解析的本局修正值，语义归局外升级；本系统不解释、不重算） |
+| `best.upgrade_snapshot` | Dictionary | 原样冻结的 `RunResult.upgrade_snapshot`（已解析的本局修正值，语义归局外升级；本系统不解释、不重算）。落盘时按存档安全编码：`float`（如 `cloying_resistance`）转为规范十进制字符串，只读快照再把已知键解码回 float；未知键中的浮点保持字符串（ADR-0018 第 2 条） |
 | `best.achieved_at` | String (UTC ISO-8601) | 该纪录达成时间，仅展示 |
 
 **`MilestoneEntry`**
@@ -126,6 +126,7 @@
 | `applied` | bool | `true` 仅当 `status = APPLIED` | 是否产生了可提交的变更 |
 | `change` | `RecordsChange` \| `null` | 非空仅当 `APPLIED` | 新 `records` 值与新达成的里程碑 |
 | `error_detail` | String \| `null` | 仅失败时非空 | 调试用；不参与判定、不面向玩家 |
+| `pending_events` | `Array[Dictionary]` | 与本次信号同序、同内容；`APPLIED` 时非空，其余为空数组 | 同步事件日志，供 `SettlementTransaction` 记录与测试断言；**不是延迟队列**，信号已在 `prepare_run` 返回前发出（ADR-0018 第 3 条） |
 
 | `status` | `applied` | `change` | 编排者必须做什么 | 界面 / 音效可以做什么 |
 |---|---|---|---|---|
@@ -248,7 +249,7 @@ The `career_complete` formula is defined as:
 | `M` | MilestoneData[] | ≥ 0 条 | 数据配置里程碑目录 | 当前全部里程碑定义 |
 | `E` | set<StringName> | ⊆ M.id | `records.milestones` | 已达成 id 集合 |
 | `m.required_for_completion` | bool | {true,false} | `MilestoneData` | 是否属于通关条件 |
-| `completed_at` | String \| null | — | `records.completed_at` | 首次达成时间，锁存 |
+| `completed_at` | String \| null | — | `records.completed_at` | 首次达成时间，锁存；损坏时为 `"unknown"` 哨兵 |
 | `career_complete` | bool | {true,false} | calculated（派生） | 是否已通关 |
 
 **Output Range:** `{true, false}`。一旦 `completed_at` 非空，答案恒为 true：之后新增必需里程碑不会把已通关的生涯改回未通关。目录中没有 `required_for_completion = true` 的条目时，公式里的存在量词为假，`all_required_earned` **恒为 false**——不能依赖「空集合恒真」的数学约定，否则空目录会在第一局就宣布通关；数据校验同时给出 `NO_COMPLETION_PATH` 警告，但警告只是提示，真正拦住自动通关的是公式里的存在量词。
@@ -288,6 +289,7 @@ The `career_complete` formula is defined as:
 - **If 载入时某条 `StationRecord` 缺语义字段**（没有 `net_profit` / `total_value` / `entry_fee`）：整条丢弃并写 `STATION_RECORD_DROPPED` 警告，其他档口纪录与生涯合计不受影响。残缺的纪录无法可靠修复，保留半条会让展示与比较出错。
 - **If 载入时某条 `StationRecord` 只缺 `achieved_at`**：保留整条纪录，`achieved_at = null`，写 `RECORD_TIMESTAMP_MISSING` 警告。时间戳不参与逻辑，不能为一个展示字段丢掉一条真实的净利纪录。
 - **If 载入时某条 `MilestoneEntry` 缺 `earned_at`**：保留该 id，`earned_at = null`，写 `MILESTONE_TIMESTAMP_MISSING` 警告；仍算已达成。已达成的里程碑不能因为时间戳缺失而被撤销。
+- **If 载入时 `completed_at` 损坏**：写 `"unknown"` 哨兵、保留 `career_complete = true` 并写 `COMPLETED_AT_INVALID` 警告；展示为「未知」，不伪造日期、不回退为未通关（ADR-0018 第 4 条）。
 - **If 载入时遇到不认识的里程碑 id**：原样保留，不删除、不参与完成判定（当前目录没有它），在纪录页标为「已归档」。定义恢复后自然重新显示。
 - **If 里程碑定义在达成后被移除**：已达成条目保留，不再出现在活动列表。若它是完成必需项且 `completed_at` 已锁存，通关状态不变；若尚未锁存，移除它会**放宽**完成条件（下一次结算可能立即通关），这是会改变完成难度的数据编辑，必须与通关条件一起评审。
 - **If 通关后新增必需里程碑**：`completed_at` 已锁存，生涯仍是已通关；新里程碑作为通关后目标，从下一次结算起可达成。完成状态从不回退。
@@ -439,7 +441,7 @@ The `career_complete` formula is defined as:
 24. **GIVEN** 载入数据含 `runs_settled = −3`、一条缺 `net_profit` 的档口纪录、一条只缺 `achieved_at` 的档口纪录、一条缺 `earned_at` 的里程碑，**WHEN** 载入，**THEN** 计数钳为 0、缺 `net_profit` 的纪录被丢弃、只缺时间戳的纪录保留且 `achieved_at = null`、该里程碑保留；`LoadReport.warnings` 分别含 `CLAMPED_NEGATIVE_COUNTER`、`STATION_RECORD_DROPPED`、`RECORD_TIMESTAMP_MISSING`、`MILESTONE_TIMESTAMP_MISSING`，其余数据不变。
 25. **GIVEN** 一个受控累加器夹具（两条 `lifetime_net_profit` 之和越过 int64 上限），**WHEN** 应用，**THEN** `status = OVERFLOW`、`applied = false`，三条合计与档口纪录均不生效、不回绕。
 26. **GIVEN** 同一起始 `records` 与同一 `RunResult` 的两个副本，**WHEN** 分别应用，**THEN** 两份结果除时间戳外逐字段深度相等；改变系统时钟不改变任何判定或排序。
-27. **GIVEN** 数据配置不在 `Ready` 或里程碑目录含重复 id / 非法 id / 生涯指标带档口过滤器，**WHEN** 应用或载入，**THEN** 返回结构化错误 `DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID`，不产生部分更新。
+27. **GIVEN** 数据配置不在 `Ready` 或里程碑目录含重复 id / 非法 id / 生涯指标带档口过滤器，**WHEN** 调用 `prepare_run`（应用一局），**THEN** 分别返回 `DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID`，不产生部分更新；**AND** 载入路径只解析已存纪录，不因目录不可用失败——目录在启动期由加载器先行校验，失败时正常启动门先报错（ADR-0018 第 11 条）。
 28. **GIVEN** 一次成功应用后写盘失败，**WHEN** 检查内存与界面，**THEN** 新纪录仍在内存中显示、命名空间标记 dirty、不发第二条信号；下一次成功写入后磁盘与内存一致。**GIVEN** 该事务同时含钱包变化，**THEN** 两者一起延后重试，不出现钱包已回滚而纪录保留的分裂（失败策略见 ADR-0007 D5）。
 29. **GIVEN** 载入时遇到不认识的里程碑 id 与档口 id，**WHEN** 保存后再载入，**THEN** 两者原样保留、不被删除、不参与完成判定；**GIVEN** `records` 命名空间整体缺失，**THEN** 按空纪录继续，首局结算正常工作。
 30. **GIVEN** 一条已冻结的档口纪录，**WHEN** 数据配置把该档口 `entry_fee` 从 85 改为 99、或把档口 `display_name` 改名，**THEN** 纪录中的 `entry_fee`、`total_value`、回本率与快照逐字段不变；只有展示名跟随数据配置变化。
