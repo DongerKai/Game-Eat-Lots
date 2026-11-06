@@ -455,9 +455,9 @@ formulas:
       - T
     output_range: [0, 99999]
     expression: "max sum(price(d) for d in S) subject to S subset M, |S| <= T, sum(satiety(d)) <= C"
-    notes: "0/1 knapsack. Design-time and CI only; never runs in-game. 12 dishes, C=20, T=10 gives 104."
+    notes: "0/1 knapsack. Design-time and CI, plus the MenuWaves health gate as the sole internal baseline: baseline_opt = opt_value(actual pool, C0, T), compared with wave_reachable_opt by integer cross-multiplication (10 * reachable >= 9 * baseline). The result is confined to HealthEval (reachable_opt, baseline_opt, attempts, nodes, truncated) and never exposed to HUD, settlement, or save. 12 dishes, C=20, T=10 gives 104."
     added: "2026-11-03"
-    revised: ""
+    revised: "2026-11-06"
 
   - name: capacity_ceiling
     status: active
@@ -1044,10 +1044,10 @@ formulas:
       - U
       - S
     output_range: "stations[] + dishes[]"
-    expression: "S_eff = S_free + {s in S : s.id in U.stations}; stations = sort(ids(S_eff) + (U.stations - S_ids)); dishes = sort(U.dishes + union(dish_pool of S_eff))"
-    notes: "Normalizes the unlock set and backfills free stations/dishes. Monotonic: never removes an id. Unknown ids are preserved."
+    expression: "S_eff = {s in S : s.unlock_cost = 0} + {s in S : s.id in U.stations and not gated(s)}; stations = sort({s.id : s in S_eff} + U.stations); dishes = sort(U.dishes + union(dish_pool of S_eff))"
+    notes: "Normalizes the unlock set and backfills free stations/dishes. Gated known stations stay in U.stations and therefore in stations, but do not contribute their dish_pool. Monotonic: never removes an id. Unknown ids are preserved."
     added: "2026-11-03"
-    revised: ""
+    revised: "2026-11-06"
 
   - name: unlock_decision
     status: active

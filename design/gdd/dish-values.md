@@ -33,8 +33,8 @@
 7. **数值带**：`satiety` 取 1–6，且 MVP 档口菜池必须同时覆盖 1 格、2–4 格、≥5 格三档。只有小份、常规、大份并存，容量约束才会真正咬合；如果所有菜都是 1 格，最优解退化成"挑最贵的 10 道"，除法就成了装饰。`price` 为 int。MVP 菜单内单位价值跨度必须 ≥ 1.5 元/格。
 8. **严格支配审查**：同一 `cloying_group` 内，若存在菜 B 满足 `price(B) ≥ price(A)` 且 `satiety(B) ≤ satiety(A)`（至少一项严格），则 A 被严格支配；同组腻度对两者的惩罚相同，A 永远不该被端上桌，这是设计错误。**两个空 `cloying_group` 视为同组**——它们都没有腻度惩罚，支配关系真实存在。跨组允许支配，但必须能为 A 写出一条用途，且用途必须落在三类之一：`腻度错峰` / `口味路线` / `容量精度`；写不出或不属于三类，即标记待复核。
 9. **内容冗余**：两道菜 `price` 与 `satiety` 完全相同是允许的，但它们必须在 `cloying_group` 或 `taste_tags` 上至少有一项不同；否则审查报告记 warning——两道完全等价的菜只会让菜单变长，不会让决策变多。`taste_tags` 按**集合**比较：顺序不同或重复标签不算差异。
-10. **菜单健康度**：一个档口的 `dish_pool` 只有同时满足「UV 跨度 ≥ 1.5」「同组严格支配对数 = 0」「同时覆盖 1 格 / 2–4 格 / ≥5 格三档」才算可发布菜单。**`menu_healthy` 只作用于档口菜池，不作用于单次刷新菜单**——要求每次刷新都覆盖全部档位会迫使大份菜每波必出；单次刷新的门槛是 `opt_value` 偏差（见 Formulas 末节）。该审查是设计期与 CI 期的检查，不阻断游戏启动——平衡问题不应该让玩家看到错误页。
-11. **不聚合**：本系统在运行时不计算一局的总价值、净利或最优解。它只提供单菜的 `price` 与 `unit_value`；求和由「结算与入场费」在 int64 中完成。`opt_value`（见 Formulas）只用于设计期与 CI 的平衡审查，不进入游戏运行时——把最优解交给玩家会把静态菜单变成一个背下来的常数。**唯一例外**：菜单波次的健康门在进程内用同一递推计算 `wave_reachable_opt`，作为 `wave_healthy` 的下界基准（ADR-0006 决策 §4）；该结果只存在于 `HealthEval`，不外流到 HUD / 结算 / 存档，也不构成公开 API。
+10. **菜单健康度**：一个档口的 `dish_pool` 只有同时满足「UV 跨度 ≥ 1.5」「同组严格支配对数 = 0」「同时覆盖 1 格 / 2–4 格 / ≥5 格三档」才算可发布菜单。**`menu_healthy` 只作用于档口菜池，不作用于单次刷新菜单**——要求每次刷新都覆盖全部档位会迫使大份菜每波必出；单次刷新的门槛是 `opt_value` 偏差（见 Formulas 末节）。菜池审查是设计期与 CI 期的检查，不阻断游戏启动——平衡问题不应该让玩家看到错误页；单次刷新的健康门禁由「菜单波次」在运行期执行（见规则 11）。
+11. **不聚合**：本系统在运行时不计算一局的总价值、净利或最优解，也不提供查询最优解的接口。它只提供单菜的 `price` 与 `unit_value`；求和由「结算与入场费」在 int64 中完成。`opt_value`（见 Formulas）的设计期/CI 用途不变；运行期唯一例外是「菜单波次」的健康门禁：它在内部用同一条 `V[i][c][t]` 递推算 `baseline = opt_value(实际菜池, C0, T)`，再与逐波重置 DP 的 `wave_reachable_opt` 按整数交叉相乘比较（`10 × reachable ≥ 9 × baseline`，等价于 `wave_reachable_opt ≥ ceil(9 × baseline / 10)`）。该结果只存在于 `HealthEval`（`reachable_opt`、`baseline_opt`、`attempts`、`nodes`、`truncated`），从不作为公开 API 暴露，也不进入 HUD / 结算 / 存档——把最优解交给玩家会把静态菜单变成一个背下来的常数。
 12. **确定性**：给定同一份记录集，所有派生值与审查结果恒定。任何需要排序的输出以 `uv_cmp` 降序为主键、`id` 字典序为次键，不依赖哈希、字典遍历顺序或浮点比较。
 
 ### MVP 菜品表（食堂档口）
@@ -84,7 +84,7 @@
 |---|---|---|---|
 | 数据配置 | 上游 | `get_dish(id)` → `price`、`satiety`、`taste_tags`、`cloying_group`；查询前提为 `Ready` | 硬 |
 | 腻度与口味 | 下游 | `unit_value(d)`、`satiety(d)`、`cloying_group(d)` | 硬 |
-| 菜单波次 | 下游 | 菜池审查：`uv_span(M)`、`same_group_dominated_pairs(M)`；单次刷新审查：`opt_value(M, C, T)` | 硬（Vertical Slice 期） |
+| 菜单波次 | 下游 | 菜池审查：`uv_span(M)`、`same_group_dominated_pairs(M)`；单次刷新健康门禁（`MenuWaves` 内部）：`opt_value(M, C, T)` | 硬（Vertical Slice 期） |
 | 结算与入场费 | 下游 | 单菜 `price(d)` 与 `unit_value(d)`；求和由结算在 int64 中完成 | 硬 |
 | 局内 HUD | 下游 | `price(d)`、`satiety(d)`；局内不请求 `unit_value` | 硬 |
 | 首局引导 | 下游 | 结算期的 `unit_value` 讲解数据 | 软 |
@@ -191,7 +191,7 @@ The `unjustified_dominated` formula is defined as:
 
 **Example:** 炸鸡腿 `13/2` vs 麻婆豆腐 `12/2`：`13 ≥ 12`、`2 ≤ 2`、价格严格 → 炸鸡腿支配麻婆豆腐。两者跨组（油 / 辣），麻婆豆腐的用途是「口味路线」→ `unjustified_dominated` 不计入。若把麻婆豆腐的用途清空，审查报告标记待复核。
 
-### 最优餐价值 `opt_value`（仅设计期 / CI）
+### 最优餐价值 `opt_value`
 
 The `opt_value` formula is defined as:
 
@@ -208,7 +208,7 @@ The `opt_value` formula is defined as:
 | `T` | int | ≥ 0 | 时间与回合系统 | 可用回合数 |
 | `opt_value` | int64 | 0–Σprice | calculated | 该菜单在容量与回合限制下的最高得分 |
 
-**Output Range:** `[0, Σ_{d∈M} price(d)]`。`M = ∅`、`C = 0` 或 `T = 0` 时返回 0。按 12 道菜、`C = 20`、`T = 10` 计算，状态数 2,400，滚动数组 O(C·T) 空间。**不进入运行时**——只在设计审查与 CI 中调用。
+**Output Range:** `[0, Σ_{d∈M} price(d)]`。`M = ∅`、`C = 0` 或 `T = 0` 时返回 0。按 12 道菜、`C = 20`、`T = 10` 计算，状态数 2,400，滚动数组 O(C·T) 空间。**调用边界**：设计审查与 CI 直接调用；运行期只有「菜单波次」的健康门禁在内部调用一次 `baseline = opt_value(实际菜池, C0, T)`，结果仅留在 `HealthEval`（`reachable_opt`、`baseline_opt`、`attempts`、`nodes`、`truncated`），不对外暴露，也不进入 HUD / 结算 / 存档。
 
 **假设**：每道菜至多选一次（0/1 背包），与「菜单波次」不重复抽取的规则一致。若未来允许重复选取，改为有界背包，递推需增加每道菜的重数维度。
 
@@ -238,7 +238,7 @@ The `calibration_ratio` formula is defined as:
 ### 审查产出的使用方式
 
 - **CI**：每次改 `.tres` 后跑 `menu_healthy`、`same_group_dominated_pairs` 与 `opt_value`；这三项越界即失败。`cross_dominated_pairs` 只记录、不设门槛——跨组支配本来就允许，只要有用途。`unjustified_dominated` 不在 CI 中：`purpose` 不是数据字段，它是人工评审步骤（见 Open Question 7）。
-- **设计期**：改入场费或初始容量后重算 `calibration_ratio`。运行期的菜单划分闸门只有一条，且由「菜单波次」拥有：`wave_reachable_opt ≥ 0.9 × opt_value(pool, C0, T)`，未达标重掷。**不存在逐划分的 ±10% 双侧重掷规则**；整池 `opt_value` 的回归由本系统 CI 的 `menu_healthy` / `opt_value` 断言拦截，不进入运行时。
+- **设计期**：改入场费或初始容量后重算 `calibration_ratio`。运行期的菜单划分闸门只有一条，且由「菜单波次」拥有：`baseline = opt_value(实际菜池, C0, T)`，`wave_reachable_opt` 与它按整数交叉相乘比较（`10 × reachable ≥ 9 × baseline`，等价于 `wave_reachable_opt ≥ ceil(9 × baseline / 10)`），未达标重掷。**不存在逐划分的 ±10% 双侧重掷规则**；整池 `opt_value` 的 CI 回归由本系统的 `menu_healthy` / `opt_value` 断言拦截，该回归检查只属于 CI，不参与运行期（运行期只执行上述健康门禁，结果留在 `HealthEval`）。
 
 ## Edge Cases
 
@@ -252,7 +252,7 @@ The `calibration_ratio` formula is defined as:
 - **If 菜单只有 1 道菜**：`uv_span = 0`、`menu_healthy = false`。可以开始游戏（数据合法），但没有任何算术可做；这是可玩性缺陷，不是崩溃。
 - **If 所有菜 `satiety = 1`**：容量永不成为约束，最优解退化为"挑最贵的 T 道"，除法变成装饰。`menu_healthy = false`（违反 Core Rule 7 的档位覆盖），禁止作为可发布菜单。
 - **If 菜单内所有菜单位价值相同**：`uv_span = 0` → `menu_healthy = false`。这是"看起来很多选择、实际只有一个答案"的典型退化。
-- **If 某个菜单划分让 `wave_reachable_opt` 跌破「菜单波次」的下界**：由「菜单波次」重掷该划分；本系统只提供 `opt_value` 与 `C0`，不定义、也不检查任何逐划分的上界。整池 `opt_value` 的回归由本系统 CI 断言负责。
+- **If 某个菜单划分让 `wave_reachable_opt` 跌破「菜单波次」的下界**：由「菜单波次」重掷该划分；本系统只提供 `opt_value` 的公式与 `C0`，运行期的计算与重掷归「菜单波次」，本系统不定义、也不检查任何逐划分的上界。整池 `opt_value` 的回归由本系统 CI 断言负责。
 - **If 玩家在局内连续选择同一 `cloying_group` 的菜**：本系统不做任何处理。惩罚系数、叠加顺序与上限全部属于「腻度与口味」；本系统只提供 `cloying_group` 与 `satiety`。
 - **If `uv_cmp` 的乘积超出 int64**：仅当上游放宽 `price` / `satiety` 的 schema 上限时才会发生。当前 `price ≤ INT32_MAX`、`satiety ≤ 6`，交叉相乘约 `1.29×10¹⁰`，安全；若未来放宽，必须改用 128 位整数或在数据配置加界，不得静默截断。
 - **If 平衡审查失败但数据合法**：游戏照常启动，只写审查报告。把平衡问题变成启动错误，会让内容作者无法进入游戏调试。
@@ -274,7 +274,7 @@ The `calibration_ratio` formula is defined as:
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
 | 腻度与口味 | 硬 | `unit_value(d)`、`satiety(d)`、`cloying_group(d)` | GDD 已写（`design/gdd/cloying-and-taste.md`） |
-| 菜单波次 | 硬（VS） | 菜池：`uv_span(M)`、`same_group_dominated_pairs(M)`；单次刷新：`opt_value(M, C, T)` | GDD 已写（`design/gdd/menu-waves.md`） |
+| 菜单波次 | 硬（VS） | 菜池：`uv_span(M)`、`same_group_dominated_pairs(M)`；单次刷新健康门禁（`MenuWaves` 内部）：`opt_value(M, C, T)` | GDD 已写（`design/gdd/menu-waves.md`） |
 | 结算与入场费 | 硬 | `price(d)`、`unit_value(d)`；一局求和由结算在 int64 中完成 | GDD 已写（`design/gdd/settlement-and-entry-fee.md`） |
 | 局内 HUD | 硬 | `price(d)`、`satiety(d)`；局内不请求 `unit_value` | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 首局引导 | 软 | 结算期 `unit_value` 讲解数据 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
@@ -343,7 +343,7 @@ The `calibration_ratio` formula is defined as:
 10. **GIVEN** 渲染结算页，**WHEN** 截图，**THEN** 红烧肉显示 `5.33`、清蒸鱼显示 `5.00`、豪华海鲜锅显示 `3.33`、冰淇淋显示 `7.00`，全部固定两位小数；截图留存。
 11. **GIVEN** 对同一 dish id 连续两次查询，**WHEN** 比较两次返回的记录，**THEN** `is_same()` 为 true；**GIVEN** 尝试对返回记录的 `price` 赋值，**THEN** 操作被拒绝或抛错，再次读取仍为原值（与数据配置 AC 19 一致）。
 
-**设计期 / CI（不进入运行时）**
+**设计期 / CI（含运行期 API 表面静态检查）**
 
 12. **GIVEN** `mvp`，**WHEN** 计算 12 道菜的单位价值，**THEN** 依次为：白米饭 4.00、拍黄瓜 5.00、可乐 6.00、冰淇淋 7.00、炒青菜 3.00、番茄炒蛋 4.00、麻婆豆腐 6.00、炸鸡腿 6.50、清蒸鱼 5.00、红烧肉 5.333333…、糖醋里脊 4.50、豪华海鲜锅 3.333333…；`price`、`satiety` 均为 int，`satiety ∈ 1–6`。
 13. **GIVEN** `mvp`，**WHEN** 计算 `uv_span`，**THEN** 结果为 `4.00`（7.00 − 3.00）。
@@ -361,7 +361,7 @@ The `calibration_ratio` formula is defined as:
 25. **GIVEN** `mvp`、`C = 20`、`T = 10`，**WHEN** 计算 `opt_value`，**THEN** 结果为 `104`，使用的 10 道菜合计 20 格；按价格降序贪心为 `94`。
 26. **GIVEN** `M = ∅`、`C = 0`、`T = 0` 三种情况，**WHEN** 计算 `opt_value`，**THEN** 都返回 `0`；**GIVEN** 单菜 10/1、`C = 2`、`T = 2`，**THEN** 返回 `10` 而不是 `20`（0/1，不重复选）。
 27. **GIVEN** `opt_value = 104`、`entry_fee = 85`，**WHEN** 计算 `calibration_ratio`，**THEN** 结果为 `1.223529411…`，落在 `[1.15, 1.35]`，报告取 `1.224`。
-28. **WHEN** 静态检查运行时 API 表面，**THEN** 没有任何导出函数对菜集合求和、返回净利或调用 `opt_value`；`opt_value` 只能从 CI/设计审查入口到达。
+28. **WHEN** 静态检查运行时 API 表面，**THEN** 没有任何公开/导出查询对菜集合求和、返回净利或最优集合，也没有任何函数把和、净利或最优集合返回给玩法层；没有任何 UI / 结算 / 存档消费者调用 `opt_value`。运行期只允许一条内部静态调用路径——「菜单波次」健康门禁（`MenuWaves` → `HealthEval`）用它计算 `baseline_opt`，结果不离开 `HealthEval`；除此之外，`opt_value` 只能从 CI/设计审查入口到达。
 29. **GIVEN** 12 道菜、`C = 20`、`T = 10`，**WHEN** 跑完整审查（跨度 + 支配 + 冗余 + `opt_value`），**THEN** 全量支配扫描（132 个有向对）≤ 1 ms（硬上限 5 ms），`opt_value` ≤ 5 ms（硬上限 20 ms），整轮 ≤ 50 ms。这些是设计期/CI 预算，不是帧时间预算。
 
 **无法直接断言的规则**：
@@ -369,7 +369,7 @@ The `calibration_ratio` formula is defined as:
 - **Core Rule 1（合法 ≠ 平衡）**：这是职责划分，不是可执行判定；由第 14、20–23 条间接覆盖。
 - **Core Rule 6（首局替换建议）**：建议文案与触发属于「首局引导」，本系统只保证结算期能取到单位价值数据。
 - **`unjustified_dominated`**：用途列不是 `DishData` 字段，CI 只能算原始跨组支配对；用途核对是人工评审步骤（Open Question 7）。
-- **±10% 菜单重掷**：已撤销（2026-11-04 交叉复审）。运行期只有「菜单波次」的单侧下界 `0.9 × opt_value`；本系统不保留双侧重掷契约，也不重复声明它。
+- **±10% 菜单重掷**：已撤销（2026-11-04 交叉复审）。运行期只有「菜单波次」的单侧下界 `wave_reachable_opt ≥ ceil(9 × baseline / 10)`（整数交叉相乘 `10 × reachable ≥ 9 × baseline`，`baseline = opt_value(实际菜池, C0, T)`）；本系统不保留双侧重掷契约，也不重复声明它。
 
 ## Open Questions
 
