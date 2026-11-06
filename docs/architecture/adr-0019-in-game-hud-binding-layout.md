@@ -249,7 +249,7 @@ var cleanse_target: StringName
 ```
 
 - **顺序**：`cards[i].display_index == i`，严格等于 `visible_dishes()` 的返回顺序。HUD 不做默认排序、不做可吃性过滤、不按价格/饱腹/单位价值重排。
-- **排序扩展**：GDD 规则 9 允许玩家主动按价格或饱腹排序；MVP **不实现**排序 UI。若未来加入，它只能是视图层的置换，`display_index` 仍记录 `visible_dishes` 的规范位置，焦点恢复与锚点 `grid:first_card` 仍按规范顺序解析；不得引入「推荐排序」。
+- **排序扩展**：GDD 规则 9 明确 MVP **不实现**排序 UI；未来若加入，它只能是视图层的置换，`display_index` 仍记录 `visible_dishes` 的规范位置，焦点恢复与锚点 `grid:first_card` 仍按规范顺序解析；不得引入「推荐排序」。
 - **`block_reason`**：
   - `CAPACITY`：`can_fit = false`，文案 `需要 X 格，剩 Y 格`，详情行补充 `还差 short_cells 格`；
   - `CAPACITY_ZERO`：`capacity_total = 0`，文案 `总容量为 0`；这是错误态，不静默当成「吃不下」；
