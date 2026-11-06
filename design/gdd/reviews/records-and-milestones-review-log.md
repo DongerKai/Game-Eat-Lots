@@ -446,3 +446,84 @@ Reviewed-Content-Hash: design/gdd/ui-flow.md cf471d2d45476ff8e1db0a5fa4a7fae9a4e
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
 Reviewed-Content-Hash: design/gdd/systems-index.md 1119e17f51ee38b2b6fdb56db5d6301d6db94f47
 Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
+
+---
+
+## Re-Review — 2026-11-06
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 3 | Recommended: 5
+Documentation-only pass: no engine, test or CI run was performed.
+Prior verdict resolved: Partially — both prior blockers are genuinely closed in the text; the re-read surfaced three AC-level contradictions with Accepted ADR-0007 that neither this nor the earlier round had flagged.
+Findings:
+- [BLOCKING] Acceptance Criteria 35 (`:459`): "发出一次失败事件（`settlement_aborted` 或等价的 `run_faulted`）" — ADR-0007 D7 says the two are not interchangeable.
+- [BLOCKING] Acceptance Criteria 36 (`:460`): commit payload asserted to contain `unlocks` in MVP/VS, which ADR-0007 D4 step 4 and ADR-0018 §13 say it must not.
+- [BLOCKING] Orchestrator contract (`:142`) vs `ui-flow.md` rule 10 (`:63`) / AC 12 (`:570`): `MILESTONE_CATALOGUE_INVALID` missing from the orchestrator's fatal-code list.
+- [RECOMMENDED] Result schema (`:129`) / AC 35–37: no AC asserts `pending_events` at all, including the signal-free `APPLIED` case the previous blocker was about.
+- [RECOMMENDED] Interface table (`:109-117`): `get_milestone_catalog()` promised to UI at `:321` is not listed; `initialize()` / `reset_after_career_delete()` (ADR-0018 §1 / §12) likewise.
+- [RECOMMENDED] `ALREADY_APPLIED` (`:134`, `:142`, AC 37) is a pure no-op here; ADR-0007 D5 (`:210`) classifies it as `INCONSISTENT_TRANSACTION_STATE`.
+- [RECOMMENDED] `pending_events` entry shape and `RecordsChange` fields are undefined while ADR-0007 D6 (`:244-246`) reads three facts off the result.
+- [RECOMMENDED] ADR-0018 Validation Criteria (`:590-592`) still maps AC 1–31 / 32–34 / 35–37; new AC 27a and 38–40 are unmapped.
+
+### 上一轮两条 blocker 复核（对照当前正文，不看提交说明）
+
+| 上一轮 blocker | 当前正文 | 结论 |
+|---|---|---|
+| ① `pending_events` 声称 `APPLIED` 时非空 | `:129` 现为「与本次调用发出的信号同序、同内容；无信号时为空数组（`APPLIED` 也可能合法地不发任何信号）；失败 status 恒为空数组」，并写明「**不是延迟队列**，信号已在 `prepare_run` 返回前发出（ADR-0018 §10；GDD Sync Check #3）」。与 ADR-0018 §10（`:349`）、ADR-0007 D4 第 2 步（`:188`）一致；规则 22（`:48`）只断言 `change` 非空，不再牵连 `pending_events` | ✓ 已解决（实质，非措辞） |
+| ② AC 27 把载入路径断言挂在 `WHEN prepare_run` 上 | AC 27（`:444`）只剩 `prepare_run` 的两类失败（`DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID`）；AC 27a（`:445`）独立为「目录非法 → `load` 成功、只解析已存纪录、不校验目录」。后者与 ADR-0018 §3（`:172`：`load` 不依赖 `DataConfig`）、§12（`:411`：目录不可用只影响 `prepare_run`）一致，且可单独失败 | ✓ 已解决 |
+
+**AC 编号唯一性**：正文编号为 1–40 加一条 `27a`，逐个出现且各一次，拆分后没有重号或复用（`:415-467`）。`27a` 是全文唯一的字母后缀编号，位置在 26 与 28 之间，未挤占后续编号。
+
+**引用格式**：`ADR-0018 §N` 与 `GDD Sync Check #N` 的双轨引用已落地（`:73`、`:82`、`:85`、`:129`、`:292`、`:444`、`:445`、`:463`），抽查 §2 / §3 / §10 / §11 与 ADR-0018 的实际小节号相符；编码 AC 38–40（`:465-467`）与 ADR-0018 §2（`:158-163`）的编码规则、6 位小数往返、`return_ratio` 不落盘三项一致。
+
+### 新发现 — Blocking
+
+1. **AC 35 允许用 `run_faulted` 代替 `settlement_aborted`，与 Accepted 的 ADR-0007 相反。**
+   AC 35（`:459`）：「**AND** 发出一次失败事件（`settlement_aborted` 或等价的 `run_faulted`）」。
+   ADR-0007 D7（`:276`）：「**`settlement_aborted` 不是故障。** …它不发 `run_faulted`，也不改 `run_state`」；Validation（`:395`）：「**禁止**把事务中止当作一局故障（不播 `run_faulted` 的 cue、不关收据）」；GDD Requirements 表（`:511`）：「整笔中止发 `settlement_aborted`；故障发 `run_faulted`；**两者不混用**」。
+   `ui-flow.md` 规则 10（`:63`）对这条路径固定发 `settlement_aborted(run_id, code)`；`audio-feedback.md` 对两者处理不同——`settlement_aborted` 只抑制结果 cue（`:328`），`run_faulted` 取消结果并起播 `sfx.run.fault`（`:333`）。AC 35 写成「或等价」会让一个违反 Accepted ADR、且发出错误听觉事件的实现通过验收。
+   修法：删去「或等价的 `run_faulted`」，只保留 `settlement_aborted`；同时把 `:140` 的「建议 `settlement_aborted(...)`」改为引用 `ui-flow.md` 规则 10 的既成事实（事件名已不再是建议）。
+
+2. **AC 36 断言结算事务载荷含 `unlocks`，而 MVP/VS 事务没有这个键。**
+   AC 36（`:460`）：「`progression` / `unlocks` / `records` 在同一次 commit 中提交（commit spy 调用 1 次、**载荷同时含三个命名空间**）」。
+   ADR-0007 D4 第 4 步（`:190`）：「解锁槽位 | **MVP / VS：不执行，`unlocks` 键不存在**；未来：…」；ADR-0018 §13（`:431`）的合并式是 `merge {records, progression}`；`ui-flow.md` 规则 10（`:63`）写「`progression`、`records`（**以及未来存在的 `unlocks`**）」；本 GDD 自己的 `:327` 也把解锁列为互不读写的同属下游。
+   后果：按当前编号执行的 QA 会在正确的 MVP 实现上失败，或反向逼实现无条件塞一个空 `unlocks` 键，与 Accepted ADR 和 `unlocks-and-stations.md` 规则 15 冲突。这是上一轮 Recommended ⑦（`:142` 把 `unlocks` 写成必合并）的同一条问题，如今固化进了可执行断言。
+   修法：AC 36 改为 MVP/VS 断言两个命名空间，并补一句「若该次结算产生 `unlocks`（当前不产生），并入同一次 commit」；`:142`、`:351` 同步。
+
+3. **编排者的致命错误清单仍缺 `MILESTONE_CATALOGUE_INVALID`（缺陷在 `ui-flow.md` 一侧）。**
+   本 GDD `:142`（与规则 22 `:48`）要求四类失败 status 一律整笔中止，与 ADR-0007 D4 第 2 步（`:188`）的四码清单一致。但编排者自己的文档 `ui-flow.md` 规则 10（`:63`）只列「`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY`」，其 AC 12（`:570`）同样只有三个码。
+   后果：照 `ui-flow` 实现的编排者在 `MILESTONE_CATALOGUE_INVALID` 上会越过第①步继续调用 `局外升级.prepare_run_result` 并提交 `progression`，而 `records` 未落账——正是规则 3 明令禁止的「同一份结算结果在两个命名空间里变成两种事实」。AC 27 与 AC 35 各测一端，端到端契约仍不可通过。
+   修法：`ui-flow.md` 规则 10 与 AC 12 补第四码（属 #16 的写入范围，本轮不可改）；本 GDD 无需改动。
+
+### Recommended Revisions
+
+4. **`pending_events` 没有任何 AC 覆盖，恰好漏掉刚修的那一条。** `:129` 定了「无信号时为空数组（`APPLIED` 也可能不发信号）」，但 AC 20（`:437`）只断言信号顺序，AC 35–37（`:459-461`）只断言 `status` / `applied` / `change` / commit 次数，全文没有一条断言 `pending_events`。建议补：①「`APPLIED` 但既不破纪录也不得里程碑 → `pending_events == []`」；②「同一次应用 → `pending_events` 与实发信号逐项同序同内容」。否则这条契约只能靠实现者自述。
+
+5. **接口表缺三个 ADR 已定的入口。** 下游表 `:321` 承诺界面可用 `get_milestone_catalog()`，但对外接口表 `:109-117` 没有它；ADR-0018 §1（`:105-111`）列出的 `initialize()`、`reset_after_career_delete()` 同样缺席（后者在边界用例 `:304` 已被引用）。建议补行或注明「由 `initialize` 内部调用、不对外」。
+
+6. **`ALREADY_APPLIED` 的分类与 ADR-0007 D5 不同。** 本 GDD `:134`、`:142`、AC 37（`:461`）把它定为幂等空操作、不发失败事件；ADR-0007 D5（`:210`）在「`records` 返回 `ALREADY_APPLIED`、钱包不是」时判 `INCONSISTENT_TRANSACTION_STATE` 并记 ERROR。commit 次数一致（0），但异常路径的定级不同，建议本 GDD 加半句「与该状态不一致的组合由编排者按 ADR-0007 D5 记 ERROR」。
+
+7. **`pending_events` 每项的形状与 `RecordsChange` 的字段未定义。** ADR-0007 D6（`:244-246`）从 `RecordsApplyResult` 读 `record_broken` / `previous_best`、`milestones_earned`、`career_completed` 三项，而本 GDD 的结果形状（`:123-129`）只有 `change`（「新 `records` 值与新达成的里程碑」）与 `pending_events`（`Array[Dictionary]`）。建议各补一行字段表，或明确「收据从 `pending_events` 取这三项」。
+
+8. **ADR-0018 的 Validation Criteria 未随新 AC 更新（ADR 侧，本轮不可改）。** `:590-592` 仍是「AC 1–31 全部通过 / 32–34 CI / 35–37 commit spy」，新增的 27a 与编码 AC 38–40 没有映射行；`:597` 的「编码往返」在实质上覆盖了 38–40，但逐条映射缺位。Owner：ADR-0018。
+
+**上一轮仍开放的 Recommended（未在本轮修复中处理，从简记录）**：AC 5 / AC 16 仍用产品中不存在的 `station_noodle`（`:419`、`:433`）；AC 33 的「不超过 `SAVE_BYTES_MAX`」近乎恒真（`:454`）；`last_applied_run_id` 仍未写进 schema 或状态表（`:64-73`、`:57`），实现者仍需猜它是内存态；`COMPLETED_AT_INVALID` 仍无边例 AC（仅 `:292`）；`upgrade_snapshot` 与 `settlement` 的「等级快照」措辞仍未统一（`:85`）；Tuning Knobs 仍无独立小节。
+
+### 文件头状态 vs 索引
+
+`records-and-milestones.md:3` 为 `Status: In Review`；`systems-index.md:71`（设计顺序 #14）同为 `In Review`。**一致**，本轮未修改索引。若下一轮通过，索引应从 `In Review` 改为 `Approved`；`systems-index.md:74` 的 `Depends On` 已含「纪录与里程碑（事件契约）」，上一轮的索引回填建议已闭合。
+
+### Verdict: NEEDS REVISION
+
+两条原 blocker 已在正文中真正修好（不是措辞游戏），`pending_events` 现在是「与实发信号同序同内容、可空」的同步日志，AC 27 / 27a 各自可独立失败。但本轮复读发现三处 AC 与 Accepted ADR-0007 的正面冲突：AC 35 允许一个 ADR 明令禁止的替代事件，AC 36 要求一个 MVP/VS 根本不存在的事务键，`ui-flow.md` 的编排清单仍缺第四类致命码。三者都能用一两句话修掉，但在修掉之前，验收会奖励错误的实现。
+
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 872d00fc71c44c3c5901412cd05665a25d1d19a3
+Reviewed-Content-Hash: design/registry/entities.yaml 5d5722fcce313d3fcbe76129bf56fd232dc80735
+Reviewed-Content-Hash: docs/architecture/adr-0018-records-milestones-career.md 51d04732502434867fe649ab73a8c1b335a18847
+Reviewed-Content-Hash: docs/architecture/adr-0007-run-state-settlement-transaction.md 57094895490eb9930cbed49fff8e3efe38817a9f
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/ui-flow.md 10331708e8493cb2d1022209c086ffc55ec61f49
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
+Reviewed-Content-Hash: design/gdd/systems-index.md 2a3dabc219eb8765940d7f6aa93ccd7d4f0e41b9
+Reviewed-Content-Hash: .claude/rules/design-docs.md 638ca578625c5a3d24a5bafe0524777b351ab2f8

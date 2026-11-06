@@ -1496,3 +1496,46 @@ Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 9bf45c1ead7e161599
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
 Reviewed-Content-Hash: design/gdd/systems-index.md 1119e17f51ee38b2b6fdb56db5d6301d6db94f47
 Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
+
+---
+
+## Re-Review — 2026-11-06
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 0 | Recommended: 7
+Completeness: 6/6 required sections at `standard` (Overview, Detailed Design, Formulas, Edge Cases, Dependencies, Acceptance Criteria); Player Fantasy and Tuning Knobs are advisory at this tier.
+Summary: All four blockers are closed in the prose, not only in the fixer's summary: `L` now derives from the lock directory with no process state, the stale-lock table is deterministic in both rule 21 and the edge case, rule 22 carries a narrowly scoped clock exception, and AC 24 is split into 24a–24h. Re-checked against ADR-0002 §3 (reclaim table, heartbeat driver), ADR-0004 D4 (load-once at `BootSequence`, `SaveHeartbeat`), ADR-0018 §2 (`records` schema / save-safe encoding), `ui-flow.md` (`LoadReport`, `retry_load()`, lock-first `Blocked` exits) and the registry (`load_outcome`, `migrate`, `save_bytes`, `slots_available`, `save_schema_version = 1`, `save_bytes_max = 262144`, `save_max_slots = 1`) — no new cross-document contradiction. The seven remaining items are precision gaps in the new lock wording and stale artefacts, none of which blocks implementation.
+Prior verdict resolved: Yes
+
+Blockers verified:
+- Blocker 1 — `L` source (`:160`): source column now reads "lock directory (`.lock/owner.json` + `.lock/heartbeat`)" with "由心跳与 `owner.started_unix` 推导，不读取进程状态（规则 21、ADR-0002 §3）". No process-probe text survives anywhere: `:47`, `:160`, `:259` mention `OS.is_process_running` only to forbid it. Matches ADR-0002 §3. **Resolved.**
+- Blocker 2 — stale-lock edge case (`:259`): now the deterministic table — `.lock` with no `owner.json` → `stale`; heartbeat readable and `now − heartbeat > 90 s` → `stale`; heartbeat unavailable (missing / unreadable / cross-host) → only `now − owner.started_unix > 24 h` reclaims; unparseable `owner.json` → live. Row-for-row agreement with ADR-0002 §3. **Resolved.**
+- Blocker 3 — Core Rule 22 (`:48`): the absolute ban now carries one scoped exception — only the lock-liveness decision may read `.lock/heartbeat` and `owner.started_unix` for a time difference, and that time "绝不参与存档内容、排序、冲突解决、迁移或展示". Consistent with rule 13 (`:39`, migration reads no clock) and the envelope row (`:124`, timestamps display-only). **Resolved.**
+- Blocker 4 — Acceptance Criteria 24 (`:414`–`:421`): split into 24a–24h — version-beats-lock and read-only render (24a), the primary 90 s heartbeat path (24b), live on unavailable heartbeat ≤ 24 h (24c), 24 h reclaim (24d), cross-host ≤/> 24 h (24e/24f), unparseable `owner.json` (24g), lock directory without `owner.json` (24h). Each is independently executable with a fixture. **Resolved.**
+- Header status: `:3` reads `In Review`, matching `systems-index.md` #4 (`In Review`) — no mismatch to report. (Body claim at `:369` is stale, see Recommended 7.)
+
+Findings:
+- [RECOMMENDED] Core Rule 22 (`:48`): the exception covers only the liveness *read*. Rule 21 (`:47`) also requires *stamping* `heartbeat` every 30 s and `owner.started_unix`/`started_at` at acquire — a clock read the exception does not name, and ADR-0004 drives it via `SaveHeartbeat.pulse_lock()`. A literal reading of "任何逻辑…都不得依赖系统时钟" therefore forbids producing the very signal the exception consumes. Name the lock's timestamp writes as part of the same exception.
+- [RECOMMENDED] Core Rule 22 (`:48`) guard claim: "时钟回拨只会让回收更保守…不会误回收正在写的实例" holds for backward jumps only. A forward clock change makes a live 30 s heartbeat look older than 90 s, so a second instance reclaims and writes. The GDD has no mid-session demotion: the write-lifecycle table (`:76`–`:86`) enters `ReadOnly` / `Blocked` only at load, while ADR-0002 §3's 持锁自检 requires an instance whose `owner.json.instance_id` changed to downgrade to read-only and emit `save_status_changed(ReadOnly)`. Add that transition and bound the claim to rollback.
+- [RECOMMENDED] Acceptance Criteria 24 (`:414`–`:421`): two rows of the ADR-0002 §3 table remain untested — "heartbeat readable and `now − heartbeat ≤ 90 s` → live" (only implicit in AC 23, which never states the heartbeat age) and "any timestamp in the future → live". Same class as the prior AC-coverage blocker; add 24i/24j.
+- [RECOMMENDED] Open Questions 2 (`:441`), 3 (`:442`) and 9 (`:448`): all three are answered by the accepted ADR-0002 — §1 canonical JSON with decimal-string integers, §2 `user://save/slot_0/career.json` layout and isolation naming, §3 lock directory + heartbeat with no OS probe. OQ 9 in particular invites re-deciding the mechanism rule 21 now mandates (carried from the last review, still open).
+- [RECOMMENDED] Rule 21 (`:47`): `started_at` is listed in `owner.json` but still not marked display-only, unlike `pid` (carried from the last review).
+- [RECOMMENDED] Interfaces (`:99`, `:114`, `:284`): `SaveStatus` is consumed but never defined — the write-lifecycle states `Clean` / `Dirty` / `Saving` / `Blocked` / `ReadOnly` (`:76`–`:86`) are never declared to be its values, while `ui-flow.md` and ADR-0004's `save_status_changed(status)` depend on them. (Pre-existing, not introduced by this fix.)
+- [RECOMMENDED] Cross-References (`:369`): "systems-index.md — #4 行已是 `Approved`" is stale; the index now reads `In Review`. The claim is dated 2026-11-04 and was true then, but the receipt is bound to today's bytes.
+
+Verdict: APPROVED
+
+Reviewed-Content-Hash: design/gdd/save-system.md fa9f1bff8eede09aaf9a68dc7dcb3f7fb851ba1e
+Reviewed-Content-Hash: design/registry/entities.yaml 5d5722fcce313d3fcbe76129bf56fd232dc80735
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: docs/architecture/adr-0002-persistence-format.md ed6c768fc306cdb6fff375868e69241f12969fe2
+Reviewed-Content-Hash: docs/architecture/adr-0004-service-composition-signals.md 591e01debcd419210384fcf5813c3714a7f6164d
+Reviewed-Content-Hash: docs/architecture/adr-0018-records-milestones-career.md 51d04732502434867fe649ab73a8c1b335a18847
+Reviewed-Content-Hash: design/gdd/ui-flow.md 10331708e8493cb2d1022209c086ffc55ec61f49
+Reviewed-Content-Hash: design/gdd/scene-flow.md 07753accfc002be7257cbcdd17323c73c2b6845a
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 872d00fc71c44c3c5901412cd05665a25d1d19a3
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md 3fa3e55b62e80ebcb1ed150a57577416f639faf9
+Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 729311c1e48fad9d1f935240bba7850da718a1af
+Reviewed-Content-Hash: design/gdd/systems-index.md 2a3dabc219eb8765940d7f6aa93ccd7d4f0e41b9
+Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d

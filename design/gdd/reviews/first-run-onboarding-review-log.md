@@ -383,3 +383,33 @@ Reviewed-Content-Hash: design/gdd/systems-index.md 12d2e7c5b8de635a090b0d1f4589d
 Approval stands. Closed `architecture-review-2026-11-05` flags #10 and #13 for this GDD: the header status now reads `Approved` (matching `systems-index.md`), and rule 5 now confirms ADR-0020's fixed-dock reading for the non-modal B2/B3 prompts (`bar:capacity` records the explanation target only; modal B0/B1 may still choose above/below by anchor). No rule, formula, AC, dependency, contract or balance value changed. Source: ADR-0020 #2/#3/#7/#8.
 
 Reviewed-Content-Hash: design/gdd/first-run-onboarding.md a4ccdc8438300cb4892c8f3b84f5ea39b39eef83
+
+---
+
+## Re-Review — 2026-11-06 (ADR-0020 D2.3 plan source)
+
+**Verdict: NEEDS REVISION**
+
+Review mode: lean · Workflow: standard · Scope: delta of `5442a16` plus a full re-read of the current file
+Blocking items: 2 | Recommended: 1
+Prior verdict: APPROVED (2026-11-04, `a4ccdc8`) — **not** re-stamped; approval is invalidated.
+
+**What the commit actually did.** `git diff 5442a16^ 5442a16 -- design/gdd/first-run-onboarding.md` is confined to two rows as claimed: the 界面流程 row in Interactions (`:135`) and the same row in 下游依赖方 (`:402`). No rule, formula, AC, balance value or content table was touched. The same commit also rewrote `design/gdd/ui-flow.md` rule 8 (`:57`), its 首局引导 dependency row (`:165`), `MainMenu` state row (`:500`), AC 6 (`:561`) and AC 47 (`:623`) — that is ui-flow's remediation of its own open NEEDS REVISION item, and ui-flow correctly remains `In Review`.
+
+**Why it is substantive, not advisory.** § Review receipts of `.claude/rules/design-docs.md` lists a change to a "dependency" or "cross-system contract" as substantive; the two edited rows are this file's canonical statement of the 首局引导↔界面流程 interface, and they flip the contract from "UI fetches the preset" to "UI reads `FirstRunRunPlan`". Independently of that classification, the edit leaves the GDD asserting the opposite contract in its own normative rule text, which is the "inconsistent" branch: rules 1/2/3/15/22 and the Dependencies notes still put the gate and the preset lookup on the UI. The edited `:135` ("不直接读预置常量（ADR-0020 决策 2.3）") and `:402` now contradict `:33` in the same file.
+
+Findings:
+
+- [BLOCKING] Core Rule 3 (`:33`): "`is_first_run = true` 时，界面流程在组装 `RunConfig` 之前向本系统取一份预置" — still instructs 界面流程 to call this system for the preset directly. ADR-0020 D2.3 replaces that path with `var plan := _first_run_planner.plan()`; Implementation Guideline 1 (`adr-0020` § Implementation Guidelines) forbids `UIRoot` / `MainMenu` / `OnboardingHost` from deriving any of it. The same conflict sits in the rule-3 heading "首局预置由本系统提供、由组装方写进 `RunConfig`" (`:33`), in Core Rule 1's ownership claim "首局预置（`pool_override` 的六道菜与 `entry_fee_override = 40`）" (`:29`) and in 接口所有权 "界面流程拥有……预置的落位" (`:140`): ownership of the preset content now belongs to `FirstRunPreset` under `FirstRunPlanner`, and the UI owns only `plan` consumption. Rules 1/3 must say the preset is published as `FirstRunRunPlan`, not fetched by the UI.
+- [BLOCKING] The gate formula is still duplicated as an assembler duty, in rule text rather than in the two edited rows. `:31`: "谁决定 `is_first_run` 归组装 `RunConfig` 的一方（界面流程）……**组装方的判据必须是两项同时成立**（S11）：`records.career.runs_settled == 0` **且** `LoadReport.first_run_eligible = true`"; `:80` (rule 15): "**「下一局还算不算首局」只有一个判据，由组装方按 `records.career.runs_settled == 0 ∧ LoadReport.first_run_eligible` 判定**"; `:96` (rule 22): "组装方不再标记 `is_first_run`" / "组装方也必须因 `first_run_eligible = false` 而不标记首局"; `:423`: "`is_first_run` 由界面流程组装 `RunConfig` 时决定"; `:408`: "**`is_first_run` 的三态真值表（推荐给组装方，本系统不实现）**" with `:410` "计算式：`is_first_run = (career.runs_settled == 0) ∧ LoadReport.first_run_eligible`". Each of these now reads as a UI-side computation or a requirement addressed to the assembler, contradicting `:135` ("`is_first_run` 由 `FirstRunPlanner` 唯一产出") and ui-flow rule 8 (`:57`, "不自行重算"). They must be restated as the `FirstRunGate` input spec that `FirstRunPlanner` consumes, with 界面流程 as a reader of `plan.is_first_run`.
+- [RECOMMENDED] Core Rule 3 (`:42`): "界面流程在组装 `RunConfig` 时已知道 `is_first_run`，因此必须用同一个标记切换菜单上的读数……组装方必须在组装时就发现字段缺失". After D2.3 the menu reads `plan.menu_entry_fee` and the `entry_fee_override` degradation is decided planner-side (`menu_entry_fee = official_entry_fee`, `has_entry_fee_override() = false`). Point this sentence at the plan to match ui-flow rule 8 / AC 47, which already carry the three-branch treatment.
+
+**Unaffected, verified.** `FirstRunExplanation` contract is untouched and still two-sided: rule 14 (`:78`), Visual/Audio (`:441`) and UI Requirements (`:463`) keep "两段文字 + 两个菜 id"; ui-flow `:500` still renders it; the edited rows still name the payload. No formula block (`:151`–`:360`), balance value (40 / 85 / 20 / 10 / 82 / `205.0%` / 12), content table (`:289`–`:316`) or acceptance criterion changed, and no AC depends on the old wording: AC 1 (`:491`) and AC 32 (`:537`) assert `RunConfig` values and menu/fee agreement, which the new rows satisfy. `entities.yaml` carries no key touched by this delta. AC 31 (`:536`) still matches. Cross-file agreement where the ADRs are enforced is now good: ui-flow rule 8 (`:57`), dependency row (`:165`), AC 6 (`:561`) and AC 47 (`:623`) all read `plan.menu_entry_fee` / `has_entry_fee_override()` / `run_config_fields()` and match ADR-0020 D2.3 (`adr-0020:219`–`:252`).
+
+**Status action required (not performed here — this log was the only file modified):** set `design/gdd/first-run-onboarding.md:3` to `In Review` and `systems-index.md:75` accordingly; approval now needs a fresh lean review after rules 1/2/3/15/22 and `:408`–`:423` are rewritten to the plan source. The 2026-11-04 receipt is also stale for `design/gdd/ui-flow.md` (`:374` records `9c70925`; current bytes are `1033170`), which reinforces rather than causes this verdict.
+
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 4a521ab5e825cb8b27d08afdf1f3089a5d90d21c
+Reviewed-Content-Hash: design/gdd/ui-flow.md 10331708e8493cb2d1022209c086ffc55ec61f49
+Reviewed-Content-Hash: design/registry/entities.yaml 5d5722fcce313d3fcbe76129bf56fd232dc80735
+Reviewed-Content-Hash: docs/architecture/adr-0020-first-run-onboarding-beat-machine.md 5252deab0b23680664d07fe7ce1c7255e89240ed
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43

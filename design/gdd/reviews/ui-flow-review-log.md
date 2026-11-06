@@ -1200,3 +1200,47 @@ Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43
 Reviewed-Content-Hash: design/gdd/save-system.md 0656b8687f961899dc87f58af176e917bd6c8729
 Reviewed-Content-Hash: design/gdd/first-run-onboarding.md a4ccdc8438300cb4892c8f3b84f5ea39b39eef83
 Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
+
+---
+
+## Re-Review — 2026-11-06
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean)
+Prior verdict: NEEDS REVISION (2026-11-06)
+Blocking items: 1 | Recommended: 5
+
+**Prior blockers — all three verified resolved** (commit `5442a16`):
+1. Fee path — Core Rules 8 (`:57`) now assembles all three fields from `FirstRunRunPlan` and displays `plan.menu_entry_fee`. The old `entry_fee_override = 40` from `首局引导.get_first_run_preset()` and the `is_first_run ? 40 : station fee` display formula are gone; the text now carries the ADR-0020 D2.3 degradation clause ("`entry_fee_override` 不被上游支持时 `plan.menu_entry_fee` 已退化为档口值，菜单与本局同时显示 85，不允许一边 40 一边 85").
+2. Interaction table 首局引导 row (`:165`) — now reads the plan and forbids the derivation: "不直接调用 `get_first_run_preset()`、不订阅 `onboarding_finished` 做首局判定、不自行计算 `is_first_run`（ADR-0020 决策 2.3）".
+3. Dependencies 存档 row (`:435`) — `LoadReport` field list now includes `lock_live` and `first_run_eligible`, and `retry_load()` is listed.
+Also verified as claimed: `MainMenu` row (`:500`) displays `plan.menu_entry_fee`; AC 6 (`:561`) is plan-sourced; AC 47 (`:623`) added the `has_entry_fee_override() = false` branch; AC 12/9 (`:67`, `:564`) keep the restart `is_first_run = false` constant, which ADR-0020 D2.3 (`:241`) explicitly endorses.
+
+**Residual sweep** (whole file, incl. tables, formulas, edge cases, ACs) for `get_first_run_preset`, `is_first_run`, `runs_settled`, `first_run_eligible`, `entry_fee_override`, `menu_entry_fee`, `40`, `85`: remaining hits are `:57` (plan fields + a description of the planner's *inputs*), `:67`/`:564` (restart constant), `:165` (prohibition), `:500` (plan field), `:561`/`:623` (plan fields). No surviving `get_first_run_preset()` fee, no `is_first_run ? 40` display, and no third re-derivation of `is_first_run` anywhere.
+
+**Fee-source chain — coherent**: menu `plan.menu_entry_fee` (`:57`, `:500`, `:623`) → `RunConfig.entry_fee_override` (`:57`, `:561`) → `RunLog.entry_fee` (`run-flow.md` `:66` and AC 1) → `RunResult.entry_fee` (registry `net_profit` / `return_ratio` notes) → receipt fee row (`:65`, `:501`). Degradation: `menu_entry_fee = official 85`, override `null`, so the run freezes 85 too. Registry values restated here match: `first_run_entry_fee = 40`, `station_canteen_entry_fee = 85`, `first_run_pool_size = 6`.
+
+**Completeness**: 6/6 sections required at `standard` present; Player Fantasy and Tuning Knobs absent (advisory at this tier). All 11 named dependency GDDs exist on disk. Header `Status: In Review` matches `systems-index.md` row 16 (`In Review`); the index was not edited.
+
+**New findings**
+
+Blocking:
+- [BLOCKING] UI Requirements `ReceiptScreen` (`:501`) vs Core Rules 8 (`:57`) vs AC 47 (`:623`): the degradation contract covers the menu and the run but stops at the receipt. Under `plan.is_first_run = true ∧ plan.has_entry_fee_override() = false` the run is charged 85 (`RunResult.entry_fee`), yet `:501` still requires the receipt to render `FirstRunExplanation`「教学价说明「首局 40 元，正式食堂 85 元」」, and `first-run-onboarding.md` rule 19 (`:90`) leaves B4 unchanged ("其余 beat 不变"; `:314` requires the 40-yuan sentence). One screen then shows 85 in the fee row and 40 in the explanation — the `:57` invariant "不允许一边 40 一边 85" is violated at the receipt, and AC 47's "不存在菜单 40 / 本局 85 的错配" asserts a mismatch-free path it does not test. Fix: state in `:57`, `:501` and AC 47 that a degraded plan makes `FirstRunExplanation` omit the teaching-price sentence (or quote the actual `RunResult.entry_fee`).
+
+Recommended:
+- [RECOMMENDED] 首局引导 dependency row (`:165`) and the event list (`:170`): `run_config_assembled(config, plan)` is missing. It is the only channel that hands `plan` to 首局引导 (ADR-0020 D2.3 `:254`; ADR-0004 D9 `:234`), yet the GDD that owns UI events does not emit it in its contract.
+- [RECOMMENDED] `design/gdd/first-run-onboarding.md` (`:31`, `:33`, `:42`): its two dependency rows are fixed, but the Core Rules still say "谁决定 `is_first_run` 归组装 `RunConfig` 的一方（界面流程）" and "界面流程在组装 `RunConfig` 之前向本系统取一份预置", and S9 still keys the menu reading off `entry_fee_override`(40). That contradicts ADR-0020 D2.3 and this doc's `:57`/`:165`. Fix in that GDD (out of scope here).
+- [RECOMMENDED] `docs/architecture/adr-0004` D9 (`:234`): the `run_config_assembled` payload note still reads "`plan = get_first_run_preset()` 或 `null`", stale against ADR-0020 D2.3. Implementation docs only.
+- [RECOMMENDED] AC 47 (`:623`): "菜单同样显示 85 且记 WARNING" does not name the WARNING's emitter; ADR-0020 D2.3 (`:240`) assigns it to `FirstRunPlanner` at assembly time. Name the emitter so the AC is independently checkable.
+- [RECOMMENDED] `design/registry/entities.yaml` `first_run_entry_fee` (`:1300`): `referenced_by` still omits `design/gdd/ui-flow.md`, although this GDD now restates 40 at `:57`, `:500`, `:501` and `:623`. Registry update is owned by a separate pass; values themselves agree.
+
+Verdict: NEEDS REVISION
+
+Reviewed-Content-Hash: design/gdd/ui-flow.md 10331708e8493cb2d1022209c086ffc55ec61f49
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 4a521ab5e825cb8b27d08afdf1f3089a5d90d21c
+Reviewed-Content-Hash: design/registry/entities.yaml 5d5722fcce313d3fcbe76129bf56fd232dc80735
+Reviewed-Content-Hash: docs/architecture/adr-0020-first-run-onboarding-beat-machine.md 5252deab0b23680664d07fe7ce1c7255e89240ed
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md 56f6f4866e1b5ab7c8a5a8f04d22078e7d05e1cb
+Reviewed-Content-Hash: design/gdd/systems-index.md 2a3dabc219eb8765940d7f6aa93ccd7d4f0e41b9
+Reviewed-Content-Hash: docs/architecture/adr-0004-service-composition-signals.md 591e01debcd419210384fcf5813c3714a7f6164d

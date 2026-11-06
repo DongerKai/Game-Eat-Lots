@@ -35,3 +35,48 @@ Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md 9bf45c1ead7e161599
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
 Reviewed-Content-Hash: design/gdd/systems-index.md 1119e17f51ee38b2b6fdb56db5d6301d6db94f47
 Reviewed-Content-Hash: project.yaml 19e09c36a420a92da7473431c9c3b4ff2ccb755d
+
+---
+
+## Re-Review — 2026-11-06
+Review mode: lean · Workflow: standard
+Scope signal: M
+Specialists: none (lean — Phase 3b not run)
+Prior verdict: NEEDS REVISION (2026-11-06, 4 blocking / 2 recommended) — 4 of 4 blockers resolved; 1 prior recommended item still open.
+
+### Blocker verification (current line numbers)
+
+- **Resolved (1/4) — wrong baseline named.** `design/gdd/dish-values.md:37` (Core Rule 11) now states the gate computes `baseline = opt_value(实际菜池, C0, T)` with the same `V[i][c][t]` recurrence and compares the per-wave DP value `wave_reachable_opt` against it by integer cross-multiplication (`10 × reachable ≥ 9 × baseline`, equivalently `≥ ceil(9 × baseline / 10)`). `wave_reachable_opt` is the candidate, the baseline is `opt_value` over the actual pool — the two are no longer conflated.
+- **Resolved (2/4) — absolute "never in-game" claims.** The `opt_value` heading no longer reads "仅设计期 / CI" (`:194`); the Output Range paragraph (`:211`) now scopes it: design/CI call directly, and the only runtime caller is the menu-waves health gate, result confined to `HealthEval` (`reachable_opt`, `baseline_opt`, `attempts`, `nodes`, `truncated`). `:241` scopes the CI regression check to CI only and names the single runtime gate. No remaining sentence in the GDD asserts that `opt_value` never runs at runtime.
+- **Resolved (3/4) — AC 28.** `:364` now permits exactly one internal static path (`MenuWaves` → `HealthEval` → `baseline_opt`) and bans only public/exported callers plus UI / settlement / save consumers. Consistent with ADR-0006 §4 (`docs/architecture/adr-0006-deterministic-rng.md:253`) and Implementation Guidelines (`:538`).
+- **Resolved (4/4) — registry `opt_value`.** `design/registry/entities.yaml:458` now says "Design-time and CI, plus the MenuWaves health gate as the sole internal baseline: baseline_opt = opt_value(actual pool, C0, T) … confined to HealthEval … never exposed to HUD, settlement, or save"; `revised: "2026-11-06"` (`:460`).
+
+### New findings
+
+**Blocking:** none.
+
+**Recommended** (cross-document drift; not editable from this review, which may touch only the review log):
+
+1. `design/registry/entities.yaml:611` (`wave_healthy` expression) still reads `... (reachable check ran and wave_reachable_opt < 0.9 * opt_value(pool, C0, T)) ...`, and `:612` reads `MVP lower bound 94 (0.9 x 104)`. Both use the float form ADR-0006 §6 forbids (`adr-0006:311-314`: `reachable × 10 < baseline × 9`, "**不得**写成 `reachable < 0.9 * baseline`") and never name `baseline_opt`. Ingestion of this entry reproduces the exact defect blocker 1 removed from the GDD.
+2. `design/gdd/menu-waves.md` still describes the gate as a bare `0.9 ×` float rather than a comparison to `baseline_opt`: rule 9 `:35` ("**可达最优 ≥ 0.9 × `opt_value(pool, C0, T)`**"), `wave_healthy` formula `:190` (`wave_reachable_opt < 0.9 × opt_value(pool, C0, T)`), variables table `:200` ("下界 … `0.9 × opt_value(pool, C0, T)`；MVP 全池 104 → 94"), examples `:181` / `:206` ("0.9 阈值（94）" / "93.6 的下界"), AC 15 `:333` ("阈值 94 = ⌈0.9 × 104⌉"), AC 22 `:343` ("低于 `0.9 × opt_value(pool, C0, T)`"). Semantics agree with the GDD; the notation and the missing `baseline_opt` name do not.
+3. `design/registry/entities.yaml:595` (`wave_reachable_opt` notes) opens with "Generation-time only." The DP runs inside `MenuWaves.initialize` at run start (ADR-0006 §5/§6), so "run-start only (inside `initialize`)" is the accurate phrasing; as written it re-suggests the design-time-only framing blocker 2 removed.
+4. `design/gdd/dish-values.md:92` (`接口所有权`) still lacks the one-line exception ADR-0006 §4 explicitly requested there (`adr-0006:253`). The contract is stated at `:37`, `:211` and `:364`, but not in the section the ADR names. This was Recommended item 2 of the prior review and remains open.
+5. `design/gdd/dish-values.md:36` (Core Rule 10) says the per-refresh threshold is "`opt_value` 偏差（见 Formulas 末节）". Read literally that points back at the baseline instead of the candidate; "`wave_reachable_opt` 相对 `baseline_opt` 的单侧下界" removes the ambiguity.
+6. `design/gdd/menu-waves.md:301` (`待回改`) asks the dish-values calibration section to note that skips lower the per-run reachable ceiling; `design/gdd/dish-values.md:232-236` still discusses only the zero-penalty witness order. Cross-document follow-up, not a contradiction (0-skip partitions do reach 104).
+7. Minor, pre-existing: registry output caps are narrower than the GDD's schema-derived bounds — `entities.yaml:406` `uv_span [0, 9999]` vs `dish-values.md:159` (`uv_span ≥ 0`), and `entities.yaml:456` `opt_value [0, 99999]` vs `dish-values.md:211` (`[0, Σ price]`, price ≤ INT32_MAX).
+
+### Verified coherent (no finding)
+
+- `return_ratio` range: `entities.yaml:664-666` `[0, +∞) | null`, empty run `0.0`, `null` only when `entry_fee = 0` — matches `design/gdd/settlement-and-entry-fee.md:180,183`.
+- Calibration band `[1.15, 1.35]` with `104 / 85 = 1.224` and full-level `[1.35, 1.45]` with `120 / 85 = 1.412` agree across `dish-values.md:232-236`, `entities.yaml:490`, `settlement-and-entry-fee.md:280,493`.
+
+### Verdict: APPROVED
+
+> Conditional on the review's scope: `dish-values.md` now matches ADR-0006 §4/§6 and its own registry entry. Recommended items 1–3 and 7 are registry / menu-waves drift outside this document and must be fixed there; items 4–6 are wording and cross-document follow-ups. No engine or test run was performed (no Godot on this machine); findings are documentation-only.
+
+Reviewed-Content-Hash: design/gdd/dish-values.md 38ec19c03e52375d9b2cb6581e1f76491da4d25a
+Reviewed-Content-Hash: design/registry/entities.yaml 5d5722fcce313d3fcbe76129bf56fd232dc80735
+Reviewed-Content-Hash: docs/architecture/adr-0006-deterministic-rng.md 70c7c9246c99c906f4b524504a491d337a475e3d
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/menu-waves.md 4c2da744c1c4b19bc861bd0c09509d6deecbd6b7
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
