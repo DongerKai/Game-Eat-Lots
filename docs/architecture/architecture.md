@@ -3,11 +3,11 @@
 ## Document Status
 
 - Version: 1
-- Last Updated: 2026-11-06
+- Last Updated: 2026-11-17
 - Engine: Godot 4.7 (pinned; installed version NOT DETERMINED — no editor on this machine)
 - GDDs Covered: 18 (all designed systems; #19 在线挑战 and #20 同屏合作 are Not Started)
 - ADRs Referenced: ADR-0001 内容数据格式；ADR-0002 持久化格式；ADR-0003 场景与屏幕架构；ADR-0004 服务组合与信号；ADR-0005 输入上下文栈；ADR-0006 确定性随机；ADR-0007 局内状态与结算事务；ADR-0008 设置与本地化；ADR-0009 音频播放与暂停（均为 Accepted，2026-11-04）；ADR-0010…0020 覆盖 44 条缺口的系统 ADR（2026-11-05 全部 Accepted）
-- Architecture Review: 2026-11-06 — CONCERNS — 20/20 ADR 已接受，矩阵为 103 covered / 0 Proposed-only / 1 partial / 0 gaps；唯一 partial 是 `TR-run-flow-002` 的初始化顺序半边（ADR-0013 委派、ADR-0007 只决定失败语义）。复审前不宣告 PASS；引擎验证仍待执行（见 `docs/architecture/architecture-review-2026-11-06.md`）
+- Architecture Review: 2026-11-17 — CONCERNS — 20/20 ADR 已接受，矩阵仍为 103 covered / 0 Proposed-only / 1 partial / 0 gaps；唯一 partial 是 `TR-run-flow-002` 的初始化顺序半边（ADR-0013 委派、ADR-0007 只决定失败语义）。2026-11-06 的 C1/C3/C4/C5 已关闭，新增并关闭 C6（ADR-0019 消费面取值域对齐 ADR-0013 §9）；复审前不宣告 PASS，引擎验证仍待执行（见 `docs/architecture/architecture-review-2026-11-17.md`）
 - TD-ARCHITECTURE: 2026-11-04 — skipped — lean mode
 - LP-FEASIBILITY: 2026-11-04 — skipped — lean mode
 

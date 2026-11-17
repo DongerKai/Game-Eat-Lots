@@ -3,12 +3,13 @@
 > ✅ **全部 20 条源 ADR 均为 `Accepted`（`accepted = 20`、`proposed = 0`，核对于 2026-11-06）。**
 > 本清单的每一条规则都出自 **Accepted** ADR：ADR-0001…ADR-0020。规则内容已定，可作为已决编码规则使用。
 > 本次为 `update` 调用：在保留 ADR-0001…0009 既有规则的基础上，纳入 ADR-0010…0020 贡献的 Core / Feature / Presentation 三层规则，Manifest Version 升至 2026-11-06。
+> 2026-11-17 增补：ADR-0013 §6 补入 `_no_legal_action()` 状态判据、§9 标注 `skip_reason` / `end_reason` 取值域 `RejectCode ∪ {NONE}`；决策 1–8 未变。Manifest Version 升至 2026-11-17。
 > 任何 ADR 被修订后，必须重新运行 `/create-control-manifest update`；
 > `/story-readiness` 的版本比对只能证明 story 写在同一天的规则上，不能证明规则此后未被修订。
 
 > **Engine**: Godot 4.7（pin 4.7.x；latest patch 4.7.2；`Installed at pin time = NOT DETERMINED`）
-> **Last Updated**: 2026-11-06
-> **Manifest Version**: 2026-11-06
+> **Last Updated**: 2026-11-17
+> **Manifest Version**: 2026-11-17
 > **ADRs Covered**: ADR-0001 … ADR-0020（共 20 条，**全部 `Accepted`**）
 > **Status**: Active — regenerate with `/create-control-manifest update` when ADRs change
 > **Technical review**: `TD-MANIFEST skipped — Lean mode`（`review_gate: skill-gates=skip`；无 technical-director 门）
@@ -128,7 +129,8 @@
 - **`skip_wave` 先问波次、再问回合**：最后一波等价 `end_pickup`（0 回合、不调 `spend_turn()`）；非最后一波用 `turns.get_turns_remaining() ≥ 2` 而不是 `can_spend_turn()`；拒绝发生在 `advance()` 与 `spend_turn()` 之前（波次不推进、菜不丢弃、回合不变、不写日志） — source: ADR-0013
 - **结束判定只有一个函数、两个时机**：`_judge_end()` 在 `run_started` 后立即一次、每次成功提交后一次；`TIME_EXHAUSTED` 优先于 `NO_EATABLE_DISH`，顺序写死在函数里；被拒绝的动作与暂停帧不判定；`Ending` 后 `submit_action` 一律 `NOT_ACTIVE` — source: ADR-0013
 - **`no_eatable` 单调**：只由 `menu_waves.consume == NO_EATABLE`、`end_pickup() == ENDED`、最后一波被吃空三处置真，一旦为真不回落；可见菜因容量放不下**不**设置它 — source: ADR-0013
-- **`action_availability()` 是只读投影**：HUD 只格式化 `skip_reason` / `end_reason` 与代价文案，不自行比较 `turns_remaining ≥ 2` 或 `is_final_wave`；投影不提交、不推进、不发信号 — source: ADR-0013, ADR-0019
+- **`_no_legal_action()` 是结判内的状态判据**：非最后一波 ∧ `turns_remaining = 1` ∧ 可见集无菜 `can_fit` 三者齐备 → 同帧 `run_ended(NO_EATABLE_DISH)`；它不改 `no_eatable`、不改动作校验表；`turns_remaining ≥ 2` 或最后一波时恒为 `false`，容量**本身**从不结束本局 — source: ADR-0013
+- **`action_availability()` 是只读投影**：HUD 只格式化 `skip_reason` / `end_reason` 与代价文案，不自行比较 `turns_remaining ≥ 2` 或 `is_final_wave`；投影不提交、不推进、不发信号；`skip_reason` / `end_reason` 取值域为 `RejectCode ∪ {NONE}`（可用时 `NONE`），此处的 `end_reason` 与快照的「本局结束原因」枚举**不同域**，不得互转 — source: ADR-0013, ADR-0019
 
 ### Forbidden Approaches
 
@@ -154,7 +156,8 @@
 - **Never 用「试扣 + 回滚」代替 `can_spend_turn()`** — 判断变成有副作用，调用方容易在失败后继续执行 — source: ADR-0011
 - **Never 让 HUD / 结算各自维护剩余容量或第二份计数器** — 三个不一致的剩余格数，重复提交无法被发现 — source: ADR-0012
 - **Never 把非法快照默认成 0 加成** — 漏配升级会伪装成「玩家没买升级」 — source: ADR-0012
-- **Never 把容量满当结束原因（`STUFFED` / `full` 标志）** — 违反「容量只决定一道菜能不能吃」，玩家失去剩余回合与跳波权利 — source: ADR-0012
+- **Never 把容量满当结束原因（`STUFFED` / `full` 标志）** — 违反「容量只决定一道菜能不能吃」；唯一的结束路径是 `_no_legal_action()` 三条件齐备，原因是 `NO_EATABLE_DISH` 而非「吃撑」 — source: ADR-0012, ADR-0013
+- **Never 把 `action_availability()` 的 `end_reason` 与快照的「本局结束原因」互相赋值或比较** — 前者取值域 `RejectCode ∪ {NONE}`，后者是本局结束原因枚举 — source: ADR-0013
 - **Never 提供 `refund` / `release` / `reset` 容量公共方法** — 破坏单调性与结算不变式；未来加入消化必须重写 ADR — source: ADR-0012
 - **Never 边校验边提交** — 失败会留下半提交（先扣回合再查容量） — source: ADR-0013
 - **Never 用 `can_spend_turn()` 直接门控付费跳波** — 剩 1 回合跳波等于零收益丢掉当前波 — source: ADR-0013

@@ -741,10 +741,10 @@ class RunActionAvailability extends RefCounted
 var eat_enabled: bool
 var skip_visible: bool
 var skip_enabled: bool
-var skip_reason: int          # NONE / NO_TURNS_ZERO / NO_TURNS_ONE / NO_EATABLE
+var skip_reason: int          # 取值域见 ADR-0013 §9（`RejectCode ∪ {NONE}`）；可用时 NONE
 var end_visible: bool
 var end_enabled: bool
-var end_reason: int           # NONE / NO_EATABLE / NOT_FINAL_WAVE
+var end_reason: int           # 同上；与快照的“本局结束原因”枚举不同域
 ```
 
 ## Implementation Guidelines

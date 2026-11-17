@@ -653,3 +653,28 @@ Reviewed-Content-Hash: design/gdd/systems-index.md 3f1fa74ca6507898756185f9530ea
 Status 头行由 `In Review` 改为 `Approved (2026-11-17)`；仅元数据，未改规则、公式、AC、依赖、契约或平衡数值（`.claude/rules/design-docs.md` 的 advisory 情形）。以下为当前字节的盖章：
 
 Reviewed-Content-Hash: design/gdd/scene-flow.md 2439af499a5bdd48e2623ed7abe998d20c8b397c
+
+## Re-stamp — 2026-11-17（架构复审后）
+仅同步闸门输入文件的当前字节（GDD 本体自上次复审后只改了 Status 头行）；未改规则、公式、AC、依赖、契约或平衡数值。
+
+Reviewed-Content-Hash: .claude/rules/design-docs.md 638ca578625c5a3d24a5bafe0524777b351ab2f8
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/audio-feedback.md 2c87b5f93a9b3af1937aafc1b4c5c5d7bedb56f2
+Reviewed-Content-Hash: design/gdd/data-config.md e4d2ee1de1f4c9affd59a3993adb89056d5e4fa9
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 46ba1e41bba159828384590641c147dfc579e252
+Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 6d7a4700f0f8b718eeb3bf0cbe9db7993df1f43d
+Reviewed-Content-Hash: design/gdd/input.md 423ac2b02d68a816905cc5060da7541aa726980c
+Reviewed-Content-Hash: design/gdd/run-flow.md da67f644d65824cb6ae98081cea03f69f0e77a0d
+Reviewed-Content-Hash: design/gdd/scene-flow.md 2439af499a5bdd48e2623ed7abe998d20c8b397c
+Reviewed-Content-Hash: design/gdd/systems-index.md ccecd7af3ef6993252cb6901db7435d0985c0953
+Reviewed-Content-Hash: design/gdd/ui-flow.md 48e965a219eaf9c4c8cf34c4de2977ee6662a9e1
+Reviewed-Content-Hash: design/registry/entities.yaml 6fd2fcaa1a1417219f92a38d2bc3c767d46b25d5
+Reviewed-Content-Hash: docs/architecture/adr-0003-scene-screen-architecture.md 3847588766a746042167ef131a23bb79765ec74f
+Reviewed-Content-Hash: docs/architecture/adr-0004-service-composition-signals.md f35769ae953b312ef0d07124ac2f6293b95e220a
+Reviewed-Content-Hash: docs/architecture/adr-0005-input-context-stack.md 8fc4f89bb89cfb7adf4498c243b74d105754a343
+Reviewed-Content-Hash: docs/architecture/adr-0007-run-state-settlement-transaction.md 30b02733b0ec60c3e18d0acf82d8fd5b740909b9
+Reviewed-Content-Hash: docs/architecture/adr-0013-action-pipeline-end-judge.md 8bfc9f56972968772b727c67dcc714e2e71baf1f
+Reviewed-Content-Hash: docs/architecture/architecture.md df2a50c657660378860faa4de6fe4e2188a61d81
+Reviewed-Content-Hash: docs/architecture/requirements-traceability.md efc28c613de2b73657961d3829f460307d5dbe92
+Reviewed-Content-Hash: docs/architecture/architecture.md 2e142bafcd81f67d8f2be533db8186bef451a037

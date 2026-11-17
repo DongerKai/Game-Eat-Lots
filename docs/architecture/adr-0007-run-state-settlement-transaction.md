@@ -222,7 +222,7 @@ AppRoot._on_state_changed 第 2 步
 
 **失败后的信号**
 
-- `settlement_aborted(run_id, code)` 只在「整笔中止」时由 `UIRoot` 发出一次，且**只在 `records` 致命、重入、`BUSY`、`RUN_ID_REUSED` 这几类**；`WALLET_OVERFLOW` 与写盘失败**不是中止**，不发该事件（收据已成功进入内存态）。
+- `settlement_aborted(run_id, code)` 只在「整笔中止」时由 `UIRoot` 发出一次，且**只在 `records` 致命、重入、`BUSY`、`RUN_ID_REUSED`、`INCONSISTENT_TRANSACTION_STATE` 这几类**；`WALLET_OVERFLOW` 与写盘失败**不是中止**，不发该事件（收据已成功进入内存态）。
 - `record_broken` / `milestone_earned` / `career_completed` 由 `Records` 在 `prepare_run` 返回 `APPLIED` 时发出（`records-and-milestones.md` 规则 11 / AC 20 的固定顺序）。本 ADR 不把发信号搬到 `commit` 之后：结算事务**永不回滚内存**，所以「内存已应用」就是玩家看到的成功态；把信号延后到写盘成功反而会让「未保存」的收据没有印章。ADR-0004 D9 的「事务成功后」应读作「事务已应用后」，这是本 ADR 对那条措辞的修订（见 Consequences）。
 - `progression_changed` 在钱包值实际变化后发一次，`APPLIED_UNSAVED` 也发（`meta-upgrades.md` 规则 6）。`WALLET_OVERFLOW` 不发。
 - 同一 `run_id` 的重复投递不重发任何信号。
