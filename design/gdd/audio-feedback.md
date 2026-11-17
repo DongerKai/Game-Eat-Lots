@@ -1,6 +1,6 @@
 # 音效反馈（Audio Feedback）
 
-> **Status**: In Design
+> **Status**: Approved (2026-11-04)
 > **Author**: user + Claude（autonomous 模式；systems-designer、qa-lead、audio-director 按 Lean 模式复核 Formulas、Acceptance Criteria 与音频方向）
 > **Last Updated**: 2026-11-04
 > **Last Verified**: 2026-11-04

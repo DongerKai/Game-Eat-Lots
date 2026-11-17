@@ -1,8 +1,8 @@
 # 数据配置（Data Config）
 
-> **Status**: In Design
+> **Status**: Approved (2026-11-17)
 > **Author**: user + agents
-> **Last Updated**: 2026-11-04
+> **Last Updated**: 2026-11-17
 > **Last Verified**: 2026-11-03
 > **Implements Pillar**: 每口都是算术题；数字看得见地涨
 
@@ -79,7 +79,8 @@
 | 腻度与口味 | 下游读取 | `DishData` 的 `taste_tags`、`cloying_group` | 硬 |
 | 菜单波次 | 下游读取 | `StationData` 的 `dish_pool` | 硬（Vertical Slice 期） |
 | 局外升级 | 下游读取 | `UpgradeData` 的全部字段 | 硬 |
-| 餐局流程 / 结算与入场费 | 下游读取 | 餐局流程解析 `station_id`；结算读取 `entry_fee` | 硬 |
+| 餐局流程 | 下游读取 | 解析 `station_id` 与 `entry_fee`，把 `entry_fee` 冻结进 `RunLog.entry_fee`（运行期快照不另存 `entry_fee`，只发布 `running_net` / `shortfall` 的派生值） | 硬 |
+| 结算与入场费 | 下游读取 | `get_station(id)` → 存在性与 `display_name`；`get_dish(id)` → `price`、`satiety`；`entry_fee` 只从 `RunLog.entry_fee` 读取，不重查 `StationData` | 硬 |
 | 存档 | 下游引用 | 只存 id 与等级/数值，不存记录本身 | 硬 |
 | 音效反馈 | 下游读取 | `get_cue(id)` / `has_cue(id)` / `cue_catalog()`；经 `AudioCatalogView` 只读适配 | 硬 |
 
@@ -127,7 +128,7 @@ The `valid_record_set` formula is defined as:
 
 `cueValid(C_cue)` 不重复定义字段规则：它等价于 ADR-0009 D7 的八条规则全部通过。本 GDD 只规定执行与汇总位置，字段语义不在此复制。
 
-**Example:** 2 个档口、4 道菜、2 项升级。档口 `station_canteen` 的 `entry_fee=30`、`cloy_cap=3`、`dish_pool=[dish_fried_rice, dish_braised_pork]`；`dish_fried_rice` 的 `price=8`、`satiety=2`、`taste_tags=[oil]`、`station_id=station_canteen`；`upgrade_capacity` 的 `cost=40`、`max_level=3`、`effect_type=STOMACH_CAPACITY`、`effect_value=1`。所有引用互相指回，`valid(D)=true`。
+**Example（最小夹具，记录与数值均取自已发布目录）:** 1 个档口、2 道菜、1 项升级。档口 `station_canteen` 的 `entry_fee=85`、`cloy_cap=3`、`dish_pool=[dish_mapo_tofu, dish_braised_pork]`；`dish_mapo_tofu` 的 `price=12`、`satiety=2`、`taste_tags=[辣, 鲜, 油]`、`station_id=station_canteen`；`dish_braised_pork` 的 `price=16`、`satiety=3`、`taste_tags=[甜, 油]`、`station_id=station_canteen`；`upgrade_stomach_capacity` 的 `cost=12`、`max_level=5`、`effect_type=STOMACH_CAPACITY`、`effect_value=1.0`。菜品数值见「菜品数值」MVP 菜品表，升级数值见「局外升级」MVP 升级目录；本例只是截取夹具，不代表完整 12 道菜目录。所有引用互相指回，`dishes_per_station(station_canteen) = |dish_pool| = 2`，`valid(D)=true`。
 
 ### 加载期派生量
 
@@ -189,7 +190,8 @@ The `valid_record_set` formula is defined as:
 | 腻度与口味 | 硬 | `get_dish(id)` → `taste_tags`、`cloying_group`；`get_station(id)` → `cloy_cap` | GDD 已写（`design/gdd/cloying-and-taste.md`） |
 | 菜单波次 | 硬（VS） | `get_station(id)` → `dish_pool` | GDD 已写（`design/gdd/menu-waves.md`） |
 | 局外升级 | 硬 | `get_upgrade(id)` → 全部字段（含 `cost_growth`） | GDD 已写（`design/gdd/meta-upgrades.md`） |
-| 餐局流程 | 硬 | `get_station(id)` 解析 `station_id`；`entry_fee` 由结算读取 | GDD 已写（`design/gdd/run-flow.md`） |
+| 餐局流程 | 硬 | `get_station(id)` 解析 `station_id` 与 `entry_fee`，把 `entry_fee` 冻结进 `RunLog.entry_fee`；运行期快照不另存 `entry_fee` | GDD 已写（`design/gdd/run-flow.md`） |
+| 结算与入场费 | 硬 | `get_station(id)` → `display_name`；`get_dish(id)` → `price`、`satiety`；`entry_fee` 只读 `RunLog.entry_fee` | GDD 已写（`design/gdd/settlement-and-entry-fee.md`） |
 | 存档 | 硬 | 持久化 id 与等级/数值；读取时不信任存档里的数值快照 | GDD 已写（`design/gdd/save-system.md`） |
 | 时间与回合 | 硬 | `StationData.turn_budget`（新增字段，int ≥ 1）；本系统不在运行时被查询 | GDD 已写（`design/gdd/time-and-turns.md`） |
 | 胃容量 | 硬 | `get_balance()` → `base_capacity`（C0 = 20；已定义第四类记录，回答胃容量 Open Question 1）；`UpgradeData.STOMACH_CAPACITY` | GDD 已写（`design/gdd/stomach-capacity.md`） |
@@ -211,7 +213,7 @@ The `valid_record_set` formula is defined as:
 
 ## Game Feel
 
-**不适用。** 数据配置没有玩家可感知的即时反馈。它的"手感"体现在下游：改一个 `.tres` 数值，下一局立刻按新数值结算，不重启、不出现缓存不一致——这一点由 Acceptance Criteria 第 23 条验证。
+**不适用。** 数据配置没有玩家可感知的即时反馈。它的"手感"体现在下游：改一个 `.tres` 数值，下一局立刻按新数值结算，不出现缓存不一致——这一点由 Acceptance Criteria 第 23a 条验证；编辑器内热重载能否进 MVP 另见 Open Question 3。
 
 ## UI Requirements
 
@@ -248,7 +250,7 @@ The `valid_record_set` formula is defined as:
 21. **GIVEN** `price` 写成 `"abc"` 或 `1e30`（超出 int 范围），**WHEN** 解析，**THEN** Failed，日志含文件路径与字段名。
 22. **GIVEN** 300 条记录的夹具，**WHEN** 冷启动校验，**THEN** Validating 阶段 p95 ≤ 100 ms（最小规格 PC、非调试构建）。该预算依赖记录条数、磁盘 I/O 与构建类型，超预算时用同一夹具重测确认。
 23. **GIVEN** 档口 `cloy_cap=0`（或 `-1`），**WHEN** 校验，**THEN** Failed，报出档口 id 与字段名；**GIVEN** `cloy_cap=1`，**WHEN** 校验，**THEN** Ready。
-23. **GIVEN** 把某道菜的 `price` 从 8 改成 12（只改 `.tres`，不改代码），**WHEN** 启动并进入该档口，**THEN** 读取到的价格与结算都使用 12——证明数值确实来自数据层。
+23a. **GIVEN** 把某道菜的 `price` 从 8 改成 12（只改 `.tres`，不改代码），**WHEN** 启动并进入该档口，**THEN** 读取到的价格与结算都使用 12——证明数值确实来自数据层。
 24. **GIVEN** 仓库中已发布的 id 清单（首个发布版时生成并纳入版本管理），**WHEN** 对比当前数据，**THEN** 没有任何已发布 id 被删除或改名；新增 id 不受限制。
 25. **GIVEN** `cost_growth=0.9`，**WHEN** 校验，**THEN** Failed；`cost_growth=1.0` 时 **THEN** Ready。
 26. **GIVEN** `turn_budget=0` 或 `wave_size=0`（各一夹具），**WHEN** 校验，**THEN** Failed；两者都为 1 时 **THEN** Ready。
@@ -263,7 +265,7 @@ The `valid_record_set` formula is defined as:
 35. **GIVEN** `cue_catalog.tres` 缺失或类型错误，**WHEN** 加载，**THEN** Failed（`CATALOG_FILE_MISSING` / `CATALOG_WRONG_TYPE`），主场景未实例化。
 
 **无法直接断言、已改写或转为开放问题的规则**：
-- 「不得硬编码平衡数字」：静态扫描需要先定义"平衡字面量"的白名单，转为第 23 条的行为验证；静态规则列为 Open Question。
+- 「不得硬编码平衡数字」：静态扫描需要先定义"平衡字面量"的白名单，转为第 23a 条的行为验证；静态规则列为 Open Question。
 - 「id 发布后不可变」：需要已发布基线，第 24 条依赖首个发布版生成的 id 清单。
 - 「并发读取」：GDScript 默认单线程，改为第 19 条的重复读取同一实例。
 

@@ -12,7 +12,7 @@ Accepted
 
 ## Last Verified
 
-2026-11-04
+2026-11-17（§9 给 `*_reason` 标注取值域 `RejectCode ∪ {NONE}` 与同名域消歧；决策 1–8 未变）
 
 ## Decision Makers
 
@@ -179,6 +179,8 @@ func _judge_end() -> EndReason:
         return EndReason.TIME_EXHAUSTED
     if no_eatable:
         return EndReason.NO_EATABLE_DISH
+    if _no_legal_action():
+        return EndReason.NO_EATABLE_DISH
     return EndReason.NONE
 ```
 
@@ -186,9 +188,28 @@ func _judge_end() -> EndReason:
 - **时机 2**：每次成功提交后执行一次。被拒绝的动作、暂停帧、纯展示帧都不判定。
 - 命中后同一帧：`run_state = ENDING`、冻结动作、广播 `run_ended(run_id, reason)`；此后 `submit_action` 一律返回 `NOT_ACTIVE`。
 - `TIME_EXHAUSTED` 优先于 `NO_EATABLE_DISH`，顺序写死在函数里，不依赖事件到达顺序。
-- 本系统**不**产生第三种原因；容量满、可见菜放不下都不触发结束。
+- 本系统**不**产生第三种原因；容量满、可见菜放不下**本身**都不触发结束（见下一条的边界）。
 
 `no_eatable` 的来源只有三个：`menu_waves.consume(dish_id) == NO_EATABLE`、`menu_waves.end_pickup() == ENDED`、菜单波次在最后一波被吃空后发出的“无剩余菜”通知。它一旦为 `true` 不回落；可见菜因容量放不下**不**设置它。
+
+**`_no_legal_action()` —— 2026-11-06 补入（S4 门控的配套出口）**：`skip_wave` 在 `turns_remaining = 1` 时被拒绝后，「最后一回合 + 非最后一波 + 当前可见集中没有一道菜 `can_fit`」会变成一个**三种动作全部不可用、两个结束原因都不成立**的局。判据因此增加一条**状态**分支，而不是第四个原因：
+
+```gdscript
+func _no_legal_action() -> bool:
+    if menu_waves.is_final_wave():
+        return false                                   # end_pickup 可用
+    if turns.get_turns_remaining() != 1:
+        return false                                   # ≥2 时 skip_wave 可用；0 已在上面结束
+    for d in menu_waves.visible_dishes():
+        if capacity.can_fit(cloying.effective_satiety(d)):
+            return false                               # eat 可用
+    return true
+```
+
+- 它是**结判函数内的状态判据**，不修改 `no_eatable`、不写任何字段、不改变动作校验表；`eat` 的 `CAPACITY` 拒绝与 `skip_wave` 的 `NO_TURNS` 拒绝仍逐字不变。
+- 边界因此收紧而非放宽：容量**本身**从不结束本局——`turns_remaining ≥ 2` 时玩家总能付费跳波，本判据恒为 `false`；最后一波恒为 `false`（`end_pickup` 免费可用）。只有「已无任何合法动作」才结束，且原因为 `NO_EATABLE_DISH`（字面含义：无菜可吃），不是「吃撑」。
+- 判据是状态式的，因此两个判定时机都能命中：初始化后（`turns_total = 1` 且首波全放不下）与每次成功提交后（例如吃下一道菜把回合从 2 用到 1）。HUD 不需要新状态或新文案——命中后同一帧进入 `Ending`，玩家看到的是收据，不是可交互的僵局画面。
+- 否决的替代方案：允许用最后一回合付费跳波（会把玩家送进 0 回合的新波，纯损失）与允许任意波 0 回合「结束取餐」（新增主动提前结账入口，超出 MVP 范围）。
 
 ### 7. 冻结与 `Ending` 之后
 
@@ -226,10 +247,10 @@ HUD 需要知道跳过/结束取餐**此刻是否可用、为什么不可用**�
 class ActionAvailability extends RefCounted
 var skip_visible: bool          # 非最后一波且当前波可推进
 var skip_enabled: bool
-var skip_reason: int            # RejectCode 的只读映射；可用时 NONE
+var skip_reason: int            # 取值域 RejectCode ∪ {NONE}；可用时 NONE
 var end_visible: bool           # 最后一波
 var end_enabled: bool
-var end_reason: int
+var end_reason: int             # 同上；与快照的"本局结束原因"枚举不同域
 ```
 
 - 判定顺序与本 ADR 决策 4 / 5 的校验表**同源**：`skip_wave` 依次问 `is_final_wave()`、`can_advance()`、`turns_remaining ≥ 2`；`end_pickup` 依次问 `is_final_wave()`、`can_end_pickup()`。
@@ -300,7 +321,7 @@ var end_reason: int
 ## Risks
 
 - **提交序列中途失败**：按 `Faulted` 处理，不尝试回滚；这是 ADR-0007 的失败哲学，避免「看起来正常的半局」。
-- **`no_eatable` 被容量误设**：契约明确容量满不设置；HUD 的「吃不下」提示不是 `no_eatable`。
+- **`no_eatable` 被容量误设**：契约明确容量满不设置；HUD 的「吃不下」提示不是 `no_eatable`。`_no_legal_action()`（决策 6）是唯一按容量读数收尾的路径，且只在「没有任何合法动作」时为真——它不写 `no_eatable`，也不把「吃得下但不想吃」变成结束。
 - **`skip_wave` 在最后一波被误判**：`is_final_wave()` 由菜单波次拥有；本系统只读，不自己数波。
 - **输入层同帧投递两个动作**：由 ADR-0005 的 `consume_action` + 首个消费者获胜保证；集成测试用双投递夹具验证。
 - **`price` 读取失败发生在提交中途**：把 `price` 放进校验阶段（第 3 步），失败时不进入提交。
@@ -315,6 +336,7 @@ var end_reason: int
 | `run-flow.md` | Core Rule 6：吃菜四道闸门与固定提交顺序 | 决策 3；校验表 + 八步提交 |
 | `run-flow.md` | Core Rule 7 / Edge Case：非最后一波付费跳波的 `NO_TURNS` 前置于 `advance()` / `spend_turn()` | 决策 4；`turns_remaining ≥ 2` |
 | `run-flow.md` | Core Rule 9 / 10：初始化后与每次成功提交后各判定一次；同帧取 `TIME_EXHAUSTED` | 决策 6 |
+| `run-flow.md` | Core Rule 8 的「无合法动作」出口：`turns_remaining = 1` ∧ 非最后一波 ∧ 可见集无菜 `can_fit` 时以 `NO_EATABLE_DISH` 结束，不新增第三种原因（2026-11-06 补入） | 决策 6；`_no_legal_action()` 状态判据 |
 | `run-flow.md` | Core Rule 11：结束即冻结 | 决策 7 |
 | `run-flow.md` | Core Rule 12：`EatenEntry` 的 `extra_satiety` / `effective_satiety` 来自吃下时刻 | 决策 3；第 2 步读取、第 1 步写入，不重算 |
 | `run-flow.md` | AC 6–12、36、39、40：吃菜/跳波/结束取餐/过期焦点/容量满不结束 | 决策 3–6 |
@@ -347,6 +369,7 @@ var end_reason: int
 - 零副作用：对每个 `RejectCode` 各一条测试，断言 `turns_used`、`capacity_used`、`eaten`、`running_net`、`action_seq` 与 `run_state` 全部不变，且 `action_committed` 未广播。
 - 单动作契约：双投递夹具在输入层被拦截；`RunFlow` 收到两次合法调用时按两次独立动作处理（不静默去重）。
 - 结束唯一性：同一局 `run_ended` 恰好一次；同帧双条件时 `end_reason = TIME_EXHAUSTED`。
+- 无死局：`turns_remaining = 1` ∧ 非最后一波 ∧ 可见集无菜 `can_fit` 的夹具在提交该状态的动作后同帧 `run_ended(NO_EATABLE_DISH)` 一次；同一夹具在 `turns_remaining = 2` 时判定为 `NONE`（`skip_wave` 仍可用）。
 
 ## Related
 

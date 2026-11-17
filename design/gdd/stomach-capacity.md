@@ -1,8 +1,8 @@
 # 胃容量（Stomach Capacity）
 
-> **Status**: In Design
+> **Status**: Approved (2026-11-17)
 > **Author**: user + Claude（autonomous 模式；systems-designer 复核规则与公式，qa-lead 复核验收标准，两份意见已并入）
-> **Last Updated**: 2026-11-04
+> **Last Updated**: 2026-11-17
 > **Last Verified**: 2026-11-03
 > **Implements Pillar**: 每口都是算术题 · 没有白吃的菜
 
@@ -29,7 +29,7 @@
 3. **容量按整格计**：容量与 `effective_satiety` 都是整数格，没有小数、没有四舍五入。基础 `satiety` 由数据配置校验在 **1–6**；`effective_satiety = satiety + extra_satiety`，其中 `extra_satiety` 最多 `cloy_cap`（默认 3），因此本系统消费的值域是 **1–(6 + `cloy_cap`)**（MVP 1–9）。`effective_satiety` 由腻度与口味给出且恒 ≥ 1；本系统只消费这个值，**不重算、不缓存、不改写**。数据配置拒绝 7 格基础饱腹，正是为了让这个值域闭合。
 4. **上限来自快照，不来自等级**：`capacity_total = C0 + capacity_bonus`。`C0` 是基础容量（数据配置提供的平衡常数，MVP = 20）。`capacity_bonus` 是局外升级在开局前算好的非负整数，本系统只相加。快照缺少 `capacity_bonus`、值为负数、`null` 或非整数时，初始化失败——**不缺省为 0、不钳制**。
 5. **可吃性是唯一闸门**：`can_fit(e) ⇔ e 是 ≥ 1 的整数 ∧ capacity_used + e ≤ capacity_total`。边界**包含等号**：恰好填满最后一格是允许的（104 元最优餐正好占满 20 / 20，改成严格小于会让校准最优不可达）。
-6. **容量不结束本局**：本系统没有“吃撑”结果，也不产生任何结束原因。已用容量等于上限、或当前可见菜都放不下时，餐局流程保持 `Active`；玩家可以付费跳波、等下一波，或用掉剩余回合。**“吃不下”是展示层的判断，不是本系统的状态，也不是第三种结束原因。**
+6. **容量不结束本局**：本系统没有“吃撑”结果，也不产生任何结束原因。已用容量等于上限、或当前可见菜都放不下时，本系统**不**结束本局。餐局流程是否保持 `Active` 只取决于**是否仍有合法动作**，与容量是否满无关：非最后一波且 `turns_remaining ≥ 2` 时玩家可付费跳波，最后一波时可结束点菜；只有“已无任何合法动作”（非最后一波、`turns_remaining = 1`、可见菜都放不下）才由餐局流程按 `NO_EATABLE_DISH` 同帧收尾（`run-flow.md` 规则 8、ADR-0013 §6）——那也不是容量产生的结束原因。**“吃不下”是展示层的判断，不是本系统的状态，也不是第三种结束原因。**
 7. **已用容量单调不减**：一局内 `capacity_used` 只增不减。没有退还、没有消化、没有释放接口。被拒绝的尝试不改变任何状态；已付的腻度额外占用不因后续解腻而退回（与「腻度与口味」的规则一致）。
 8. **`consume(e)` 是唯一的写入口**：餐局流程在一次动作完整校验通过后，对每次成功吃菜调用一次 `consume(e)`。它先校验 `e` 是 ≥ 1 的整数、且 `capacity_used + e ≤ capacity_total`，全部通过才原子增加；任一失败返回结构化错误且**不改变任何字段**。`e < 1` 或非整数时绝不允许通过——否则 `consume(-1)` 会减少已用容量，直接破坏规则 7。
 9. **判定是纯的，不预留**：`can_fit` 只读，不锁、不预留、不改变状态；同一状态重复调用结果相同。餐局流程在同一帧内完成“判定 → 提交”，单线程下两者之间没有其他写入者，因此不需要预留机制。
@@ -46,12 +46,13 @@
 | 阶段 | 进入条件 | 允许的写 | 离开 |
 |---|---|---|---|
 | `未初始化` | 应用启动 / 收到 `end_run(reason)` | 仅 `initialize` | 成功 → `就绪`；失败 → 保持 `未初始化`（餐局流程 `Failed`） |
-| `就绪` | `initialize` 成功，`used = 0` | `consume` | 本局结束 / 放弃 → `未初始化` |
+| `就绪` | `initialize` 成功，`used = 0` | `consume` | 收到 `end_run` → `未初始化` |
 | `已满` | `used = total`（**派生判断，不是独立状态**） | 本局 `consume` 全部拒绝；仍接受下一局的 `initialize` | 同 `就绪` |
-| `初始化失败` | 输入非法 / 上限越界 / 同局重复初始化 | 无（交餐局流程进入 `Failed` 或 `Faulted`） | 立即回到 `未初始化`；下一次 `initialize` 是新局 |
-| `已丢弃` | 餐局流程放弃、退出或 `run_faulted` | 无 | 立即回到 `未初始化`；下一次 `initialize` 是新局 |
+| `初始化失败（输入非法 / 上限越界）` | 首次 `initialize` 的入参非法、`C0` 越界或 `capacity_bonus` 非法 | 无（交餐局流程进入 `Failed`，随后调 `end_run(failed)`） | 此时账本本就是 `未初始化`；下一次 `initialize` 是新局 |
+| `同局重复初始化（契约违例）` | 账本为 `就绪` 时第二次调用 `initialize` | 无（返回 `CAPACITY_INIT_INVALID`，交餐局流程进入 `Faulted`） | **保持 `就绪` 与全部字段不变**，直到餐局流程调 `end_run(faulted)` 才清零 |
 
-- `已满` 与 `已丢弃` 都不是结束判定：本系统不产生 `end_reason`，也不调用结算。
+- `已满` 不是结束判定：本系统不产生 `end_reason`，也不调用结算。
+- `end_run(reason)` 是唯一回到 `未初始化` 的路径，`reason` 按 `fault.phase` 选：`ended` / `discarded` / `failed`（`phase = INIT`，含 `run_id` 溢出）/ `faulted`（`phase = RUN`）。重复的 `end_run` 幂等（已在 `未初始化` 时再调不改变任何字段）。
 - 暂停/冻结（`frozen = true`）不改变容量，也不阻止读取；恢复后数值与冻结前逐字段一致。
 - 重开是全新一局：新的 `initialize` 把 `used` 置 0，总容量按新快照重算，上一局的任何字段都不延续。
 
@@ -130,7 +131,7 @@ The `capacity_remaining` formula is defined as:
 | `capacity_used` | int | 0–`capacity_total` | 本系统 | 本局已占用 |
 | `capacity_remaining` | int | 0–`capacity_total` | calculated | 还能放的格数 |
 
-**Output Range:** `[0, capacity_total]`。`capacity_remaining = 0` 时本局“已满”，但**不结束**（规则 6）。该值是腻度 `meal_step` 的 `remaining_capacity`，也是 HUD 容量条的分母来源。
+**Output Range:** `[0, capacity_total]`。`capacity_remaining = 0` 表示本局“已满”，但容量本身不构成结束原因（规则 6）。该值是腻度 `meal_step` 的 `remaining_capacity`，也是 HUD 容量条的分母来源。
 
 **Example:** 总容量 20、已用 15 → 剩余 5。
 
@@ -151,7 +152,7 @@ The `can_fit` formula is defined as:
 
 **Output Range:** `true` 或 `false`。**等号成立时返回 `true`**：`capacity_remaining = e` 允许吃下，正好填满最后一格。`e < 1` 或 `e` 不是整数时返回 `false` 并记一条 ERROR——正常流程不可能出现（腻度保证 `e ≥ 1`），这是防御性契约，**绝不放行“免费菜”**。`e > capacity_total` 是合法输入（这道菜整局都放不下），返回 `false` 且**不记错误**。
 
-**Example:** 总容量 20、已用 15 → `can_fit(5) = true`、`can_fit(6) = false`；已用 20 → `can_fit(1) = false`，但本局继续。
+**Example:** 总容量 20、已用 15 → `can_fit(5) = true`、`can_fit(6) = false`；已用 20 → `can_fit(1) = false`。容量满本身不结束本局：非最后一波且 `turns_remaining ≥ 2` 时仍可跳波，最后一波时仍可结束点菜；只有非最后一波且 `turns_remaining = 1`（此时可见菜都放不下）才由餐局流程按 `NO_EATABLE_DISH` 同帧收尾（见规则 6）。
 
 ### 升级加成 `capacity_bonus`（上游拥有，仅引用）
 
@@ -176,8 +177,8 @@ The `capacity_bonus` formula is defined as:
 
 ## Edge Cases
 
-- **If 一道菜的 `effective_satiety > capacity_total`**：`can_fit` 整局返回 `false`，该菜本局不可吃；不记错误、不结束本局。这是合法数据（例如低容量 + 高腻度追加的极端组合），不是 bug。
-- **If `capacity_used = capacity_total`**：`can_fit(e)` 对任何 `e ≥ 1` 返回 `false`；本局保持 `Active`，不产生结束原因；玩家仍可付费跳波、等下一波或耗尽回合。
+- **If 一道菜的 `effective_satiety > capacity_total`**：`can_fit` 整局返回 `false`，该菜本局不可吃；不记错误，这一条件本身不结束本局（若因此已无合法动作，由餐局流程按规则 8 收尾）。这是合法数据（例如低容量 + 高腻度追加的极端组合），不是 bug。
+- **If `capacity_used = capacity_total`**：`can_fit(e)` 对任何 `e ≥ 1` 返回 `false`。容量满本身不产生结束原因，也不直接决定本局是否继续：非最后一波且 `turns_remaining ≥ 2` 时仍有合法动作（跳波），本局保持 `Active`；最后一波时仍可结束点菜，本局保持 `Active`；只有非最后一波、`turns_remaining = 1`、且可见菜都放不下（容量满时最后一条恒真）才已无任何合法动作，由餐局流程同帧按 `NO_EATABLE_DISH` 收尾（规则 6、`run-flow.md` 规则 8）。
 - **If `capacity_remaining = e`**：允许吃下，已用容量恰好到上限。等号是允许的，不允许改成严格小于。
 - **If `e < 1` 或 `e` 不是整数**：`can_fit` 返回 `false` 并记 ERROR；`consume` 返回 `INVALID_SATIETY` 且不改变任何字段。绝不放行免费菜，也绝不让负值减少已用容量。
 - **If `upgrade_snapshot` 缺少 `capacity_bonus`，或值为 `null` / 负数 / 非整数**：初始化失败 `CAPACITY_INIT_INVALID`；餐局流程进入 `Failed`。**不缺省为 0、不取绝对值、不四舍五入。**
@@ -188,7 +189,7 @@ The `capacity_bonus` formula is defined as:
 - **If 同一次吃菜被提交两次**：第二次仍受本系统校验；若放得下，本系统无法仅凭自身识别重复提交。该错误由餐局流程在组装 `RunLog` 时用 `capacity_used = Σ effective_satiety` 的不变式捕获，或由结算返回 `CAPACITY_MISMATCH`。本系统不引入额外的提交令牌。
 - **If 本局被放弃或退出**：收到 `end_run(discarded)` 后立即回到 `未初始化`，容量状态直接丢弃，不结算、不写纪录；下一局 `initialize` 从 `used = 0` 开始。初始化失败（`end_run(failed)`）与运行期故障（`end_run(faulted)`）同样触发。
 - **If 暂停 / 冻结**：容量不变化、不读时钟、不推进；恢复后逐字段一致。
-- **If 有剩余回合但当前可见菜都放不下**：本系统只如实返回 `can_fit = false`；不结束、不替代玩家做决定。HUD 可显示“吃不下”提示，但那不是状态。
+- **If 有剩余回合但当前可见菜都放不下**：本系统只如实返回 `can_fit = false`；不结束、不替代玩家做决定。HUD 可显示“吃不下”提示，但那不是状态。**唯一的例外在餐局流程**：`turns_remaining = 1` ∧ 非最后一波 ∧ 所有可见菜都放不下时已无任何合法动作，餐局流程按 `NO_EATABLE_DISH` 结束本局（`run-flow.md` 规则 8）；那仍不是本系统的结束原因，本系统只被调一次 `end_run(ended)`。
 - **If 本局一道菜也没吃**：`capacity_used = 0`、`capacity_remaining = capacity_total`；结算的 `wasted_capacity = capacity_total`，正常结算。
 - **If 在同一状态重复查询 `can_fit`**：返回值相同，`capacity_used` 不变（无预留）。
 - **If 在 `initialize` 之前读取容量**：返回 `0` 并记 ERROR；正常流程不会发生（HUD 只在本局 `Active` 后读取）。
@@ -292,7 +293,7 @@ The `capacity_bonus` formula is defined as:
 14. **GIVEN** `capacity_used = 18`、`capacity_total = 20`，**WHEN** `consume(3)`（越过上限），**THEN** 返回 `CAPACITY_OVERFLOW`，`capacity_used` 仍为 `18`，餐局流程进入 `Faulted`；没有钳到 `20`。
 15. **GIVEN** `capacity_used = 10`，**WHEN** 分别 `consume(0)`、`consume(-1)`、`consume(2.5)`，**THEN** 各自返回 `INVALID_SATIETY`，`capacity_used` 仍为 `10`（负值绝不允许减少已用容量）。
 16. **GIVEN** `capacity_used = 15`、`capacity_total = 20`，**WHEN** `consume(5)`，**THEN** `capacity_used = 20`（等号提交成功）。
-17. **GIVEN** 本系统的公开接口清单，**WHEN** 枚举所有能改变 `capacity_used` 的方法，**THEN** 只有 `initialize` 与 `consume`，不存在 `refund` / `release` / `reset` / 公共 setter。
+17. **GIVEN** 本系统的公开接口清单，**WHEN** 枚举所有能改变 `capacity_used` 的方法，**THEN** 一局内只有 `initialize` 与 `consume`；跨局清零只有 `end_run(reason)`（它不是局内写入口，也不可被下游直接调用）；不存在 `refund` / `release` / `reset` / 公共 setter。
 
 **集成、只读与确定性**
 
@@ -305,6 +306,8 @@ The `capacity_bonus` formula is defined as:
 24. **GIVEN** 本局在 `capacity_used = 12` 时被放弃，**WHEN** 下一局 `initialize`，**THEN** `capacity_used = 0`，且放弃的那一局不产生 `RunResult`、不影响下一局。
 25. **GIVEN** 在 `initialize` 之前读取 `capacity_total` / `capacity_used` / `capacity_remaining`，**WHEN** 读取，**THEN** 返回 `0` 并各记一条 ERROR（正常流程不会发生）。
 26. **GIVEN** 一次 `initialize` 因非法 `capacity_bonus` 失败、餐局流程进入 `Failed` / `Faulted`，**WHEN** 下一局以合法快照调用 `initialize`，**THEN** 初始化成功（`capacity_used = 0`），不被判为同局第二次。
+27. **GIVEN** 一局在 `capacity_used = 17` 时就绪，**WHEN** 依次收到 `end_run(ended)` / `end_run(discarded)` / `end_run(failed)` / `end_run(faulted)`（四个夹具各一次），**THEN** 每次都回到 `未初始化`，`capacity_total` / `capacity_used` 读数为 `0` 并各记一条 ERROR；重复 `end_run` 幂等；随后 `initialize` 成功且不被判为同局第二次。
+28. **GIVEN** 账本为 `未初始化`，**WHEN** 调用 `can_fit(3)`，**THEN** 返回 `false`；**WHEN** 调用 `consume(3)`，**THEN** 返回 `NOT_INITIALIZED` 且不改变任何字段（ADR-0012 §5）。
 
 > 夹具 3、4、10、15 需要直接注入非法快照与非法 `e`；夹具 21 需要空菜单。不得为通过测试修改 12 道菜或 `UpgradeData` 的真实数值。
 

@@ -1,8 +1,8 @@
 # 时间与回合（Time and Turns）
 
-> **Status**: In Design
+> **Status**: Approved (2026-11-17)
 > **Author**: user + Claude（autonomous 模式；Lean 模式不派生子代理）
-> **Last Updated**: 2026-11-03
+> **Last Updated**: 2026-11-17
 > **Last Verified**: 2026-11-03
 > **Implements Pillar**: 时间在走，手不用快 · 每口都是算术题
 
@@ -50,7 +50,7 @@
 
 12. **结束后只读**：`run_ended` 之后数值冻结，供 `RunLog` 与结算读取；直到下一次 `initialize()` 才重置。局外界面（菜单、升级、结算页）不得直接读取本系统的当前读数——结算只使用 `RunLog` 里冻结的值，也不能据此显示“上一局还剩几格”。
 
-13. **最后一回合拒绝付费跳波**：`turns_remaining = 1` 时，非最后一波的付费跳波必须在调用 `spend_turn()` **之前**被拒绝（`NO_TURNS`），不推进波次、不扣回合、不播放跳波成功反馈。理由：花掉最后一回合只会让玩家看到一波无法取菜的新波，并让 `TIME_EXHAUSTED` 与跳波反馈叠在同一帧。该判断由餐局流程执行（本系统不判断动作语义），但阈值以本系统的 `turns_remaining` 为准；最后一波「结束取餐」代价为 0，不受此限。
+13. **最后一回合拒绝付费跳波**：`turns_remaining = 1` 时，非最后一波的付费跳波必须在调用 `spend_turn()` **之前**被拒绝（`NO_TURNS`），不推进波次、不扣回合、不播放跳波成功反馈。理由：花掉最后一回合只会让玩家看到一波无法取菜的新波，并让 `TIME_EXHAUSTED` 与跳波反馈叠在同一帧。该判断由餐局流程执行（本系统不判断动作语义），但阈值以本系统的 `turns_remaining` 为准；最后一波「结束取餐」代价为 0，不受此限。**该门控不会制造死局**：若此时当前波也没有一道菜放得进剩余容量，三种动作全部不可用，由餐局流程的结束判定按 `NO_EATABLE_DISH` 收尾（`run-flow.md` 规则 8、ADR-0013 §6 `_no_legal_action()`）——本系统仍只提供读数，不参与该判断，也不新增状态。
 
 ### States and Transitions
 
@@ -175,7 +175,7 @@ The `is_exhausted` formula is defined as:
 - **If 暂停、失焦、最小化或结算动画期间**：不调用 `spend_turn()`，因此不消耗任何回合。本系统没有内部计时器，不存在“后台偷偷走表”。
 - **If 本局以 `NO_EATABLE_DISH` 结束且仍有剩余回合**：数值冻结在结束时刻，`is_exhausted()` 为 `false`；结算按 `turns_total` / `turns_used` 如实记录，不收走剩余回合、不折算成分数。
 - **If 本局以 `TIME_EXHAUSTED` 结束**：`turns_remaining = 0`、`turns_used = turns_total`，`is_exhausted()` 保持 `true` 直到下一局 `initialize()`。
-- **If `turns_remaining = 1` 时请求付费跳波**：餐局流程在提交前拒绝（`NO_TURNS`），不推进波次、不扣回合、不播放跳波成功反馈；本局停在 `Active`，玩家仍可吃菜，或在最后一波选择「结束取餐」（0 回合）。若在 `turns_remaining ≥ 2` 时付费跳波，则允许：扣 1 回合、波次推进，本局不因此立即结束。
+- **If `turns_remaining = 1` 时请求付费跳波**：餐局流程在提交前拒绝（`NO_TURNS`），不推进波次、不扣回合、不播放跳波成功反馈。若当前波至少有一道菜放得下，本局停在 `Active`，玩家仍可吃菜；若一道菜都放不下（非最后一波），本局的结束判定在同帧按 `NO_EATABLE_DISH` 结束（`run-flow.md` 规则 8）；最后一波则用免费的「结束取餐」退出。若在 `turns_remaining ≥ 2` 时付费跳波，则允许：扣 1 回合、波次推进；跳波本身不是结束原因，但若跳进的新波一道菜都放不下且剩余回合为 1（非最后一波），结束判定会在同帧按 `NO_EATABLE_DISH` 收尾（`run-flow.md` 规则 8）。
 - **If 同一帧同时满足回合耗尽与无可吃菜**：本系统只报告 `is_exhausted() = true`，不保存原因；餐局流程按固定优先级取 `TIME_EXHAUSTED`。本系统不参与排序。
 - **If 观测到 `turns_used > turns_total` 或 `turns_remaining < 0`**：内部状态已损坏，返回结构化错误并停止消耗，**不钳回合法区间**。钳制会让越界变成一张看起来正常的收据。
 - **If `turn_budget` 远大于菜池规模**（例如 1000 回合、12 道菜）：数据合法，游戏照常开始；但回合永远不是约束，属于可玩性缺陷而非错误。按 `dish-values.md` 的 `opt_value` 审计处理：当最优解的道数少于 `turns_total` 时，回合不再承重，应同时调低预算或调高容量，而不是让本系统拒绝数据。
@@ -213,7 +213,7 @@ The `is_exhausted` formula is defined as:
 
 **双向一致核对：**
 
-- 已回指本系统的 GDD：餐局流程（下游表，接口逐字一致）、结算与入场费（上游表，`turns_total` / `turns_used`）、菜品数值（软上游，`T` 作为审计参数）、局内 HUD（上游表）。菜单波次从餐局流程接收 `turns_total`，索引未把本系统列为其上游，与本设计一致。
+- 已回指本系统的 GDD：餐局流程（下游表；接口是**超集**，`can_spend_turn()` / `is_exhausted()` 仍待餐局流程回填）、结算与入场费（上游表，`turns_total` / `turns_used`）、菜品数值（软上游，`T` 作为审计参数）、局内 HUD（上游表）。菜单波次从餐局流程接收 `turn_budget`，索引未把本系统列为其上游，与本设计一致。
 - **索引已对齐（不在本文件修改）**：`systems-index.md` 第 6 行已记录 `Status = Approved`、`Design Doc = design/gdd/time-and-turns.md`、`Depends On = 餐局流程`；本节不再包含待编排会话处理的事项。
 - **数据配置已定义**：`StationData.turn_budget: int`（≥ 1）已在 `design/gdd/data-config.md` 声明并纳入加载期校验；本 GDD 的规则 3 依赖该字段存在。
 - **菜单波次措辞**：其 UI Requirements 写“本系统只发起扣除”，本 GDD 规定唯一调用者是餐局流程；行为一致（发起 ≠ 执行），措辞统一与 S4 的按钮禁用见 Cross-References 末段与 Open Question 6。
@@ -254,16 +254,16 @@ The `is_exhausted` formula is defined as:
 | 输入 | design/gdd/input.md | 无直接交互：动作由餐局流程路由 |
 | 音效反馈 | design/gdd/audio-feedback.md | 无直接交互：本系统不发信号 |
 
-**待回指（不由本文件修改）**：其余回指均已完成。剩余两项：
+**回指（已核实，2026-11-06）**：其余回指均已完成，本文件不再保留待办。
 
-1. `menu-waves.md` §UI Requirements 的「本系统只发起扣除」建议改为「本系统发出跳波意图，由餐局流程调用时间与回合扣除」。
-2. **S4 落地**：`run-flow.md` 的跳波校验需加入「`turns_remaining = 1` 时拒绝非最后一波的付费跳波（`NO_TURNS`，先于 `spend_turn()`）」；`menu-waves.md` 与 `in-game-hud.md` 需在 `turns_remaining = 1` 时禁用「下一波」按钮并显示原因，最后一波「结束取餐」保持可用。
+1. `menu-waves.md` §UI Requirements 的「只发起扣除」已在 2026-11-06 改为「计数器归时间与回合、扣回合的调用归餐局流程，本系统只声明代价」。
+2. **S4 已全部落地**：`run-flow.md` 规则 7 / AC 11a（`NO_TURNS` 先于 `spend_turn()` 与 `advance()`）、`menu-waves.md` 规则 5（最后一回合例外）、`in-game-hud.md` 的按钮禁用与原因文案；最后一波「结束取餐」保持可用。剩余的唯一补充是「无合法动作」出口（`run-flow.md` 规则 8 / 本文件 AC 23a）。
 
 ## Acceptance Criteria
 
 > **Formulas 覆盖**：`turn_budget` 由第 1–3、20、21 条；`spend_turn` 由第 4–9 条；`turns_used` 由第 7、16 条；`is_exhausted` 由第 8、9、10、15、17 条。其余判据来自 Detailed Design。
 
-> **集成判据**：第 2、8、14、16、17、18、19、20 条需要餐局流程、菜单波次或结算的测试替身；只测本系统的判据可用 `initialize` / `spend_turn` 直接驱动，不需要启动一局。
+> **集成判据**：第 2、8、14、16、17、18、19、20、23、23a 条需要餐局流程、菜单波次或结算的测试替身；只测本系统的判据可用 `initialize` / `spend_turn` 直接驱动，不需要启动一局。
 
 > **术语**：`initialized` = 已成功初始化过一局；`Active` / `Exhausted` / `Uninitialized` = 本系统的状态；`turns_used = 吃菜数 + 付费跳波数` 是恒等式，不含自动推进与最后一波“结束取餐”。
 
@@ -284,12 +284,13 @@ The `is_exhausted` formula is defined as:
 15. **GIVEN** 本局以 `NO_EATABLE_DISH` 结束且 `turns_remaining = 3`，**WHEN** `run_ended` 之后读取，**THEN** 数值冻结为 3，`is_exhausted() = false`；`RunLog.turns_total` / `turns_used` 与冻结值一致。
 16. **GIVEN** 任意完成的一局，吃菜行数为 `n`、付费跳波次数为 `s`，**WHEN** 结算校验，**THEN** `n ≤ turns_used ≤ turns_total` 且 `turns_used = n + s`；结算能接收该 `RunLog` 而不返回 `TURN_INCONSISTENT`。
 17. **GIVEN** 一次成功动作后同时满足 `turns_remaining = 0` 与“无可吃菜”，**WHEN** 餐局流程判定，**THEN** `end_reason = TIME_EXHAUSTED`；本系统只返回 `is_exhausted() = true`，不保存也不排序原因。
-18. **GIVEN** `turns_remaining = 2`，**WHEN** 餐局流程允许并提交一次付费跳波，**THEN** `turns_remaining = 1`、波次推进、`turns_used` 加 1，本局不因此立即结束；随后仍可吃一道菜或在最后一波结束取餐。
+18. **GIVEN** `turns_remaining = 2`，**WHEN** 餐局流程允许并提交一次付费跳波，**THEN** `turns_remaining = 1`、波次推进、`turns_used` 加 1；跳波本身不是结束原因，若新波至少有一道菜放得下，本局停在 `Active`，随后仍可吃一道菜或在最后一波结束取餐。**GIVEN** 跳进的新波一道菜都放不下且不是最后一波，**THEN** 同帧按 `NO_EATABLE_DISH` 结束（`run-flow.md` 规则 8），`is_exhausted() = false`。
 19. **GIVEN** 一次吃菜提交后 `action_committed` 广播，**WHEN** 局内 HUD 读取本局快照，**THEN** 快照中的 `turns_remaining` 与本系统的读数在同一帧相等，且比提交前恰好少 1。
 20. **GIVEN** 当前 12 道菜池、`C = 20`、`turn_budget = 10` 的 MVP 内容，**WHEN** 玩家完成最优餐（10 道菜、20 格），**THEN** 第 10 次吃菜后 `turns_used = 10`、`turns_remaining = 0`；**GIVEN** 玩家付费跳过 2 波，**THEN** 最多只能吃 8 道菜，`turns_used` 仍为 10。
 21. **GIVEN** `turn_budget = 1000` 与 12 道菜的菜池，**WHEN** 开局，**THEN** 初始化成功（数据合法，不钳制）；设计期审计应报告“回合不承重”，而不是让本系统拒绝该档口。
 22. **GIVEN** 故障注入：同一动作调用两次 `spend_turn()`，**WHEN** 两次都被处理，**THEN** 扣除两格；本系统不去重、不猜测调用意图；正常路径的集成判据（第 7、8 条）断言每次提交只扣一次。
-23. **GIVEN** `turns_remaining = 1` 且当前不是最后一波，**WHEN** 玩家按 `game_skip_wave`（付费跳波），**THEN** 餐局流程在调用 `spend_turn()` 之前拒绝（`NO_TURNS`），波次不推进、`turns_remaining` 与 `turns_used` 不变、不播放跳波成功反馈；**GIVEN** 当前是最后一波，**WHEN** 玩家选择「结束取餐」，**THEN** 不消耗回合且仍然允许。
+23. **GIVEN** `turns_remaining = 1` 且当前不是最后一波，**WHEN** 玩家按 `game_skip_wave`（付费跳波），**THEN** 餐局流程在调用 `spend_turn()` 之前拒绝（`NO_TURNS`），波次不推进、当前波剩余集合不变、`turns_remaining` 与 `turns_used` 不变、`advance()` / `spend_turn()` 调用计数为 0、不播放跳波成功反馈；**GIVEN** 当前是最后一波，**WHEN** 玩家选择「结束取餐」，**THEN** 不消耗回合且仍然允许。
+23a. **GIVEN** 同一夹具（`turns_remaining = 1`、非最后一波）且当前波没有任何一道菜放得进剩余容量，**WHEN** 提交造成该状态的动作，**THEN** 餐局流程同帧以 `NO_EATABLE_DISH` 结束本局并广播 `run_ended` 一次，本系统读数冻结在该时刻，`is_exhausted() = false`（结束原因不是回合耗尽）；**GIVEN** 同一夹具但 `turns_remaining = 2`，**THEN** 不结束（`skip_wave` 仍可用）。
 
 ## Open Questions
 

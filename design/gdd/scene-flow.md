@@ -1,8 +1,8 @@
 # 场景与流程管理（Scene & Flow）
 
-> **Status**: In Review — Formulas 章节补写、输入上下文接口定名（2026-11-03），待重新评审
+> **Status**: Approved (2026-11-17)
 > **Author**: user + Claude（首次设计未咨询 systems-designer — Lean 模式；Formulas 后续补写）
-> **Last Updated**: 2026-11-03
+> **Last Updated**: 2026-11-17
 > **Last Verified**: 2026-11-03
 > **Implements Pillar**: 数字看得见地涨
 
@@ -26,7 +26,7 @@
 
 1. **单一顶层状态**：任意时刻恰好一个顶层状态。集合固定为六个：`Boot`、`Error`、`Menu`、`Run`、`Paused`、`Quit`。不为细分界面新增顶层状态——结算、升级、设置都是 `Menu` 内的界面，由界面流程推进。
 2. **唯一切换入口与合法性**：所有顶层切换只经 `request_transition(to, payload)`，并返回该请求是否被接受（bool）。其他系统不得自行挂载/卸载场景或写状态。请求先校验 `(current, to)` 是否在下面的转移表内：合法则在该帧渲染前生效；非法则拒绝、保持原状态并记日志。**一帧内的多个请求全部针对帧初状态校验**，按到达顺序取第一个合法者生效，其余一律拒绝并各记日志——后到的请求不会因为前一个已经改变状态而重新变得合法。**日志级别**：普通非法转移与同帧落败记 WARNING；在非 `Run` 状态收到 `RunResult` 记 ERROR。调用方拿到 `false` 即知 payload 未被交付，不得假设成功。**幂等空操作**：若 `to == current` 且 payload 为空，返回 `true`，不改变状态、不发信号、不记日志（同一帧重复的 `Paused → Run` 落到此路径）；若 `to == current` 但带 payload，返回 `false`（payload 未被交付）。**作用域**：`Quit` 终态：任何请求返回 `false`；`Boot` 尚未完成校验期间：同状态请求返回 `false`，其余请求按规则 6 处理——`Boot → Quit` 仍合法并返回 `true`。
-3. **状态 → 输入上下文**：切换生效时，本系统调用 `request_context(default_ctx, clear_stack := true)`（输入 GDD 规则 12），把输入置于该状态的默认上下文并清空临时栈：`Boot` → Blocked、`Error` → Menu、`Menu` → Menu、`Run` → Run、`Paused` → Paused。`Error` 沿用 Menu 上下文只是为了让唯一按钮可以被导航与确认；`Error` 内不存在任何能触发 `Menu` 或 `Run` 的动作。`Modal` 与 `Blocked` 可由界面流程或首局引导临时压栈；本系统不感知其内容，只在顶层切换时保证输入栈回到该状态的默认上下文。
+3. **状态 → 输入上下文**：切换生效时，本系统调用 `request_context(default_ctx, clear_stack := true)`（输入 GDD 规则 12），把输入置于该状态的默认上下文并清空临时栈：`Boot` → Blocked、`Error` → Menu、`Menu` → Menu、`Run` → Run、`Paused` → Paused。`Error` 沿用 Menu 上下文只是为了让唯一按钮可以被导航与确认；`Error` 内不存在任何能触发 `Menu` 或 `Run` 的动作。临时上下文**各有唯一请求方**：`Modal` 只由界面流程压栈，`Blocked` 只由首局引导（引导段）与本系统（`Boot` 加载）请求——界面流程**不得**压 `Blocked`。本系统不感知其内容，只在顶层切换时保证输入栈回到该状态的默认上下文。
 4. **启动序列**：进入 `Boot` 后读取数据配置的加载与校验结果；`Ready` → `Menu`，`Failed` → `Error`。启动期间输入为 Blocked。
 5. **一局的进入**：`Menu → Run` 携带 `RunConfig`，由发起方（界面流程）组装：`station_id` 与当前局外升级等级快照。本系统不读存档、不组装 `RunConfig`，只原样转交。
 6. **一局的离开**：`Run → Menu` 携带 `RunResult`，由餐局流程在结算完成时发起。`RunResult` 在切换生效的同一帧内、恰好一次同步交给界面流程，不落盘、不缓存；界面流程据此打开结算屏。**进入失败不是结算**：若 `RunConfig` 在进入时无法解析，餐局流程立即请求 `Run → Menu`，携带 `init_failed = true` 与 `fault.phase = INIT`；不产生 `RunResult`、不结算。开局之后的不变式或结算失败同样携带 `init_failed = true`，但 `fault.phase = RUN`——`phase` 才是文案判据，`init_failed` 只表示 payload 中没有 `RunResult`（ADR-0007 D7）。
@@ -58,7 +58,8 @@
 | `Error` | 重新加载数据（debug） | `Boot` | — | 重走加载与校验 |
 | `Menu` | 请求开始一局 | `Run` | `RunConfig` | 同一档口可重复开始 |
 | `Run` | 餐局流程结算完成 | `Menu` | `RunResult` | 由餐局流程发起 |
-| `Run` | 进入失败（`RunConfig` 无法解析） | `Menu` | `init_failed = true, fault = {phase: INIT}` | 不是结算、不产生 `RunResult`、不写纪录 |
+| `Run` | 进入失败（`RunConfig` 无法解析 / 任一子系统初始化失败 / `run_id` 溢出） | `Menu` | `init_failed = true, fault = {phase: INIT}` | 不是结算、不产生 `RunResult`、不写纪录；`run_started` 从未发出 |
+| `Run` | 开局后故障（`RunLog` 不变式失败 / `settle` 返回结构化错误） | `Menu` | `init_failed = true, fault = {phase: RUN}` | 不是结算、不产生 `RunResult`、不写纪录；界面按 `phase` 说「本局结算失败，收益不计」 |
 | `Run` | `ui_pause` | `Paused` | — | |
 | `Paused` | `ui_pause` / 界面流程请求恢复 | `Run` | — | 恢复现场；`ui_accept` 由界面流程消费 |
 | `Paused` | 放弃确认 | `Menu` | `abandoned = true` | 无结算、无纪录 |
@@ -73,9 +74,9 @@
 | 系统 | 方向 | 数据/接口 | 硬/软 |
 |---|---|---|---|
 | 数据配置 | 上游读取 | `Boot` 期读取加载与校验的最终结果（`Ready` / `Failed`）；不重复实现校验 | 硬 |
-| 输入 | 下游通知 / 上游动作 | 输出：切换时调用 `request_context(default_ctx, clear_stack := true)`。输入：订阅 `context_changed` 与 `ui_pause` 触发 `Run ⇄ Paused`；`ui_accept` 由界面流程消费，本系统不监听 | 硬 |
-| 界面流程 | 下游读取 | 发起 `request_transition(Menu → Run, RunConfig)`；订阅 `RunResult`、`abandoned`、`init_failed` 与当前顶层状态；接收 `ui_cancel` 打开退出确认，并把确认/取消的结果以切换请求交回本系统；暂停菜单消费 `ui_accept` 后请求 `Paused → Run` | 硬 |
-| 餐局流程 | 下游读取 | 进入 `Run` 时取得 `RunConfig`；收到暂停/恢复通知；结算完成时发起 `Run → Menu, RunResult`；启动失败时发起 `Run → Menu, init_failed` | 硬 |
+| 输入 | 下游通知 / 上游动作 | 输出：切换时调用 `request_context(default_ctx, clear_stack := true)` 并读返回值（**不订阅 `context_changed`**，ADR-0005 D9）。输入：轮询 `ui_pause` 触发 `Run ⇄ Paused`；`ui_accept` 由界面流程消费，本系统不监听 | 硬 |
+| 界面流程 | 下游读取 | 发起 `request_transition(Menu → Run, RunConfig)`；订阅 `RunResult`、`abandoned`、`init_failed` + `fault.phase`（`INIT` / `RUN`）与当前顶层状态；接收 `ui_cancel` 打开退出确认，并把确认/取消的结果以切换请求交回本系统；暂停菜单消费 `ui_accept` 后请求 `Paused → Run` | 硬 |
+| 餐局流程 | 下游读取 | 进入 `Run` 时取得 `RunConfig`；收到暂停/恢复通知；结算完成时发起 `Run → Menu, RunResult`；启动失败或运行期故障时发起 `Run → Menu, init_failed + fault`（`fault.phase ∈ {INIT, RUN}`） | 硬 |
 | 存档 | 无直接调用 | `RunConfig` 与纪录写入由发起方负责；本系统不读写存档 | 软（间接） |
 | 音效反馈 | 下游订阅 | 状态切换事件（进入 `Run`、结算、退出） | 软 |
 | 首局引导 | 下游请求 | 在 `Run` 内请求 Blocked 上下文并只放行指定动作；不改变顶层状态 | 软 |
@@ -139,7 +140,8 @@ The `transition_total` formula is defined as:
 - **If `Boot` 尚未拿到校验结果就收到切换请求**：除 `Quit` 外全部拒绝；请求方不得假设状态已就绪。
 - **If 结算回传 `RunResult` 时当前不在 `Run`**（例如已经放弃本局）：拒绝并记 ERROR——防止重复结算或跨局结算。
 - **If `Run` 中收到第二次"开始一局"请求**：拒绝（不在合法转移表内），本局继续。
-- **If `RunConfig` 的 `station_id` 无法解析**：由餐局流程发起 `Run → Menu`，携带 `init_failed = true`，不得停在半初始化的 `Run`；本系统只按合法转移处理这次返回，不校验 payload 内容。不产生 `RunResult`、不写纪录。
+- **If `RunConfig` 的 `station_id` 无法解析**：由餐局流程发起 `Run → Menu`，携带 `init_failed = true` 与 `fault.phase = INIT`，不得停在半初始化的 `Run`；本系统只按合法转移处理这次返回，不校验 payload 内容。不产生 `RunResult`、不写纪录。
+- **If 开局之后发生故障**（`RunLog` 不变式失败、`settle` 返回结构化错误）：同样发起 `Run → Menu`，`init_failed = true` 但 `fault.phase = RUN`；本系统不区分两条故障路径，只转交 payload，界面流程按 `phase` 选文案。
 - **If `Boot` 中请求退出或窗口关闭**：直接进入 `Quit`，不确认——启动阶段没有任何一局可以损失。
 - **If release 构建的 `Error` 屏被要求重新加载数据**：该入口不存在，界面上没有这个按钮；不存在"请求被拒绝"的分支。
 - **If 暂停中窗口关闭或请求退出**：先走确认；取消则回到 `Paused`，本局继续。
@@ -158,14 +160,14 @@ The `transition_total` formula is defined as:
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
 | 数据配置 | 硬 | `Boot` 期读取加载与校验的最终结果（`Ready` / `Failed`）；校验逻辑由数据配置拥有，本系统不重复实现 | GDD 已写 |
-| 输入 | 硬 | 切换生效时调用 `request_context(default_ctx, clear_stack := true)`；订阅 `context_changed`；订阅 `ui_pause` 驱动 `Run ⇄ Paused` | GDD 已写 |
+| 输入 | 硬 | 切换生效时调用 `request_context(default_ctx, clear_stack := true)` 并读返回值（不订阅 `context_changed`）；轮询 `ui_pause` 驱动 `Run ⇄ Paused` | GDD 已写 |
 
 **下游依赖方：**
 
 | 系统 | 硬/软 | 接口 | 状态 |
 |---|---|---|---|
-| 界面流程 | 硬 | 发起 `Menu → Run`（携带 `RunConfig`）；订阅 `RunResult`、`abandoned`、`init_failed` 与当前顶层状态；暂停菜单消费 `ui_accept` 后请求 `Paused → Run` | GDD 已写（`design/gdd/ui-flow.md`） |
-| 餐局流程 | 硬 | 进入 `Run` 时取得 `RunConfig`；接收暂停/恢复通知；结算完成时发起 `Run → Menu, RunResult`；启动失败时发起 `Run → Menu, init_failed` | GDD 已写（`design/gdd/run-flow.md`） |
+| 界面流程 | 硬 | 发起 `Menu → Run`（携带 `RunConfig`）；订阅 `RunResult`、`abandoned`、`init_failed` + `fault.phase` 与当前顶层状态；暂停菜单消费 `ui_accept` 后请求 `Paused → Run` | GDD 已写（`design/gdd/ui-flow.md`） |
+| 餐局流程 | 硬 | 进入 `Run` 时取得 `RunConfig`；接收暂停/恢复通知；结算完成时发起 `Run → Menu, RunResult`；启动失败或运行期故障时发起 `Run → Menu, init_failed + fault`（`fault.phase ∈ {INIT, RUN}`） | GDD 已写（`design/gdd/run-flow.md`） |
 | 首局引导 | 软 | 在 `Run` 内请求 Blocked 上下文，只放行引导需要的动作；不改变顶层状态 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 | 音效反馈 | 软 | 订阅状态切换事件（进入 `Run`、结算、退出；具体点 `Paused` / `Resumed` / `Quit`） | GDD 已写（`design/gdd/audio-feedback.md`） |
 
@@ -211,9 +213,9 @@ The `transition_total` formula is defined as:
 | 系统 | GDD | 关系 |
 |---|---|---|
 | 数据配置 | design/gdd/data-config.md | 上游：读取加载与校验结果，决定 `Boot → Menu` 还是 `Boot → Error` |
-| 输入 | design/gdd/input.md | 上游：切换时调用 `request_context(..., clear_stack := true)`；订阅 `context_changed` 与 `ui_pause` 驱动暂停 |
-| 界面流程 | design/gdd/ui-flow.md | 下游：发起 `Menu → Run`，接收 `RunResult`、`init_failed` 与 `abandoned`，按顶层状态切界面 |
-| 餐局流程 | design/gdd/run-flow.md | 下游：取得 `RunConfig`，接收暂停/恢复通知，结算时回传 `RunResult`，启动失败时回传 `init_failed` |
+| 输入 | design/gdd/input.md | 上游：切换时调用 `request_context(..., clear_stack := true)` 并读返回值；轮询 `ui_pause` 驱动暂停（不订阅 `context_changed`） |
+| 界面流程 | design/gdd/ui-flow.md | 下游：发起 `Menu → Run`，接收 `RunResult`、`init_failed` + `fault.phase` 与 `abandoned`，按顶层状态切界面 |
+| 餐局流程 | design/gdd/run-flow.md | 下游：取得 `RunConfig`，接收暂停/恢复通知，结算时回传 `RunResult`，启动失败或运行期故障时回传 `init_failed + fault` |
 | 首局引导 | design/gdd/first-run-onboarding.md | 下游（软）：在 `Run` 内请求 Blocked 上下文 |
 | 音效反馈 | design/gdd/audio-feedback.md | 下游（软）：订阅状态切换事件 |
 
@@ -251,7 +253,8 @@ The `transition_total` formula is defined as:
 24. **GIVEN** `Run` 中窗口失去焦点，**WHEN** 焦点离开，**THEN** 不自动暂停，状态保持 `Run`。
 25. **GIVEN** `Run` 或 `Paused` 时进程被强制终止，**WHEN** 重启，**THEN** 该局无收益、无纪录，存档与前一次正常退出时一致。
 26. **GIVEN** 本系统的公开接口，**WHEN** 查找写状态、写存档、改数值或挂载场景的入口，**THEN** 均不存在。
-27. **GIVEN** `Run` 中 `RunConfig.station_id` 无法解析，**WHEN** 餐局流程请求返回菜单，**THEN** 切为 `Menu` 且携带 `init_failed = true`，不产生 `RunResult`、不写纪录。
+27. **GIVEN** `Run` 中 `RunConfig.station_id` 无法解析，**WHEN** 餐局流程请求返回菜单，**THEN** 切为 `Menu` 且携带 `init_failed = true` 与 `fault.phase = INIT`，不产生 `RunResult`、不写纪录。
+27a. **GIVEN** 开局之后 `settle` 返回结构化错误，**WHEN** 餐局流程请求返回菜单，**THEN** 切为 `Menu` 且携带 `init_failed = true` 与 `fault.phase = RUN`；本系统转交 payload 时不改写、不丢弃 `phase`，两者都不得停在 `Run`。
 28. **GIVEN** `Paused`，**WHEN** 玩家按 `ui_accept`，**THEN** 本系统不自行恢复 `Run`（不监听该动作）；只有界面流程请求恢复才切回 `Run`。退出确认 `Modal` 打开时同理，`ui_accept` 只属于对话框。
 29. **GIVEN** 任一请求被拒绝，**WHEN** 调用 `request_transition`，**THEN** 返回 `false`，调用方据此可以重新发起。**GIVEN** 当前不是 `Quit` 且 `Boot` 已就绪、目标状态与当前相同且不带 payload，**WHEN** 请求，**THEN** 返回 `true`，状态不变、不发切换信号、不记日志；**GIVEN** 目标状态与当前相同但带 payload，或当前为 `Quit`，或当前为 `Boot` 待校验期且目标等于当前状态，**THEN** 返回 `false`。
 30. **GIVEN** 视觉过渡尚未播完，**WHEN** 收到新的合法请求，**THEN** 立即生效并中止未完成的过渡。

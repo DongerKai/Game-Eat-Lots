@@ -2,7 +2,7 @@
 
 > **Status**: Approved
 > **Created**: 2026-11-03
-> **Last Updated**: 2026-11-06
+> **Last Updated**: 2026-11-17
 > **Source Concept**: design/gdd/game-concept.md
 
 ---
@@ -59,7 +59,7 @@ event/settings loop (see Circular Dependencies).
 | 2 | 输入 | Core | MVP | Approved | design/gdd/input.md | — |
 | 3 | 场景与流程管理 | Core | MVP | Approved | design/gdd/scene-flow.md | 数据配置, 输入 |
 | 4 | 存档 | Persistence | MVP | Approved | design/gdd/save-system.md | 数据配置 |
-| 5 | 餐局流程 | Core | MVP | Approved | design/gdd/run-flow.md | 场景与流程管理, 数据配置, 输入 |
+| 5 | 餐局流程 | Core | MVP | Approved | design/gdd/run-flow.md | 场景与流程管理, 数据配置, 菜品数值, 输入 |
 | 6 | 时间与回合 | Core | MVP | Approved | design/gdd/time-and-turns.md | 餐局流程 |
 | 7 | 胃容量 | Gameplay | MVP | Approved | design/gdd/stomach-capacity.md | 餐局流程, 数据配置 |
 | 8 | 菜品数值 | Gameplay | MVP | Approved | design/gdd/dish-values.md | 数据配置 |
@@ -172,7 +172,7 @@ Vertical Slice tier, and the rest are Full Vision.
 ### Core Layer (depends on foundation)
 
 1. **存档** — depends on: 数据配置（字段 schema）
-2. **餐局流程** — depends on: 场景与流程管理, 数据配置, 输入
+2. **餐局流程** — depends on: 场景与流程管理, 数据配置, 菜品数值（只读 `price(d)`）, 输入
 3. **时间与回合** — depends on: 餐局流程
 4. **胃容量** — depends on: 餐局流程, 数据配置
 5. **菜品数值** — depends on: 数据配置

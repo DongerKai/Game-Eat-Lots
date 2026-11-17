@@ -3,11 +3,11 @@
 ## Document Status
 
 - Version: 1
-- Last Updated: 2026-11-05
+- Last Updated: 2026-11-06
 - Engine: Godot 4.7 (pinned; installed version NOT DETERMINED — no editor on this machine)
 - GDDs Covered: 18 (all designed systems; #19 在线挑战 and #20 同屏合作 are Not Started)
 - ADRs Referenced: ADR-0001 内容数据格式；ADR-0002 持久化格式；ADR-0003 场景与屏幕架构；ADR-0004 服务组合与信号；ADR-0005 输入上下文栈；ADR-0006 确定性随机；ADR-0007 局内状态与结算事务；ADR-0008 设置与本地化；ADR-0009 音频播放与暂停（均为 Accepted，2026-11-04）；ADR-0010…0020 覆盖 44 条缺口的系统 ADR（2026-11-05 全部 Accepted）
-- Architecture Review: 2026-11-05 — CONCERNS — 评审时 57 covered / 46 Proposed-only / 1 partial / 0 gaps；随后 ADR-0007 对齐、ADR-0010…0020 全部接受，矩阵为 104 / 0 / 0 / 0。复审前不宣告 PASS；引擎验证仍待执行（见 `docs/architecture/architecture-review-2026-11-05.md`）
+- Architecture Review: 2026-11-06 — CONCERNS — 20/20 ADR 已接受，矩阵为 103 covered / 0 Proposed-only / 1 partial / 0 gaps；唯一 partial 是 `TR-run-flow-002` 的初始化顺序半边（ADR-0013 委派、ADR-0007 只决定失败语义）。复审前不宣告 PASS；引擎验证仍待执行（见 `docs/architecture/architecture-review-2026-11-06.md`）
 - TD-ARCHITECTURE: 2026-11-04 — skipped — lean mode
 - LP-FEASIBILITY: 2026-11-04 — skipped — lean mode
 
@@ -121,8 +121,9 @@ API calls, and re-verify the HIGH-risk rows above on that install.
 | Records | Best-run records, career aggregates, milestones | `prepare_run`, `snapshot`, `milestone_progress`, signals | Save, Data Config | none |
 | In-Game HUD | `HudFrame`, focus/hover presentation, anchor rects | `snapshot`, `get_anchor_rect`, `submit_action` (UI intent) | Run Flow, Menu Waves, Cloying, Capacity, Time, Settlement | `Control`, `Theme`, `Tween` |
 | UI Flow | Screen stack, modal stack, focus order, settings model, receipt orchestration | `push_screen`/`pop_screen`, semantic events, `settings` | Scene Flow, Save, Meta Upgrades, Records, Run Flow | `Control`, `Theme`, `Tween`, `Window` |
-| Audio Feedback | Buses, voice pool, cue catalog, cooldowns | `play(cue_id)`, `set_bus_volume`, mute | UI Flow/run signals, settings | `AudioStreamPlayer`, `AudioServer` |
-| First-Run Onboarding | Beat index, explanation payload | `get_first_run_preset`, `onboarding_finished` | Run Config, HUD anchors, Data Config | `Control` |
+| Audio Feedback | Buses, voice pool, cue catalog, cooldowns | `request(event)`, `play(cue_id)`, `shutdown`, `cue_log`, `duck_gain_db` | UI Flow/run signals, settings | `AudioStreamPlayer`, `AudioServer` |
+| First-Run Onboarding | Beat index, bubble layout, explanation payload | `configure(plan)`, `onboarding_finished`, `current_beat` | `FirstRunRunPlan` (First-Run Planner), HUD anchors, Run Config | `Control` |
+| First-Run Planner | First-run gate, preset invariants, the sole `FirstRunRunPlan` | `refresh`, `plan`, `FirstRunRunPlan` | Save `LoadReport`, Records, Data Config, Meta Upgrades, Dish Values | none (plain `RefCounted`) |
 
 **Dependency direction**
 
@@ -418,13 +419,12 @@ class OnboardingHost extends CanvasLayer:
 
 ## ADR Audit
 
-Twenty ADRs are written, all `Accepted` (ADR-0001…0020). The 2026-11-05
-`/architecture-review full` re-run counted them at 57 covered / 46 Proposed-only /
-1 partial / 0 gaps; the last partial closed when ADR-0007 gained `frozen` and
-`action_availability()`, and ADR-0010…0020 were accepted on 2026-11-05. The
-matrix now reads 104 covered / 0 proposed / 0 partial / 0 gaps. Engine
-verification remains pending for all twenty. The TR registry holds all 104 table
-requirements; ADR linkage below is authoritative.
+Twenty ADRs are written, all `Accepted` (ADR-0001…0020). The 2026-11-06
+`/architecture-review full` re-run re-derived the matrix row by row and read
+103 covered / 1 partial / 0 gaps: `TR-run-flow-002`'s initialization-order half
+has no owner (ADR-0013 delegates it to ADR-0007, which only decides the failure
+semantics). Engine verification remains pending for all twenty. The TR registry
+holds all 104 table requirements; ADR linkage below is authoritative.
 
 | ADR | Engine Compat | Version | GDD Linkage | Conflicts | Valid |
 |---|---|---|---|---|---|
@@ -449,10 +449,10 @@ requirements; ADR linkage below is authoritative.
 | ADR-0019 HUD 数据绑定、布局与呈现契约 | ✅ | ✅ 4.7 | ✅ TR-in-game-hud-001/003/005/006（002→ADR-0003，004→ADR-0005） | None | ✅ Accepted — engine verification pending |
 | ADR-0020 首局引导 beat 机、阻断输入与跳过 | ✅ | ✅ 4.7 | ✅ TR-first-run-onboarding-001..005 | None | ✅ Accepted — engine verification pending |
 
-**Traceability coverage:** 104 of 104 requirements are covered by an Accepted ADR,
-0 partial, 0 gaps. The per-requirement matrix is authoritative:
-`docs/architecture/requirements-traceability.md` (review:
-`docs/architecture/architecture-review-2026-11-05.md`).
+**Traceability coverage:** 103 of 104 requirements are covered by an Accepted ADR,
+1 partial (`TR-run-flow-002`, initialization order), 0 gaps. The per-requirement
+matrix is authoritative: `docs/architecture/requirements-traceability.md`
+(review: `docs/architecture/architecture-review-2026-11-06.md`).
 
 ## Required ADRs
 
@@ -649,11 +649,11 @@ Extracted from 18 GDDs | 104 requirements | 104 registered in
 | Area | Requirements | Covered (Accepted) | Proposed only | Partial | Gaps |
 |---|---|---|---|---|---|
 | Foundation (data, input, scene, save) | 24 | 24 | 0 | 0 | 0 |
-| Core (run, turns, capacity, dish values) | 21 | 21 | 0 | 0 | 0 |
+| Core (run, turns, capacity, dish values) | 21 | 20 | 0 | 1 | 0 |
 | Feature (cloying, waves, settlement, meta, unlocks, records) | 34 | 34 | 0 | 0 | 0 |
 | Presentation (HUD, UI, audio, onboarding) | 25 | 25 | 0 | 0 | 0 |
-| **Total** | **104** | **104** | **0** | **0** | **0** |
+| **Total** | **104** | **103** | **0** | **1** | **0** |
 
-The 2026-11-05 `/architecture-review full` produced
+The 2026-11-06 `/architecture-review full` produced
 `docs/architecture/requirements-traceability.md`, which carries the full
 per-requirement matrix; every provisional ID now has its permanent row.

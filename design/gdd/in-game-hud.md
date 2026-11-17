@@ -1,8 +1,8 @@
 # 局内 HUD（In-Game HUD）
 
-> **Status**: Approved (2026-11-06)
+> **Status**: Approved (2026-11-17)
 > **Author**: user + Claude（autonomous 模式；Lean 模式不派生视觉子代理）
-> **Last Updated**: 2026-11-06
+> **Last Updated**: 2026-11-17
 > **Last Verified**: 2026-11-03
 > **Implements Pillar**: 每口都是算术题 · 数字看得见地涨 · 时间在走，手不用快
 
@@ -34,7 +34,7 @@
 
 4. **同帧更新**：动作提交后，回合、容量、净利、回本差额与菜品卡状态必须在**提交后的第一个渲染帧**就显示新值。动画只能叠加在已经正确的新值之上（如数字跳动、卡片位移），不得用动画时长推迟数值变化，也不得先播动画再改数（支柱 4）。
 
-5. **不自推结束**：HUD 不判断“回合耗尽”“放不下任何菜”“最后一波吃完”。它只读 `run_state` 与 `end_reason`；进入 `Ending` 的唯一依据是餐局流程的快照，不是 `turns_remaining = 0` 这类派生条件。HUD 不得自行弹出“时间到”模态。
+5. **不自推结束**：HUD 不判断“回合耗尽”“放不下任何菜”“最后一波吃完”。它只读 `run_state` 与 `end_reason`；进入 `Ending` 的唯一依据是餐局流程的快照，不是 `turns_remaining = 0` 这类派生条件。HUD 不得自行弹出“时间到”模态。**同样地，HUD 不自己判断“是否还有合法动作”**：当餐局流程判定已无合法动作时（`run-flow.md` 规则 8），本局会在同一帧进入 `Ending`，HUD 不会画出“只剩导航”的中间态；`turns_remaining = 1` 且可见菜都放不下时，看到的是最后一帧合法的 `Active` 画面直接接 `Ending`，而不是一个可停留的空转界面。
 
 6. **不自求和**：净利与回本差额只显示**餐局流程快照**中的 `running_net` / `shortfall`。该累加器由餐局流程维护，是本局运行期的唯一副本；计算口径由结算与入场费的纯函数 `running_net(k)` / `shortfall(k)` 定义，`entry_fee` 与取整由结算拥有。**HUD 不得把菜品价格相加来得到净利，也不得维护第三份累加器**，即使结果在数学上相同——两份求和会在某个边界（空局、免单、错误局）漂移。
 
@@ -56,7 +56,7 @@
 
 15. **焦点顺序按屏幕位置**：上/下/左/右按卡片的屏幕位置导航，不按节点树顺序。每个 HUD 状态有初始焦点：`Active` 首帧落在当前波第一张可吃菜（若全不可吃则第一张卡）；最后一波结束取餐确认打开时落在「取消」。焦点不因重绘丢失；同一张卡在重绘后保持焦点。
 
-16. **跳过与结束取餐由 HUD 呈现、菜单波次定义语义**：非最后一波显示「跳过本波 · 花 1 回合」，激活即提交，不再二次确认（代价已写在按钮上）；最后一波显示「结束取餐（免费）」，激活后打开 HUD 内的确认面板，面板默认焦点在「取消」。确认面板**不是**输入上下文意义上的 `Modal`——它不调用 `push_context(Modal)`（该接口的唯一调用方是界面流程），而是在 Run 上下文内做焦点陷阱：面板打开时导航限制在面板内，`ui_cancel` 关闭并把焦点还给原按钮。**面板打开期间 `game_skip_wave` 一律被吞掉**：它不重开面板、不当作确认、不提交任何意图，视图与状态都不变；关闭只能经面板内的「取消 / 确认」或 `ui_cancel`。跳过与结束取餐都不得由 HUD 自行扣回合或丢菜，HUD 只提交意图。
+16. **跳过与结束取餐由 HUD 呈现、菜单波次定义语义**：非最后一波显示「跳过本波 · 放弃剩余 N 道 · 花 1 回合」（`N` 取当前波 `visible_dishes` 数量，来自菜单波次；代价前置是 `menu-waves.md` 的硬要求），激活即提交，不再二次确认（代价已写在按钮上）；最后一波显示「结束取餐（免费）」，激活后打开 HUD 内的确认面板，面板默认焦点在「取消」。确认面板**不是**输入上下文意义上的 `Modal`——它不调用 `push_context(Modal)`（该接口的唯一调用方是界面流程），而是在 Run 上下文内做焦点陷阱：面板打开时导航限制在面板内，`ui_cancel` 关闭并把焦点还给原按钮。**面板打开期间 `game_skip_wave` 一律被吞掉**：它不重开面板、不当作确认、不提交任何意图，视图与状态都不变；关闭只能经面板内的「取消 / 确认」或 `ui_cancel`。跳过与结束取餐都不得由 HUD 自行扣回合或丢菜，HUD 只提交意图。**哪个按钮可见、是否可用、原因文案取自哪里，全部来自餐局流程的 `action_availability()` 只读投影**（`skip_visible` / `skip_enabled` / `skip_reason` / `end_visible` / `end_enabled` / `end_reason`；**这里的 `end_reason` 是 RejectCode，与快照里"本局结束原因"的同名枚举是两个域**，HUD 不得混用）；HUD 只把 `*_reason` 映射为文案，**不得自己比较 `turns_remaining ≥ 2` 或 `is_final_wave()`** 来决定可用性——可用性归餐局流程（`run-flow.md` 规则 5）。
 
 17. **无倒计时、无限时确认**：任何确认面板都等待玩家输入，不会因为时间流逝自动关闭或自动确认（时间与回合规则 2；支柱 3）。
 
@@ -161,7 +161,7 @@ HUD 的状态是 `run_state` 的投影，加上一个独立的 `frozen` 维度�
 
 | 系统 | 方向 | 数据/接口 | 硬/软 |
 |---|---|---|---|
-| 餐局流程 | 上游（权威） | `run_state` 只读快照（`run_id`、`station_id`、`run_state`、`frozen`、`turns_remaining`、`turns_total`、`capacity_used`、`capacity_total`、`eaten_count`、`end_reason`、`run_seed`）；信号 `run_started` / `action_committed` / `run_ended` / `run_settled` / `run_faulted` / `run_discarded`；HUD 回传 `focused_dish_id` 与跳过意图 | 硬 |
+| 餐局流程 | 上游（权威） | `run_state` 只读快照（`run_id`、`station_id`、`run_state`、`frozen`、`turns_remaining`、`turns_total`、`turns_used`、`capacity_used`、`capacity_total`、`eaten_count`、`running_net`、`shortfall`、`action_seq`、`end_reason`、`run_seed`）；只读投影 `action_availability()`（跳过/结束取餐的可见、可用与原因）；信号 `run_started` / `action_committed` / `run_ended` / `run_settled` / `run_faulted` / `run_discarded`；HUD 回传 `focused_dish_id` 与跳过意图 | 硬 |
 | 时间与回合 | 上游 | 经快照读 `turns_remaining` / `turns_total`；不自行推算耗尽 | 硬 |
 | 胃容量 | 上游 | 经快照读 `capacity_used` / `capacity_total`；读 `capacity_remaining` 与 `can_fit(d)`；**`Ending` 期间读最后一帧快照，不实时查询**（容量可能在 `run_ended` 重置）；不写、不自建计数器 | 硬 |
 | 菜品数值 | 上游 | `get_dish(id)` → 名称、图标、`price`、`satiety`；**不请求 `unit_value`** | 硬 |
@@ -367,9 +367,10 @@ HUD 的状态是 `run_state` 的投影，加上一个独立的 `frozen` 维度�
 - **If 文本缩放切到 150%**：卡片列数按 `hud_card_columns` 降到 2 列，卡片高度增加；顶栏高度允许增至 96 px；任何文字不截断、不覆盖相邻元素。若仍放不下，右栏内容折成两行，信息块不消失。
 - **If 手柄断开**：焦点保持在最后一张卡上并继续绘制；不重置到第一张、不清空焦点；下一个方向输入或鼠标悬停重新定位。HUD 不显示设备错误（由场景与流程管理处理）。
 - **If 焦点菜在重绘后已不在可见集**（被吃掉或跳波）：焦点移到同一位置的下一张卡；若当前波为空且已自动推进，焦点落到新波第一张可吃菜。
-- **If 当前波全部不可吃**：卡片全部置灰并各自写出原因；焦点仍可移动，`ui_accept` 只给“放不下”反馈；跳过按钮保持可用——HUD 不自行结束本局，也不提示“无菜可吃”（那是菜单波次与餐局流程的判定）。
+- **If 当前波全部不可吃**：卡片全部置灰并各自写出原因；焦点仍可移动，`ui_accept` 只给“放不下”反馈；跳过按钮照常读 `action_availability()`（不是 HUD 自己决定可用）——HUD 不自行结束本局，也不提示“无菜可吃”（那是餐局流程规则 8 的判定）。
 - **If 最后一波点「结束取餐」**：打开确认面板，逐条列出当前波仍会失去的菜，并以「另有 N 道本局剩余」汇总不可见的部分；确认面板不假装知道未揭晓的内容。默认焦点在「取消」，`ui_cancel` 关闭并还原焦点。
-- **If 非最后一波点「跳过本波」**：立即提交，不弹确认；按钮文案已写明代价。若 `turns_remaining ≤ 1`，按钮置为不可用且不提交：`turns_remaining = 0` 时写“没有回合了”；`turns_remaining = 1` 时写“最后一回合不能跳波”（跳过会花掉唯一剩下的回合，玩家将进入一波却无回合可吃，餐局流程会返回 `NO_TURNS`）。最后一波的「结束取餐（免费）」不受此限。
+- **If 非最后一波点「跳过本波」**：立即提交，不弹确认；按钮文案已写明代价。按钮是否可用读 `action_availability().skip_enabled`，原因文案由 `skip_reason` 映射（RejectCode 域）：`NO_TURNS` 写“最后一回合不能跳波”（跳过会花掉唯一剩下的回合，玩家将进入一波却无回合可吃）；`FROZEN` 写“暂停中”；`NOT_ACTIVE` 写“本局已结束”；`NO_EATABLE` 写“现在没有可处理的菜”；`NONE` 不写原因；`NOT_FINAL_WAVE` / `STALE_FOCUS` / `CAPACITY` 在跳过按钮上不可达（`skip_visible = false` 时整颗按钮不渲染）。**HUD 不自己比较 `turns_remaining`，也不自行把 `ui_accept` 挡下来**——不可用按钮**仍可获焦**（与规则 10 同一原则：数据状态的不可用是信息，不是流程禁用），激活不提交、只在焦点详情行显示上述原因。`turns_remaining = 0` 不是可停留的 HUD 局面：本局已在同一帧按 `TIME_EXHAUSTED` 结束（`run-flow.md` 规则 9），因此不需要单独的“没有回合了”文案。最后一波的「结束取餐（免费）」按 `end_visible` / `end_enabled` 渲染，`end_reason` 用同一套 RejectCode 文案映射（`FROZEN` → “暂停中”，`NOT_ACTIVE` → “本局已结束”），同样不自行判断 `is_final_wave()`。
+- **If `turns_remaining = 1` 且当前波可见菜都放不下**：这不是 HUD 的空转态——餐局流程在同一次判定里按 `NO_EATABLE_DISH` 结束本局（`run-flow.md` 规则 8），HUD 收到 `run_ended` 后进入 `Ending` 并保持最后一帧合法画面；HUD 不得在此期间画出一个“跳过与吃菜都不可用、只能移焦点”的界面。
 - **If 跳过或吃菜被餐局流程拒绝**：HUD 不乐观更新任何数字；保持旧值，焦点详情行显示一行拒绝原因（来自 `run_flow` 的结构化错误），150 ms 后恢复常态文案。
 - **If `run_discarded` 在 `Frozen` 中到达**：直接回 `Hidden`，不播放收尾动画，不显示“本局结束”；被丢弃的局没有收据。
 - **If 首局引导压入 Blocked 上下文**：HUD 的回合、容量、净利数字仍然可见（餐局流程 UI Requirements 7）；引导层由首局引导绘制，HUD 通过 `get_anchor_rect(anchor_id)` 提供被讲解控件的屏幕矩形，不改变自己的布局。
@@ -380,12 +381,12 @@ HUD 的状态是 `run_state` 的投影，加上一个独立的 `frozen` 维度�
 
 | 系统 | 方向 | 接口 | 硬/软 | 状态 |
 |---|---|---|---|---|
-| 餐局流程 | 上游 | `run_state` 快照；`run_*` 信号；接收 `focused_dish_id` 与跳过/结束取餐意图 | 硬 | GDD 已写（`design/gdd/run-flow.md`） |
+| 餐局流程 | 上游 | `run_state` 快照；`action_availability()` 可用性投影；`run_*` 信号；接收 `focused_dish_id` 与跳过/结束取餐意图 | 硬 | GDD 已写（`design/gdd/run-flow.md`） |
 | 时间与回合 | 上游 | 快照中的 `turns_remaining` / `turns_total` / `turns_used` | 硬 | GDD 已写 |
 | 胃容量 | 上游 | 快照中的 `capacity_used` / `capacity_total`；`capacity_remaining`；`can_fit(d)` | 硬 | GDD 已写 |
 | 菜品数值 | 上游 | `get_dish(id)` → 名称、图标、`price`、`satiety`；不请求 `unit_value` | 硬 | GDD 已写 |
 | 腻度与口味 | 上游 | `effective_satiety` / `extra_satiety` / `taste_tags` / `cloying_group` / `cleanse_target`；组计数 | 硬 | GDD 已写 |
-| 菜单波次 | 上游 | 波次索引与总数、`visible_dishes`、`preview_dishes`、`?` 数量、跳过/结束取餐可用性与代价 | 硬 | GDD 已写 |
+| 菜单波次 | 上游 | 波次索引与总数、`visible_dishes`、`preview_dishes`、`?` 数量、跳过代价（`advance_cost = 1`）；**跳过/结束取餐的可用性不来自本行，来自餐局流程的 `action_availability()`** | 硬 | GDD 已写 |
 | 结算与入场费 | 上游 | 定义纯函数 `running_net(k)` / `shortfall(k)` 并在结算时复核；实时值经餐局流程快照到达（餐局流程是运行期唯一累加器）；本系统不自推、不求和、不维护第三份累加器 | 硬 | GDD 已写 |
 | 输入 | 上游 | 导航、`ui_accept`、`ui_cancel`、`game_skip_wave`；焦点状态查询 | 硬 | GDD 已写 |
 | 数据配置 | 间接上游 | 菜品/档口记录经菜品数值与菜单波次解析后到达；HUD 不直接查询 | 软 | GDD 已写 |
@@ -445,7 +446,7 @@ UX 规格必须覆盖以下内容，并以本 GDD 的 Formulas 作为数值下�
 
 | 文档 | 关系 | 本系统引用/依据 |
 |---|---|---|
-| `design/gdd/run-flow.md` | 上游（权威） | `run_state` 快照字段、`run_*` 信号、`focused_dish_id` 提交契约、`Ending`/`frozen` 禁用规则、`Settling` 保留最终画面 |
+| `design/gdd/run-flow.md` | 上游（权威） | `run_state` 快照字段、`action_availability()` 可用性投影、`run_*` 信号、`focused_dish_id` 提交契约、`Ending`/`frozen` 禁用规则、无合法动作的同帧结束、`Settling` 保留最终画面 |
 | `design/gdd/time-and-turns.md` | 上游 | `turns_remaining` / `turns_total` / `turns_used`；无倒计时；同帧更新；耗尽不是弹窗 |
 | `design/gdd/stomach-capacity.md` | 上游 | `capacity_used` / `capacity_total` / `capacity_remaining` / `can_fit`；容量条与卡片不可吃原因；不做可吃性排序 |
 | `design/gdd/dish-values.md` | 上游 | `price` / `satiety`；卡片字段；默认按陈列顺序、不按单位价值排序；`unit_value` 只在收据 |
@@ -468,7 +469,7 @@ UX 规格必须覆盖以下内容，并以本 GDD 的 Formulas 作为数值下�
 
 1. **GIVEN** 一局已开始且已吃过 3 道菜（16、5、18 元），**WHEN** HUD 显示净利，**THEN** 显示 `−46`，与本局快照的 `running_net` 完全一致，并与结算纯函数 `running_net(k)` 对同一份 `RunLog` 的复核值一致；HUD 代码路径中不存在价格求和或第三份累加器。
 2. **GIVEN** 一局刚开始、尚未吃任何菜，**WHEN** `run_started` 到达，**THEN** 净利显示 `−entry_fee`（MVP 食堂档口为 `−85`）、回本差额显示 `还差 entry_fee 元`（MVP 为 `还差 85 元`），不需要等第一道菜。
-3. **GIVEN** `turns_remaining = 0`，**WHEN** 快照更新但 `run_state` 仍为 `Active`，**THEN** HUD 不显示“时间到”模态、不进入 `Ending`、只把数字画成 `剩余 0 / 10` 并等待餐局流程的结束信号。
+3. **GIVEN** `turns_remaining = 0`，**WHEN** 快照更新但 `run_state` 仍为 `Active`（只存在一帧的瞬态），**THEN** HUD 不显示“时间到”模态、不自行进入 `Ending`、把数字画成 `剩余 0 / 10`，并在同一帧收到 `run_ended(TIME_EXHAUSTED)` 后进入 `Ending`；不存在停在该画面的稳定状态。
 4. **GIVEN** 快照的 `running_net` / `shortfall` 查询失败或上游返回错误，**WHEN** HUD 重绘，**THEN** 净利与差额位置显示 `—`，不显示 0、不显示旧值、不自行求和、不回退到第三份累加器。
 5. **GIVEN** 同一帧到达两个 `action_committed`，**WHEN** HUD 重绘，**THEN** 只渲染最后一个快照，不出现两个中间态；调试构建记录一次 `HUD_INVARIANT` 5。
 6. **GIVEN** `run_faulted` 在 `Active` 中到达，**WHEN** HUD 进入 `Faulted`，**THEN** 保留最后一帧布局、受影响数字为 `—`、顶栏显示错误码文字、无控件可获焦。
@@ -498,9 +499,10 @@ UX 规格必须覆盖以下内容，并以本 GDD 的 Formulas 作为数值下�
 21. **GIVEN** 当前波 4 道菜，**WHEN** HUD 渲染，**THEN** 4 张卡按 `visible_dishes` 顺序陈列，不按价格、饱腹或单位价值排序；无默认排序控件被激活。
 22. **GIVEN** 一张卡被焦点选中，**WHEN** 玩家按 `ui_accept`，**THEN** HUD 把该卡 id 随动作提交给餐局流程，餐局流程校验其仍在可见集；HUD 不自行扣回合或改容量。
 23. **GIVEN** 焦点落在不可吃的卡上，**WHEN** 玩家按 `ui_accept`，**THEN** HUD 不提交动作，卡片抖动 ≤ 150 ms 并在焦点详情行写出“放不下”。
-24. **GIVEN** 非最后一波，**WHEN** 玩家激活「跳过本波 · 花 1 回合」，**THEN** HUD 立即提交跳波意图，不弹二次确认；回合数字由随后的 `action_committed` 在同一帧更新。
+24. **GIVEN** 非最后一波且当前波还剩 3 道，**WHEN** 渲染跳过按钮，**THEN** 文案为「跳过本波 · 放弃剩余 3 道 · 花 1 回合」（N 与 `visible_dishes` 数量一致）；**WHEN** 玩家激活它，**THEN** HUD 立即提交跳波意图，不弹二次确认；回合数字由随后的 `action_committed` 在同一帧更新（`menu-waves.md` AC 20）。
 25. **GIVEN** 最后一波，**WHEN** 玩家激活「结束取餐（免费）」，**THEN** 打开 HUD 内确认面板，逐条列出将失去的当前波菜品，默认焦点在「取消」；`ui_cancel` 关闭并把焦点还原到按钮；确认后面板关闭并提交意图。
-26. **GIVEN** 最后一波且 `turns_remaining ≥ 1`，**WHEN** 渲染「结束取餐」，**THEN** 按钮可用且文案写明免费。**GIVEN** 非最后一波且 `turns_remaining = 0`，**WHEN** 渲染「跳过本波」，**THEN** 按钮不可用并写明“没有回合了”。**GIVEN** 非最后一波且 `turns_remaining = 1`，**WHEN** 渲染「跳过本波」，**THEN** 按钮不可用并写明“最后一回合不能跳波”，激活不提交 `game_skip_wave`；此时吃菜按钮保持可用。
+26. **GIVEN** 最后一波且 `turns_remaining ≥ 1`，**WHEN** 快照的 `action_availability()` 返回 `end_visible = true`、`end_enabled = true`，**THEN** 「结束取餐」按钮可用且文案写明免费。**GIVEN** 非最后一波且 `turns_remaining = 1` 且有可吃菜，**WHEN** `skip_enabled = false`、`skip_reason = NO_TURNS`，**THEN** 按钮不可用并写明“最后一回合不能跳波”，激活不提交 `game_skip_wave`，吃菜按钮保持可用；**WHEN** 全仓静态扫描 HUD 代码，**THEN** `turns_remaining >= 2`、`turns_remaining <= 1`、`is_final_wave()` 的比较命中 0 次（可用性只来自 `action_availability()`）。**GIVEN** 快照里 `turns_remaining = 0` 而 `run_state` 仍为 `Active`（单帧瞬态），**THEN** HUD 按 `skip_reason` 渲染禁用态，并在同一帧收到 `run_ended(TIME_EXHAUSTED)` 后进入 `Ending`，不出现只画着禁用按钮的停留画面。
+26a. **GIVEN** `turns_remaining = 1` 且当前波所有可见菜都放不下，**WHEN** 餐局流程判定结束并广播 `run_ended(NO_EATABLE_DISH)`，**THEN** HUD 在同一帧进入 `Ending` 并保留最后一帧合法画面；调试截图中不存在“跳过与吃菜都不可用、只能移动焦点”的停留态。
 27. **GIVEN** 「结束取餐」确认面板已打开，**WHEN** 玩家按 `game_skip_wave`（S / X / 右键），**THEN** 面板保持原状、不重开、不提交意图、不产生 `action_committed`；**WHEN** 再按 `ui_cancel`，**THEN** 面板关闭并把焦点还原到「结束取餐」按钮。
 
 **无障碍**

@@ -810,3 +810,182 @@ Reviewed-Content-Hash: design/gdd/records-and-milestones.md 7cb99488fee8beeba202
 Reviewed-Content-Hash: design/gdd/scene-flow.md 07753accfc002be7257cbcdd17323c73c2b6845a
 Reviewed-Content-Hash: design/gdd/systems-index.md 1119e17f51ee38b2b6fdb56db5d6301d6db94f47
 ```
+
+---
+
+## Review — 2026-11-06 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: S
+Specialists: none (lean)
+Blocking items: 4 | Recommended: 5
+Summary: Both edited `entry_fee` rows now correctly put resolution and freezing in run-flow and make settlement read `RunLog.entry_fee`, matching run-flow rules 22/23, settlement rule 2 and the registry's `running_net`/`shortfall` notes. The over-correction is in the same cells: "结算不直接查数据目录" is false (settlement is a hard downstream that still reads station/dish records and the `Ready` gate), "写进本局快照" is not published by run-flow, and the dependency table still has no 结算与入场费 row. Whole-document read (no delta), 6/6 standard sections present; Player Fantasy and Tuning Knobs remain advisory at `standard`.
+Prior verdict resolved: Yes — latest entry (2026-11-04, lean, APPROVED) carried 0 blocking items; its note that the duplicated AC 23 label was carried unchanged still holds and is now re-raised below because Game Feel cites it.
+Findings:
+- [BLOCKING] Interactions `:82` / Dependencies `:192` — "结算只读 `RunLog.entry_fee`，不直接查数据目录" contradicts `settlement-and-entry-fee.md:95` and `:324`, where 结算与入场费 is a hard downstream reading `get_station(id)` (存在性、`display_name`), `get_dish(id)` (`price`、`satiety`), the int64 rule and the `Ready` gate. Only the `entry_fee` read moved to `RunLog`. The dependency table (`:186-201`) has no 结算与入场费 row at all although settlement declares data-config its upstream, so `:203`'s "均已列出本系统" is false and the bidirectional rule is broken.
+- [BLOCKING] Interactions `:82` / Dependencies `:192` — "写进本局快照与 `RunLog`" overstates the contract: run-flow's snapshot field table (`run-flow.md:136-150`) publishes no `entry_fee` (only `running_net` starting at `−entry_fee`); `entry_fee` lives only in `RunLog` (`run-flow.md:40`). `:192` also attaches `price(d)` — the 菜品数值 interface (`run-flow.md:119`) — to the run-flow/data-config edge, while data-config's own price interface is `get_dish(id).price`.
+- [BLOCKING] Registry Values `:130` — the formula example gives the real station id `station_canteen` `entry_fee=30`, but registry `station_canteen_entry_fee` is `85` (`entities.yaml:1211-1220`, notes "Stored as StationData.entry_fee"). A copied fixture ships a 55-yuan-wrong entry fee; use 85 or a synthetic `station_example` id.
+- [BLOCKING] Acceptance Criteria `:250-251` — two criteria are numbered 23 (`cloy_cap` and the hot-reload price test); Game Feel `:214` cites "Acceptance Criteria 第 23 条" for the hot-reload behaviour, which now resolves to the `cloy_cap` criterion. Label one of them `23a`/`23b` instead of renumbering (preserves external citations).
+- [RECOMMENDED] Cross-document (`run-flow.md:466`) — Open Question 10 still says "本设计由结算读取；本系统只解析 `station_id`", contradicting run-flow's own rules 22/23 and this document's corrected rows. Close it, otherwise the two documents disagree about who reads `entry_fee` while both are In Review.
+- [RECOMMENDED] Dependencies `:192` — the 餐局流程 row now carries a settlement clause; split it into a 结算与入场费 row (`RunLog.entry_fee` only, plus its record reads from the blocker above) so each edge is readable on its own.
+- [RECOMMENDED] Coverage — the changed contract has no criterion in this document; it is only proven by `run-flow.md` AC 1/14 and `settlement-and-entry-fee.md` rule 2 / AC 25. Add a one-line AC ("station `entry_fee` change is visible in `RunLog.entry_fee`, and never re-read at settlement") or cite the owning ACs.
+- [RECOMMENDED] Acceptance Criteria 22 (`:249`) — a p95 ≤100 ms budget on 300 records is hardware-dependent; keep it but state it as a non-blocking evidence item, as run-flow does for performance criteria.
+- [RECOMMENDED] Process (`systems-index.md:58`) — the row is still `Approved` while the header is `In Review`; this substantive edit invalidates the approval (`.claude/rules/design-docs.md:28-31`).
+
+Reviewed-Content-Hash: design/gdd/data-config.md 92b3a28fc63465eacf3a88d3fec13bdff9f9455f
+Reviewed-Content-Hash: design/registry/entities.yaml 1a9dceea86fa114cbbbe92eeaab97ff540737277
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md 346526135c3bfbf7829d9a9bc6955d9088722b80
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
+Reviewed-Content-Hash: design/gdd/menu-waves.md a0b26691ca0f6ba5cac4c01ac0704913179b43ed
+Reviewed-Content-Hash: design/gdd/systems-index.md 3f1fa74ca6507898756185f9530eaf4ccfe9a27a
+Reviewed-Content-Hash: docs/architecture/adr-0007-run-state-settlement-transaction.md 27029b18c6265825a3ffb4def6849166fb5736aa
+Reviewed-Content-Hash: docs/architecture/adr-0013-action-pipeline-end-judge.md 3e709cc7b5901dc11ba7ae9a7b7f73d19fc616e8
+
+---
+
+## Review — 2026-11-17 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: S
+Specialists: none (lean)
+Blocking items: 3 | Recommended: 8
+Summary: All four prior blocking items are closed: the combined 餐局流程/结算 row is split (`:82`, `:83`) with settlement's real reads (`get_station` → `display_name`, `get_dish` → `price`/`satiety`) and `entry_fee` sourced only from `RunLog.entry_fee`; a 结算与入场费 row now exists in Dependencies (`:194`) so reciprocity with `settlement-and-entry-fee.md:95`/`:324` holds; "写进本局快照" is gone; the example's `entry_fee` is 85; and the duplicate AC 23 is renumbered 23a (`:253`). Three residuals: the same edited example cell still fails this document's own validator (`taste_tags=[oil]` is outside `TAGSET`), two "第 23 条" citations still point at the `cloy_cap` test instead of 23a, and the replacement parenthetical now under-claims the snapshot ("只发布 `shortfall`"). Whole-document read (no delta), 6/6 standard sections present; Player Fantasy and Tuning Knobs remain advisory at `standard`.
+Prior verdict resolved: Partially — 4/4 blocking closed. Of the prior 5 recommended: 2 closed (run-flow Open Question 10 marked resolved 2026-11-17; the 餐局流程 row split), 3 open and re-raised below, plus one carried-forward item from 2026-11-04 (Recommended 6, the invented ids).
+Findings:
+- [BLOCKING] Formulas example `:131` — `taste_tags=[oil]` is not in the fixed table (酸/甜/苦/辣/鲜/冰/油, `:34`/`:124`; registry spells it `油`), so `R_dish(d)` (`:99`) is false and the example's own "`valid(D)=true`" claim fails; anyone copying the block as a fixture gets `Failed`. The same cell still attaches `dish_fried_rice` (not one of the 12 registered dishes) and `upgrade_capacity` cost 40 / max 3 (the real record is `upgrade_stomach_capacity`, cost 12 / max 5, `meta-upgrades.md:278`) to the real `station_canteen`. Use `油` plus a registered dish, or relabel the whole block as synthetic (`station_example`, `dish_example_a`) so it cannot be pasted into a `.tres` (carried Recommended 6 from 2026-11-04).
+- [BLOCKING] Game Feel `:216` — still cites "Acceptance Criteria 第 23 条" for the `.tres` price-change behaviour, but 23 is now the `cloy_cap` test and the price test is 23a (`:253`); `:268` repeats the same off-by-one ("转为第 23 条的行为验证"). The same sentence's "不重启" is not what AC 23a verifies (it starts the game) and contradicts Open Question 3, where hot reload is deferred to Vertical Slice.
+- [BLOCKING] Interactions `:82` — "（运行期快照不另存 `entry_fee`，只发布 `shortfall`）" is false: run-flow's snapshot publishes both `running_net` and `shortfall` (`run-flow.md:147`). The cell edited to remove one over-claim now under-claims instead; write "只发布 `running_net` / `shortfall`".
+- [RECOMMENDED] Dependencies `:194` — the settlement row omits the `Ready` gate and the int64 sum rule that `settlement-and-entry-fee.md:324` says it relies on; add them so the row matches its consumer.
+- [RECOMMENDED] Interactions `:82` / Dependencies `:193` — neither cell states the resolution precedence (`RunConfig.entry_fee_override` else `StationData.entry_fee`, run-flow rule 22) nor that `station_id` resolution and `dish_pool` id set are read in the same step; "解析 `station_id` 与 `entry_fee`" hides the override.
+- [RECOMMENDED] Coverage — the contract the last round asked for still has no criterion here: AC 23a proves price-from-data, nothing proves `RunLog.entry_fee` is frozen from `StationData.entry_fee` and never re-read at settlement (only `run-flow.md` AC 1/14 and settlement rule 2 / AC 25). Add one line or cite those ACs. (Second recurrence.)
+- [RECOMMENDED] Acceptance Criteria 22 (`:251`) — p95 ≤ 100 ms on 300 records still names no reference machine (carried Recommended 7, still open).
+- [RECOMMENDED] Registry — `station_canteen_entry_fee` (`entities.yaml:1212`) `referenced_by` omits this file although `:131` restates 85; `cloy_cap` and `wave_size_default` already include it. Registry edits are out of scope here.
+- [RECOMMENDED] Cross-document (`settlement-and-entry-fee.md:64`) — its `RunLog` field table says "结算不再直接读档口记录", contradicting that file's own `:95` and `:324` (and this file's `:83`) that settlement reads `get_station(display_name)`; the note should read "不再从档口记录读 `entry_fee`". Owner: settlement doc (unchanged this round).
+- [RECOMMENDED] Cross-document (`run-flow.md` Open Question 10) — marked resolved 2026-11-17 but cites "`data-config.md:82`/`:192`"; `:192` is now the 局外升级 row (the 餐局流程 row is `:193`). Owner: run-flow doc.
+- [RECOMMENDED] Process — `systems-index.md:58` still reads `Approved` while the header is `In Review`; `.claude/rules/design-docs.md:28-31` voids that approval. (Index not edited here.)
+
+Reviewed-Content-Hash: design/gdd/data-config.md 36fd1ebaca36d1edee0c93b674f21d0418798713
+Reviewed-Content-Hash: design/registry/entities.yaml 6fd2fcaa1a1417219f92a38d2bc3c767d46b25d5
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md 34881a6a257179f401908799c00b8f396ad279ed
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md d9314a9ea5813e2b921939d5275e97261557e4a9
+Reviewed-Content-Hash: design/gdd/dish-values.md 1a899cb0831e3b8e3afebaed272862124d97f1c8
+Reviewed-Content-Hash: design/gdd/systems-index.md 3f1fa74ca6507898756185f9530eaf4ccfe9a27a
+
+---
+
+## Review — 2026-11-17 — Verdict: NEEDS REVISION（第 4 轮：三条 blocker 关闭核验 + 整篇复检）
+Review mode: lean · Workflow: standard
+Scope signal: S
+Specialists: none (lean)
+Blocking items: 1 | Recommended: 9
+Summary: 三条 blocker 里两条完全关闭、一条只做了一半。已关闭：`taste_tags` 改为 `油`（`:131`，在 TAGSET 内，`R_dish` 不再自相矛盾）；两处引用改为「第 23a 条」（`:216`、`:268`），23 与 23a 不再撞号；快照描述改为「运行期快照不另存 `entry_fee`，只发布 `running_net` / `shortfall` 的派生值」（`:82`），与 `run-flow.md:136-152` 逐字相符，既不越权也不再少报。餐局流程行（`:82`/`:193`）与结算行（`:83`/`:194`）的读取范围拆分正确：前者解析 `station_id` 与 `entry_fee` 并冻结进 `RunLog.entry_fee`，后者读 `get_station` → 存在性与 `display_name`、`get_dish` → `price`/`satiety`、`entry_fee` 只从 `RunLog.entry_fee` 取，与 `settlement-and-entry-fee.md:95`/`:324` 逐项相符；示例的 `entry_fee = 85` 与注册表 `station_canteen_entry_fee`（`entities.yaml:1212`）及结算规则 2 一致。未关闭的一半：示例仍把未登记的 `dish_fried_rice` 与 `upgrade_capacity`（`cost=40` / `max_level=3`）挂在真实档口 `station_canteen` 上，与注册表 12 道菜、`meta-upgrades.md:278-280` 的三条升级目录冲突（见 blocking）。全篇阅读（非 delta），6/6 standard 节齐备；Player Fantasy 与 Tuning Knobs 在 `standard` 下仍为 advisory。
+Prior verdict resolved: Partially — 3/3 blocking 名义上关闭，但 #1 只落了 `油` 这半句，同一单元的真实 id 混用未处理，按「半应用仍算 blocking」保留；#2、#3 完全关闭。上轮 8 条 recommended 中 0 条关闭（结算行的 `Ready`/int64、`entry_fee_override` 优先级、冻结契约缺 AC、AC 22 参考机、注册表 `referenced_by`、结算 `:64`、run-flow OQ10 行号、索引状态），全部按原样再提，另补 1 条新的跨文档条目。
+Findings:
+- [BLOCKING] Formulas Example `:131` — 该单元只把 `oil` 改成 `油`，其余照旧：`dish_fried_rice`（`price=8`、`satiety=2`）不在注册表的 12 道菜里，`upgrade_capacity`（`cost=40`、`max_level=3`）也不存在——`meta-upgrades.md:278-280` 的真实目录是 `upgrade_stomach_capacity`（12 / 1.35 / 5）、`upgrade_cloying_resistance`（20 / 1.35 / 1）、`upgrade_menu_vision`（16 / 1.35 / 3）；两者却都挂在真实档口 `station_canteen` 与真实入场费 85 旁边。上一轮的 blocker 原文是「用 `油` 加上一道登记菜，或把整段标为合成（`station_example` / `dish_example_a`）」，两条路一条也没走完。照抄成 `.tres` 的人会得到一个只剩 2 道菜（其中一道不存在）的 `station_canteen`，并多出一条与升级目录冲突的 `upgrade_capacity`。同句「2 个档口、4 道菜、2 项升级」只描述了 2 道菜与 1 项升级，`valid(D)=true` 对未描述的记录无法核验。
+- [RECOMMENDED] Dependencies `:194` — 结算行仍缺 `Ready` 前提与 int64 求和规则，而 `settlement-and-entry-fee.md:324` 明写它依赖这两条。（第二轮再提）
+- [RECOMMENDED] Interactions `:82` / Dependencies `:193` — 两行都没写入场费的解析优先级（`RunConfig.entry_fee_override` 优先，否则 `StationData.entry_fee`，`run-flow.md` 规则 22），也没写 `station_id` 解析与 `dish_pool` id 集合是同一步读完；「解析 `station_id` 与 `entry_fee`」把 override 藏掉了。（第二轮再提）
+- [RECOMMENDED] Coverage — 上一轮要求的判据仍缺：AC 23a 只证价格来自数据层，没有任何一条断言 `RunLog.entry_fee` 由 `StationData.entry_fee` 冻结、结算期不再重查（目前只有 `run-flow.md` AC 1/14 与 settlement 规则 2 / AC 25 间接覆盖）。补一行或明确引用那几条。（第三轮再提）
+- [RECOMMENDED] Acceptance Criteria 22 `:251` — 300 条记录 p95 ≤ 100 ms 仍不写参考机器与判定口径（是否阻断）。（第三轮再提）
+- [RECOMMENDED] Registry — `station_canteen_entry_fee`（`entities.yaml:1212`）的 `referenced_by` 仍不含本文件，虽然 `:131` 重述 85；`cloy_cap` 与 `wave_size_default` 已含本文件。注册表不在本次可改范围。
+- [RECOMMENDED] 跨文档（`settlement-and-entry-fee.md:64`）— `RunLog` 字段表仍写「结算不再直接读档口记录」，与同一文件的 `:95`/`:324` 以及本文件 `:83`（结算读 `get_station` 的 `display_name`、`get_dish` 的 `price`/`satiety`）相反；应改为「不再从档口记录读 `entry_fee`」。owner 是结算文档（本轮未改）。（第二轮再提）
+- [RECOMMENDED] 跨文档（`run-flow.md` Open Question 10，`:465`）— 已标「已解决（2026-11-17）」，但引用的 `data-config.md:82`/`:192` 中 `:192` 现在是局外升级行，餐局流程行是 `:193`；引用应随本次拆分更新。owner 是 run-flow 文档。
+- [RECOMMENDED] 跨文档（本文件 `:201` 局内 HUD 行）— 「通过菜品数值/时间与回合取得数字，不直接读 catalog」与 ADR-0019 D3 第 7 步（`:213`）不符：档口显示名与菜品图标由 HUD 的投影层 `HudSource` 直读 `data.get_station(station_id)` / `data.get_dish_icon(id)`，`in-game-hud.md:173`/`:392` 也是同一说法。三处应统一为「数字经下游转发；显示名与图标由 HUD 投影层只读直取」。
+- [RECOMMENDED] Process — `systems-index.md:58` 仍读 `Approved`，而本文件表头是 `In Review`，`.claude/rules/design-docs.md:28-31` 使该批准失效。（第三轮再提；索引未在此修改）
+
+### Nice-to-Have
+
+- 规则 7 把「建议增加一条：至少存在一个 `unlock_cost = 0` 的档口」写在校验规则正文里，读起来像硬规则；运行期兜底已由「解锁与档口」的 `NoPlayableStation` 提供，可把这条明确为 warning 或移出规则 7。
+- TAGSET（`:34`/`:124`）有 7 个标签，12 道菜的注册表实际只用到 6 个（`苦` 未被使用）；合法，可在 `TAGSET` 行注明为预留。
+
+### 判定说明
+
+lean 模式不派发 `creative-director`，主评审意见即最终意见。三条 blocker 的核验结论是「两整半」：`taste_tags`、引用编号、快照描述三处文字都已改到位，而且快照描述既不越权也不像上一轮那样反向少报；餐局流程与结算两条读取边的归属也与下游 GDD 的接口行逐项对齐。剩下的这条 blocking 不是新问题，而是上一轮同一单元里「真实 id 混用未登记/冲突记录」那半句没有执行——技能 Phase 3 的注册表检查对示例、目录与变体注记一视同仁，因此按 Required Before Implementation 处理。它只需改一个单元（换登记菜或整段改合成 id），不需要动任何规则或 AC。
+
+### Scope Signal
+
+Rough scope signal: **S**（基础层、无上游 GDD、公式只有集合合法性与三项派生计数；producer 应在排期前复核）。
+
+### Verdict: NEEDS REVISION
+
+1 条 blocking、9 条 recommended、2 条 nice-to-have。本 GDD 未被修改；`systems-index.md:58` 的状态待 blocking 关闭并由编排会话统一收口。
+
+Reviewed-Content-Hash: design/gdd/data-config.md 8d799e593ad60b254814ede22b4f9b3fc8de99e4
+Reviewed-Content-Hash: design/registry/entities.yaml 6fd2fcaa1a1417219f92a38d2bc3c767d46b25d5
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: .claude/rules/design-docs.md 638ca578625c5a3d24a5bafe0524777b351ab2f8
+Reviewed-Content-Hash: design/gdd/run-flow.md f584ae1193d3a9e039b38c02338cafc163efa92a
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md d9314a9ea5813e2b921939d5275e97261557e4a9
+Reviewed-Content-Hash: design/gdd/dish-values.md 1a899cb0831e3b8e3afebaed272862124d97f1c8
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md d8c7b56e7ffa8611ce9c271b25b064d38a8fb204
+Reviewed-Content-Hash: design/gdd/menu-waves.md b4eb4df304c1a82859ea02ee18d0162c9c5c4485
+Reviewed-Content-Hash: design/gdd/stomach-capacity.md 93968bd02251e306f5b99c7b1cc5800272e54a06
+Reviewed-Content-Hash: design/gdd/time-and-turns.md 78dcb4e9ce3a408138c7a08ff2464bc571447101
+Reviewed-Content-Hash: design/gdd/in-game-hud.md b3bf25a6c9aae77d037a0a13a142d7cc62f3cf03
+Reviewed-Content-Hash: docs/architecture/adr-0013-action-pipeline-end-judge.md 8bfc9f56972968772b727c67dcc714e2e71baf1f
+Reviewed-Content-Hash: docs/architecture/adr-0019-in-game-hud-binding-layout.md 23304c8212ab59cede6f6f3d81cd40cea079cde5
+Reviewed-Content-Hash: design/gdd/systems-index.md 3f1fa74ca6507898756185f9530eaf4ccfe9a27a
+
+---
+
+## Review — 2026-11-17 — Verdict: APPROVED（第 5 轮：示例夹具改用已发布记录后的全量 lean 复审）
+Review mode: lean · Workflow: standard
+Scope signal: S
+Specialists: none (lean)
+Blocking items: 0 | Recommended: 16
+Summary: 第 4 轮唯一的 blocking 已完全关闭。示例（`:131`）现在逐项对得上已发布目录：`station_canteen` 的 `entry_fee=85` 与注册表 `station_canteen_entry_fee`（`entities.yaml:1212`）、结算规则 2、`dish-values.md:42` 一致，`cloy_cap=3` 等于本文件规则 5 的默认值与注册表 `cloy_cap`（`entities.yaml:1180`）；`dish_mapo_tofu` 12 / 2 / 辣,鲜,油 与 `dish_braised_pork` 16 / 3 / 甜,油 逐字段等于 `dish-values.md:52`、`:55` 的 MVP 菜品表；`upgrade_stomach_capacity` 的 `cost=12`、`max_level=5`、`effect_value=1.0` 等于 `meta-upgrades.md:278` 的 MVP 升级目录（`cost_growth` 未写，取 Resource 默认 1.35，与记录一致）。`dish_fried_rice` / `upgrade_capacity` 全文已无命中，`dish_pool` 大小不变式（2 = 2）成立，标签全部落在 TAGSET 内，「1 个档口、2 道菜、1 项升级」与正文描述一致，并明确声明这是截取夹具、不代表完整 12 道菜目录。全篇阅读（非 delta），6/6 standard 节齐备；Player Fantasy 与 Tuning Knobs 在 `standard` 下仍为 advisory。
+Prior verdict resolved: Yes — 第 4 轮的 1 条 blocking 关闭（示例的真实 id、真实数值、池大小与叙述四处同时对齐，自造菜与自造升级已清除）。上轮 9 条 recommended 因本轮只改示例而 0 条关闭，全部按原样再提；另补 2 条本轮新发现（示例的 `valid(D)=true` 仍隐含未列出的 `BalanceData` 与 cue 目录；规则 7 的 `DISPLAY_NAME_NOT_A_KEY` 没有对应 AC），以及 5 条更早轮次仍未关闭的公式/AC 条目。
+Findings:
+- [RECOMMENDED] Formulas Example `:131` — 「`valid(D)=true`」仍依赖夹具未列出的两项：`|D_bal| = 1`（`:95`）与 `cueValid(C_cue)`（`:95`/`:121`）。示例只描述 1 档口 / 2 菜 / 1 升级，照抄成夹具会得到 `valid(D)=false`。补一句「另加 1 个 `BalanceData` 与一份合法 cue 目录」即自洽。
+- [RECOMMENDED] Dependencies `:194` — 结算行仍缺 `Ready` 前提与 int64 求和规则，而 `settlement-and-entry-fee.md:324` 明写它依赖这两条；同一文件的 `:83` 已列出完整读取面，两行粒度不一致。（第四轮再提）
+- [RECOMMENDED] Interactions `:82` / Dependencies `:193` — 两行仍未写入场费解析优先级（`RunConfig.entry_fee_override` 优先，否则 `StationData.entry_fee`，`run-flow.md:50` 规则 22），也未写 `turn_budget` 与 `dish_pool` id 集合是在同一步读完；「解析 `station_id` 与 `entry_fee`」把 override 与另两项读取藏掉了。（第三轮再提）
+- [RECOMMENDED] Coverage — 仍无一条 AC 证明 `RunLog.entry_fee` 由 `StationData.entry_fee` 冻结、结算期不再重查；目前只有 `run-flow.md` AC 1/14 与 settlement 规则 2 / AC 25 间接覆盖。补一行或明确引用那几条。（第四轮再提）
+- [RECOMMENDED] Detailed Rules 规则 7 `:55` — `DISPLAY_NAME_NOT_A_KEY` 是规则正文里唯一的 warning 级校验，但 AC 1–35 无一条覆盖它（AC 9 只测 `icon` 警告，AC 31 只测 `COST_GROWTH_OUTSIDE_DESIGN_BAND`）。补一条「`display_name` 非 key → Ready 且 warnings=1」即可闭合。
+- [RECOMMENDED] Detailed Rules 规则 7 `:55` / Formulas `:137` — 「建议增加一条：至少存在一个 `unlock_cost = 0` 的档口」仍写在硬规则列表里；同时 `dish_count ≥ 1` 被声明为「由 `R_sta` 蕴含」，但 `D_sta = ∅` 时 `R_sta` 空真、`valid(D)=true`、`dish_count = 0`。要么把集合级谓词写进 `valid(D)` 并配 AC，要么把该建议降为 warning 并软化范围声明。（第三轮再提）
+- [RECOMMENDED] Formulas `:99`–`:125` — `D_ids`、`S_ids`、`U_ids`、`uniqueIds(·)`、`cyclic(·)`、`dish(·)`、`upgrade_count` 仍出现在公式而未在变量表定义；另外 `prereq_depth` 的范围 `1–upgrade_count`（`:139`）与 AC 20 的三节点链 `depth=2`、无前置升级 `depth=0` 矛盾，应为 `0–(upgrade_count − 1)`。（第四轮再提）
+- [RECOMMENDED] Formulas `:100` — `R_upg` 仍未校验 `effect_type` 枚举成员：`(u.effect_type ∈ {STOMACH_CAPACITY, MENU_VISION} → …)` 对枚举外的整数空真，`.tres` 里 `effect_type=7` 可通过；id 正则 `^[a-z][a-z0-9_]*$` 也只写在 `DishData` 规则下，`upgrade_BAD` 仅靠前缀即可通过。（第三轮再提）
+- [RECOMMENDED] Detailed Rules 规则 4 `:44` — 「小数部分在解析时取整」未说明方向；`meta-upgrades.md:57` 规则 16 用 `floor`，2.5 存在两种读法。写明「向下取整」或指向该规则即可。
+- [RECOMMENDED] Acceptance Criteria 22 `:251` — 仍只写「最小规格 PC、非调试构建」，没有具体参考机，也未说明超预算是否阻断；`run-flow.md` 对性能判据的做法可参照。（第四轮再提）
+- [RECOMMENDED] Acceptance Criteria 19 `:248` — 「操作被拒绝或抛错」两种行为都能通过，未指定机制；`DishData` 是可变导出 Resource，需点名 setter 或只读投影之一。（第二轮再提）
+- [RECOMMENDED] Registry — 示例重述了 85 / 12,2 / 16,3，但 `station_canteen_entry_fee`（`entities.yaml:1215`）、`dish_mapo_tofu`（`:197`）、`dish_braised_pork`（`:245`）的 `referenced_by` 都不含本文件；`cloy_cap` 与 `wave_size_default` 已含。注册表不在本次可改范围。
+- [RECOMMENDED] 跨文档（`settlement-and-entry-fee.md:64`）— `RunLog` 字段表仍写「结算不再直接读档口记录」，与同一文件 `:324`（读 `get_station` 的 `display_name`）及本文件 `:83` 相反；应改为「不再从档口记录读 `entry_fee`」。（第三轮再提）
+- [RECOMMENDED] 跨文档（`run-flow.md:468` Open Question 10）— 已标已解决，但引用的 `data-config.md:82`/`:192` 中 `:192` 现在是局外升级行，餐局流程行是 `:193`；引用应随拆分更新。
+- [RECOMMENDED] 跨文档（本文件 `:201` 局内 HUD 行）— 「通过菜品数值/时间与回合取得数字，不直接读 catalog」与 `in-game-hud.md:180`（卡片图标/名称来自 `DataConfig.get_dish_icon`）、`:259` 以及 `adr-0019:213`（`HudSource` 直取 `get_station` 显示名与 `get_dish_icon`）不符；三处应统一为「数字经下游转发；显示名与图标由 HUD 投影层只读直取」。（第二轮再提）
+- [RECOMMENDED] Process — `systems-index.md:58` 仍读 `Approved`，而本文件表头是 `In Review`，`.claude/rules/design-docs.md:28-31` 使该批准失效。（第四轮再提；索引未在此修改）
+
+### Nice-to-Have
+
+- 示例的 `station_canteen` 只带 2 道菜，而 `dish-values.md:42` 与 `menu-waves.md:313` 都以 12 道菜描述该档口；这 2 道菜的池也不满足 `dish-values.md:36` 规则 10 的 `menu_healthy`（UV 跨度 1.125，无 ≥5 格档）。正文已声明「截取夹具」，故不阻断；若希望夹具可直接照抄，档口 id 改用 `station_example` 更稳。
+- Dependencies `:203` 的「场景与流程管理」行只有「GDD 已写」，没有像其他行那样给出 `design/gdd/scene-flow.md` 路径。
+- Open Question 1 与 2 的目标解决时间写「原型阶段（2026-11-17 前）」，今日已到期且仍开放；建议更新日期或给出裁决。
+- TAGSET（`:34`/`:124`）有 7 个标签，12 道菜的注册表只用到 6 个（`苦` 未被使用）；合法，可在 `TAGSET` 行注明为预留。
+- Player Fantasy 与 Tuning Knobs 在 `standard` 下仍为 advisory（不变）。
+
+### 判定说明
+
+本轮是全新全篇 lean 复审，不是 delta：技能 Phase 3 的注册表检查覆盖表格、目录与示例/变体，因此示例与 `dish-values.md`、`meta-upgrades.md`、`entities.yaml` 和结算规则逐值比对。结论是第 4 轮 blocking 的四项（真实档口 id、真实菜品数值、真实升级目录、叙述计数）全部落地，池大小不变式与 TAGSET 成员都成立，没有残留自造 id；其余 16 条 recommended 都是精度、覆盖或跨文档同步问题——它们不改任何规则、公式、AC 或平衡值，也不会让程序员或 QA 无法实现/无法判定（示例少列的 `BalanceData`/cue 属于说明补全，示例本身不承担 AC 职责）。据 blocking 定义（是否直接改变实现、或让某条 AC/规则无法通过），本轮 0 条 blocking，故 APPROVED。6/6 standard 所需节齐备（Overview、Detailed Rules、Formulas、Edge Cases、Dependencies、Acceptance Criteria），Formulas 因系统定义数值规则而必需。
+
+### Scope Signal
+
+Rough scope signal: **S**（基础层、无上游 GDD、公式只有集合合法性与三项派生计数；producer 应在排期前复核）。
+
+### Verdict: APPROVED
+
+0 条 blocking、16 条 recommended、5 条 nice-to-have。示例夹具已可作合法 `valid(D)` 的说明书使用（补齐 `BalanceData` 与 cue 目录后可直接当夹具）；`systems-index.md:58` 的 `Approved` 与本文件表头 `In Review` 的状态待编排会话统一收口，索引未在此修改。
+
+Reviewed-Content-Hash: design/gdd/data-config.md 4481fe6d8a0047d784a160a32084ac642ba9fa24
+Reviewed-Content-Hash: design/gdd/dish-values.md 1a899cb0831e3b8e3afebaed272862124d97f1c8
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md d9314a9ea5813e2b921939d5275e97261557e4a9
+Reviewed-Content-Hash: design/gdd/run-flow.md f584ae1193d3a9e039b38c02338cafc163efa92a
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
+Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md 06a670b544d8998eef4a8219cc9fa9d5a6b740b9
+Reviewed-Content-Hash: design/registry/entities.yaml 6fd2fcaa1a1417219f92a38d2bc3c767d46b25d5
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: .claude/rules/design-docs.md 638ca578625c5a3d24a5bafe0524777b351ab2f8
+Reviewed-Content-Hash: design/gdd/systems-index.md 3f1fa74ca6507898756185f9530eaf4ccfe9a27a
+
+## Re-stamp — 2026-11-17
+Status 头行由 `In Review` 改为 `Approved (2026-11-17)`；仅元数据，未改规则、公式、AC、依赖、契约或平衡数值（`.claude/rules/design-docs.md` 的 advisory 情形）。以下为当前字节的盖章：
+
+Reviewed-Content-Hash: design/gdd/data-config.md e4d2ee1de1f4c9affd59a3993adb89056d5e4fa9

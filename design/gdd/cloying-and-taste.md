@@ -1,6 +1,6 @@
 # 腻度与口味（Cloying & Taste）
 
-> **Status**: In Design
+> **Status**: Approved (2026-11-04)
 > **Author**: user + agents
 > **Last Updated**: 2026-11-03
 > **Last Verified**: 2026-11-03

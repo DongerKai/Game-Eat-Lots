@@ -383,3 +383,147 @@ Reviewed-Content-Hash: design/registry/entities.yaml 02f5c072fc535530c710fd71d77
 Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
 Reviewed-Content-Hash: design/gdd/dish-values.md 72cf43fcd49019dd6e5281ed8f6d7df8705a71e0
 Reviewed-Content-Hash: design/gdd/menu-waves.md 4c2da744c1c4b19bc861bd0c09509d6deecbd6b7
+
+---
+
+## Review — 2026-11-06 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean)
+Blocking items: 5 | Recommended: 9
+Summary: The round's central move — availability, visibility and reason all read from `action_availability()`, HUD only formats `*_reason` — is the right contract and the no-legal-action same-frame framing matches ADR-0013 §6. But the reason map contradicts the code vocabulary (FROZEN is "paused", not "ended"; `end_reason` has no copy at all), one ownership line still assigns availability to menu-waves, the disabled-button focus rule contradicts both rule 10 and ADR-0019 #6, and AC 3 still treats `turns_remaining = 0` as a stayable HUD state. Whole-document read (no delta), 6/6 standard sections present; Player Fantasy and Tuning Knobs remain advisory at `standard`.
+Prior verdict resolved: Yes — latest entry (2026-11-06, lean, APPROVED) carried 0 blocking items. Its recommended item on AC 21 wording (still "无默认排序控件被激活", `:499`) is still open; the dish-values cross-doc item is outside this file.
+Findings:
+- [BLOCKING] Core Rules 16 / Edge Cases `:372` — `FROZEN` is mapped to "本局已结束", but ADR-0013 §1 `RejectCode.FROZEN` is "顶层 Paused" and HUD rule 21 (`:69`) itself renders pause as frozen; "本局已结束" belongs to `NOT_ACTIVE`. The two copies are swapped, so the only readable explanation of a frozen skip button states the wrong fact.
+- [BLOCKING] Core Rules 16 / Interactions `:164` — rule 16 promises a mapping for both `skip_reason` and `end_reason`, but no edge case, rule or AC gives any `end_reason` copy, and ADR-0013 §9 emits `NO_EATABLE` / `NOT_FINAL_WAVE` / `NONE` as well as the three HUD maps; `NO_TURNS` copy "最后一回合不能跳波" is also false on the `turns_remaining = 0` transient AC 26 itself asserts. Define the closed set, a copy per value and a fallback.
+- [BLOCKING] Naming `:164`, `:504` vs `:128` — the snapshot field `end_reason` (run end: `NONE`/`TIME_EXHAUSTED`/`NO_EATABLE_DISH`, registry `:890`) and the availability field `end_reason` (RejectCode for the end-pickup button) are two different enums under one identifier, both listed in the same dependency cell; HUD displays the first and would map the second. Rename one (e.g. `end_disabled_reason`) before any code names it.
+- [BLOCKING] Core Rules 10 (`:47`) vs Edge Cases `:372` — rule 10 says controls become truly disabled and unfocusable only in `{Ending, Settling, Handoff, Faulted}` or `frozen`, and deliberately keeps data-state controls focusable so the reason can be read; the new skip rule says an unavailable button "不获得焦点" while `Active`. ADR-0019 #6 (`:36`) likewise requires unavailable controls to stay focusable and read out their reason. As written, AC 26's "按钮不可用并写明…" has no surface to show the text, and C3 becomes an empty focus stop (nav order `:107` has no skip).
+- [BLOCKING] Acceptance Criteria 3 (`:472`) — still models `turns_remaining = 0` + `run_state = Active` as a state HUD renders and "等待餐局流程的结束信号", contradicting rule 5 (`:37`), edge `:372` (declared a same-frame transient, "不需要单独…文案") and AC 26's third GIVEN. Either delete AC 3 or restate it as the intra-frame `action_committed`→`run_ended` sequence with no second render.
+- [RECOMMENDED] Acceptance Criteria 26 (`:504`) — the static scan only bans the literal comparisons `turns_remaining >= 2` / `<= 1` / `is_final_wave()`; a bare `if menu_waves.is_final_wave():`, `turns_remaining == 0`, `> 1` or a helper alias passes. "全仓静态扫描 HUD 代码" is also scope-ambiguous (run-flow and menu-waves legitimately contain `≥ 2`). Assert "HUD module calls no is_final_wave()/no availability threshold; availability values only from `action_availability()`".
+- [RECOMMENDED] Acceptance Criteria 26a (`:505`) — "调试截图中不存在…停留态" is a negative screenshot claim; replace with a frame-probe assertion (exactly one frame between `action_committed` and `run_ended`, no interactive `Active` frame after the judgment).
+- [RECOMMENDED] Core Rules 6 (`:39`) — "`entry_fee` 与取整由结算拥有" is stale: `entry_fee` is resolved and frozen by run-flow (run-flow rule 22, settlement rule 2, registry `:641`); settlement owns only the pure functions and rounding. HUD's own dependency row (`:390`) already says so.
+- [RECOMMENDED] Edge Cases `:360` — empty-run net still "负数或 0（由结算给值）"; the value is `−entry_fee` from the run-flow snapshot (settlement rule 5 / AC 5), never "由结算给值" at runtime. Prior round's item 21 is unfixed.
+- [RECOMMENDED] Edge Cases `:372` — "（规则 9）" points at this file's sorting rule; the intended reference is run-flow rule 9 (end-judgment timing).
+- [RECOMMENDED] Interactions `:170` — "本系统另可调用结算的纯函数复核" is not implementable: both pure functions take a `RunLog`/prefix, which HUD never holds (ADR-0007 `:109`, ADR-0019 capture list `:193-213`); only AC 1 compares externally. Say HUD never calls them.
+- [RECOMMENDED] Interactions `:164` — the snapshot field list omits `turns_used` and `action_seq`, both used by invariant 2/5 (`:328`, `:331`) and listed in Dependencies (`:385`); add them so the contract cell is the published set.
+- [RECOMMENDED] Registry `:686-718`, `:890`, `:1119` — `running_net`/`shortfall` are bidirectional now, but `end_reason`'s `referenced_by` omits this file although HUD displays it, and `onboarding_active` lists HUD although this file never names it; HUD money "最多 5 位" (`:63`, `:316`) still conflicts with `running_net` upper bound `999999` (6 digits); `advance_cost` (`:389`) vs registry `wave_advance_cost`.
+- [RECOMMENDED] Process (`systems-index.md:72`) — HUD row is still `Approved` while the header is `In Review`; this substantive edit invalidates the approval (`.claude/rules/design-docs.md:28-31`). `:400` also asserts the index says `Approved`, which is exactly the stale state.
+
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 27e2978106c35139e3a3d0f371472a7aafd5dc2a
+Reviewed-Content-Hash: design/registry/entities.yaml 1a9dceea86fa114cbbbe92eeaab97ff540737277
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md 346526135c3bfbf7829d9a9bc6955d9088722b80
+Reviewed-Content-Hash: design/gdd/time-and-turns.md 0f2ea128a9a42008413a15dd8608246513ef36f4
+Reviewed-Content-Hash: design/gdd/stomach-capacity.md 43fc521a857c5ce53ba3e1855c271ae2ffdfb1b6
+Reviewed-Content-Hash: design/gdd/menu-waves.md a0b26691ca0f6ba5cac4c01ac0704913179b43ed
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
+Reviewed-Content-Hash: design/gdd/data-config.md 92b3a28fc63465eacf3a88d3fec13bdff9f9455f
+Reviewed-Content-Hash: design/gdd/systems-index.md 3f1fa74ca6507898756185f9530eaf4ccfe9a27a
+Reviewed-Content-Hash: docs/architecture/adr-0013-action-pipeline-end-judge.md 3e709cc7b5901dc11ba7ae9a7b7f73d19fc616e8
+Reviewed-Content-Hash: docs/architecture/adr-0019-in-game-hud-binding-layout.md 23304c8212ab59cede6f6f3d81cd40cea079cde5
+Reviewed-Content-Hash: docs/architecture/adr-0007-run-state-settlement-transaction.md 27029b18c6265825a3ffb4def6849166fb5736aa
+
+---
+
+## Review — 2026-11-17 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean)
+Blocking items: 1 | Recommended: 13
+Summary: All five prior blocking items are closed and closed correctly: the RejectCode copy map is now FROZEN→"暂停中" / NOT_ACTIVE→"本局已结束" / NO_EATABLE→"现在没有可处理的菜" / NONE silent, the end-pickup button uses the same map, `action_availability().end_reason` is declared a RejectCode domain distinct from the snapshot's run-end `end_reason`, unavailable buttons stay focusable and only fail to submit (`:372`), and AC 3 restates turns=0 as the intra-frame `action_committed`→`run_ended` sequence with no stayable state (`:472`, matching ADR-0013's commit-then-judge order). The one new blocker is the interface cell itself: the "本局只读快照" list at `:164` still omits `running_net` / `shortfall` / `action_seq` / `turns_used`, the exact four fields every rule, invariant and AC in this document reads. Whole-document read (no delta), 6/6 standard sections present; Player Fantasy and Tuning Knobs remain advisory at `standard`.
+Prior verdict resolved: Partially — 5/5 blocking closed. Of the prior 9 recommended: 1 closed (the `:372` reference now names `run-flow.md` 规则 9), 8 open and re-raised below; one of them (the snapshot field list) is escalated to blocking because it survived a full revision cycle.
+Findings:
+- [BLOCKING] Interactions `:164` — the snapshot cell lists `run_id`/`station_id`/`run_state`/`frozen`/`turns_remaining`/`turns_total`/`capacity_used`/`capacity_total`/`eaten_count`/`end_reason`/`run_seed` and omits `running_net`, `shortfall`, `action_seq` and `turns_used`, although `run-flow.md:143-147` publishes all four and rule 6 (`:39`), AC 1/2/4 (`:470-473`), invariants 2/5 (`:328`, `:331`) and Dependencies (`:385`) all read them; an implementer wiring HUD from the interface cell would never receive the two numbers this document exists to show.
+- [RECOMMENDED] Edge Cases `:372` — `NONE` is not a member of ADR-0013 §1 `RejectCode` (`adr-0013:91-99`); it exists only as the "可用时 NONE" sentinel in §9 (`:250`) and in ADR-0019 `:747`. Call it a sentinel, or add it to the enum. The same sentence explains `NOT_FINAL_WAVE`/`STALE_FOCUS`/`CAPACITY` as unreachable "because `skip_visible = false`"; only `NOT_FINAL_WAVE` follows from that — the other two are never emitted by the projection at all.
+- [RECOMMENDED] Edge Cases `:372` — the end-pickup half gives two entries (`FROZEN`, `NOT_ACTIVE`) and never states its closed set, its `NONE` case or which codes are unreachable (`NOT_FINAL_WAVE` when `end_visible = false`). ADR-0019 `:747` sketches a third set (`NONE / NO_EATABLE / NOT_FINAL_WAVE`) that contradicts ADR-0013 §9; enumerate the end-reachable codes explicitly so one document wins.
+- [RECOMMENDED] Naming `:59`/`:164`/`:384` — the disambiguation is now stated, but only in rule 16's parenthetical; the interface cell and Dependencies row still name only the snapshot's `end_reason`, and ADR-0019 `:153` (EndReason) / `:747` (RejectCode) keep the same identifier for the projection inside one snapshot table (`run-flow.md:148` vs `:150`). Rename the projection field (e.g. `end_block_reason`) or restate the qualifier where the contract is read.
+- [RECOMMENDED] Acceptance Criteria 26 (`:504`) — the static scan still bans only the literals `turns_remaining >= 2`, `turns_remaining <= 1`, `is_final_wave()`; `== 0`, `> 1`, a helper alias or `menu_waves.is_final_wave()` passes, and "全仓" vs "HUD 代码" is scope-ambiguous. Assert instead: the HUD module contains no availability threshold and no `is_final_wave()` call; availability values come only from `action_availability()`. (Second recurrence.)
+- [RECOMMENDED] Acceptance Criteria 26 (`:504`) — the third GIVEN says HUD "按 `skip_reason` 渲染禁用态" at `turns_remaining = 0`; per `:372` the run has already ended in that same frame, so the frame is constructed and superseded, never presented, and the `NO_TURNS` copy would be false if it were drawn. Drop the GIVEN (AC 3 covers it) or say "构造但不呈现".
+- [RECOMMENDED] Acceptance Criteria — the new focus rule from fix (4) has no criterion: AC 26 asserts activation submits nothing and the reason is written, but nothing asserts the unavailable skip/end button keeps `focus_mode` and that its reason is reachable from D 焦点详情行, which rule 10 and ADR-0019 `:758` now require.
+- [RECOMMENDED] Interactions `:170` — "本系统另可调用结算的纯函数复核" remains unimplementable: `running_net(k)` / `shortfall(k)` take a `RunLog`/prefix that HUD never holds; only AC 1's external comparison does that. Say HUD never calls them. (Second recurrence; run-flow `:126` carries the same sentence.)
+- [RECOMMENDED] Core Rules 6 (`:39`) — "`entry_fee` 与取整由结算拥有" is still stale: run-flow resolves and freezes `entry_fee` (run-flow rule 22/23), settlement owns only the pure functions and rounding. (Second recurrence.)
+- [RECOMMENDED] Edge Cases `:360` — empty run "净利显示负数或 0（由结算给值）": at runtime the value is `−entry_fee` from the run-flow snapshot; settlement is not called until the receipt. (Second recurrence.)
+- [RECOMMENDED] Core Rules 18 (`:63`) / number format (`:316-319`) — "HUD 金额最多 5 位" and the 5-digit min-width still conflict with registry `running_net` range `[-99999, 999999]` (`entities.yaml:695`); net needs 6 digits. (Second recurrence.)
+- [RECOMMENDED] Dependencies `:389` — `advance_cost = 1` vs registry `wave_advance_cost` (`entities.yaml:1203`, whose `referenced_by` still omits this file). (Second recurrence.)
+- [RECOMMENDED] Registry metadata — `end_reason` (`entities.yaml:890`) `referenced_by` omits this file although `:128` displays it, while `onboarding_active` (`:1119`) lists this file although it never names that symbol; `running_net`/`shortfall` (`:692`, `:709`) are correctly bidirectional. Registry edits are out of scope here.
+- [RECOMMENDED] Process — `systems-index.md:72` still reads `Approved` while the header is `In Review`; `.claude/rules/design-docs.md:28-31` voids that approval. `:400` asserts the index says `Approved`, i.e. it records the stale state. (Second recurrence; index not edited here.)
+
+Reviewed-Content-Hash: design/gdd/in-game-hud.md b8ead1263039519de2ff2ad9378fe43a8ea58373
+Reviewed-Content-Hash: design/registry/entities.yaml 6fd2fcaa1a1417219f92a38d2bc3c767d46b25d5
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/run-flow.md 34881a6a257179f401908799c00b8f396ad279ed
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
+Reviewed-Content-Hash: design/gdd/systems-index.md 3f1fa74ca6507898756185f9530eaf4ccfe9a27a
+Reviewed-Content-Hash: docs/architecture/adr-0013-action-pipeline-end-judge.md 3e709cc7b5901dc11ba7ae9a7b7f73d19fc616e8
+Reviewed-Content-Hash: docs/architecture/adr-0019-in-game-hud-binding-layout.md 23304c8212ab59cede6f6f3d81cd40cea079cde5
+
+---
+
+## Review — 2026-11-17 — Verdict: APPROVED（第 4 轮：快照字段行 + 整篇复检）
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean)
+Blocking items: 0 | Recommended: 18
+Summary: 第三轮的唯一 blocker 已关闭且改到位：`Interactions :164` 的「本局只读快照」现在逐字列出 15 个字段（`run_id` / `station_id` / `run_state` / `frozen` / `turns_remaining` / `turns_total` / `turns_used` / `capacity_used` / `capacity_total` / `eaten_count` / `running_net` / `shortfall` / `action_seq` / `end_reason` / `run_seed`），与 `run-flow.md:138-150` 的快照表一一对应，规则 6、AC 1/2/4、不变式 2/5 与 Dependencies 读的四个字段全部在内。整篇复检确认：HUD 呈现的每一个数字都能在快照或 `action_availability()` 里找到来源（档口显示名与菜品图标由投影层向数据层取、错误码经 `run_faulted` 参数到达，见 N1）；规则 16 与边角案例的可用性契约只读 `action_availability()`，并把 `*_reason` 与快照的 run-end `end_reason` 明确声明为两个域；`FROZEN`/`NOT_ACTIVE`/`NO_EATABLE`/`NONE` 文案与「不可用按钮仍可获焦、激活不提交」与 ADR-0013 §9、ADR-0019 D6.1/实现准则 7 一致；AC 3（单帧瞬态）、AC 24（跳波文案与 `visible_dishes` 数量钉死）、AC 26（可用性不自行判定）、AC 26a（同帧 `Ending`）四者互相自洽，AC 1–42 + 26a 编号连续无重复。剩余 18 条为跨文档口径、字段命名与公式自洽问题，不阻断实现。全篇阅读（非 delta），6/6 standard 节齐备；Player Fantasy 与 Tuning Knobs 在 `standard` 下仍为 advisory。
+Prior verdict resolved: Yes — 第三轮 1/1 blocking 关闭。其 13 条 recommended 中 0 条关闭（`NONE` 域表述、结束取餐闭合集、投影字段命名、AC 26 静态扫描、AC 26 的 turns=0 GIVEN、焦点可获焦判据、结算纯函数、`entry_fee` 归属、空局净利、5 位金额、`advance_cost`、注册表元数据、索引状态），全部按原样再提；另补入第一轮的 4 条遗留（布局拉伸口径、`hud_capacity_cells` 值域、`hud_area_usage` 右栏高度、`can_fit`/`get_dish`/`turns_total` 口径）与 1 条新问题。
+Findings:
+- [RECOMMENDED] Edge Cases `:372` / Core Rules 16 `:59` — 取值域仍写作「RejectCode」，上游是 `RejectCode ∪ {NONE}`（`run-flow.md:33`、ADR-0013 §9 `:250`）；同一句把 `STALE_FOCUS` / `CAPACITY` 的不可达解释为「`skip_visible = false`」，但这两个码根本不由跳波投影产生（ADR-0013 §3 只由 `eat` 产生），只有 `NOT_FINAL_WAVE` 才由 `skip_visible` 决定。（第三轮再提）
+- [RECOMMENDED] Edge Cases `:372` — 结束取餐半个映射只列 `FROZEN` → 「暂停中」、`NOT_ACTIVE` → 「本局已结束」，未写闭合集、`NONE` 与不可达码；ADR-0019 `:744-747` 又给出第三套词表（`NO_TURNS_ZERO` / `NO_TURNS_ONE`、`NONE` / `NO_EATABLE` / `NOT_FINAL_WAVE`），与 ADR-0013 §9 不一致。写明以生产者 ADR-0013 §9 为准，并列出结束取餐可达码与兜底文案。（第三轮再提）
+- [RECOMMENDED] Naming `:59` / `:164` / `:384` — 两个 `end_reason` 的消歧仍只写在规则 16 的括注里；接口单元与 Dependencies 行只出现快照那一个，实现者按契约单元命名时仍会撞名。建议改投影字段名（如 `end_block_reason`）或在两处契约单元重复限定。（第三轮再提）
+- [RECOMMENDED] Acceptance Criteria 26 `:504` — 静态扫描仍只禁三处字面量（`turns_remaining >= 2`、`<= 1`、`is_final_wave()`），`== 0`、`> 1`、helper 别名或 `menu_waves.is_final_wave()` 都能通过；「全仓静态扫描 HUD 代码」范围仍含混。改为断言「HUD 模块内不存在任何可用性阈值与 `is_final_wave()` 调用；可用性只来自 `action_availability()`」。（第三轮再提）
+- [RECOMMENDED] Acceptance Criteria 26 `:504` — 第三个 GIVEN 仍写 `turns_remaining = 0` 时「HUD 按 `skip_reason` 渲染禁用态」，与同一 AC 与 `:372`「该帧已按 `TIME_EXHAUSTED` 结束、不存在停留画面」自相矛盾；改为「构造但不呈现」或删除（由 AC 3 覆盖）。（第二轮再提）
+- [RECOMMENDED] Acceptance Criteria — 规则 10、`:372` 与 ADR-0019 D6.1 `:410` / 实现准则 7 要求的「不可用按钮保持 `focus_mode = FOCUS_ALL`、原因可从 D 焦点详情行读出」仍无判据：AC 26/26a 只断言激活不提交与同帧结束。（第二轮再提）
+- [RECOMMENDED] Interactions `:170` — 「本系统另可调用结算的纯函数复核」仍不可实现：`running_net(k)` / `shortfall(k)` 吃 `RunLog` / 前缀，HUD 从不持有；只有 AC 1 的外部对照做这件事。改为「HUD 从不调用它们」。同一句仍留在 `settlement-and-entry-fee.md:105`、`:338` 与 `run-flow.md:126`（跨文档）。（第三轮再提）
+- [RECOMMENDED] Core Rules 6 `:39` — 「`entry_fee` 与取整由结算拥有」仍陈旧：`entry_fee` 由餐局流程解析并冻结（`run-flow.md` 规则 22/23），结算只拥有两个纯函数与取整；本文件自己的 `:390` 已写对。（第三轮再提）
+- [RECOMMENDED] Edge Cases `:360` — 空局仍写「净利显示负数或 0（由结算给值）」；运行期值是快照的 `−entry_fee`，结算在收据前不参与。（第三轮再提）
+- [RECOMMENDED] Core Rules 18 `:63` 与 `hud_number_format` `:316-319` — 「HUD 金额最多 5 位」与 5 位 `min-width` 仍与注册表 `running_net` 上界 `999999`（6 位，`entities.yaml:695`）差一位。（第三轮再提）
+- [RECOMMENDED] Dependencies `:389` — 仍写 `advance_cost = 1`，注册表条目名是 `wave_advance_cost`（`entities.yaml:1203`，其 `referenced_by` 仍不含本文件）。（第三轮再提）
+- [RECOMMENDED] 布局与信息层级 `:75` 对 `hud_ui_scale` `:215` / ADR-0019 D5.1 `:265` — 前者写「采用 `canvas_items` 拉伸…UI 整体随窗口等比放大」，后者写 HUD 画在不叠加拉伸的独立层、按窗口像素并用 `1/c` 逆缩放，OQ7（`:542`）仍沿用前一套前提。统一为「工程用 `canvas_items` + `expand`；HUD 用 `CanvasLayer` 逆内容缩放、以窗口像素布局」。（第一轮遗留）
+- [RECOMMENDED] `hud_capacity_cells` `:252` / `:267` — Output Range 仍写 `cells ∈ [0, 24]`，而式子是 `max(1, …)`，值域是 [1, 24]；也仍未像 `hud_turn_slots` 那样写明 `capacity_total = 0` 时「不渲染分段」。（第一轮遗留）
+- [RECOMMENDED] `hud_area_usage` `:296` / 分区表 `:98-103` / AC 12 `:484` — 右栏仍无 y 范围，例子取高 560 得 26.5%，而按图（顶栏下缘 108、内容下缘 684）应为 576 → 26.9%；补 y 范围或改算例与 AC。
+- [RECOMMENDED] 三处上游口径仍不符：`can_fit(d)`（`:47`、`:166`、`:300`、`:309`、`:330`、`:385`）对 `stomach-capacity.md:31` / 注册表 `can_fit` 的 `can_fit(e)`；`get_dish(id)`（`:167`、`:386`）对 `dish-values.md:95` 的 `get_dish(id, caller)`；`turns_total` 范围 1–999（`:242`）对 `time-and-turns.md:101` 的 1–INT32_MAX，而 AC 17 又测 `turns_total = 0`。（第一轮遗留）
+- [RECOMMENDED] Interactions `:173` / Dependencies `:392` — 「菜品与档口记录由菜品数值/菜单波次解析后传入；HUD 不直接查询数据目录」漏掉档口显示名与菜品图标：ADR-0019 D3 第 7 步（`:213`）由 `HudSource` 调 `data.get_station(station_id)` 与 `data.get_dish_icon(id)`，首帧 `station_name` 无其它来源。写明「投影层（`HudSource`）可读数据层，视图层不可」。
+- [RECOMMENDED] Registry 元数据 — `end_reason`（`entities.yaml:890`）与 `can_fit`（`:922`）的 `referenced_by` 仍不含本文件（`:128` 显示前者、`:47` 等消费后者），而 `onboarding_active`（`:1119`）仍列本文件却从未点名该符号；`running_net` / `shortfall` 已双向正确。注册表不在本次可改范围。
+- [RECOMMENDED] Process — `systems-index.md:72` 仍读 `Approved`，而本文件表头是 `In Review`，`.claude/rules/design-docs.md:28-31` 使该批准失效；`:400` 的「双向一致性」段仍断言索引写 `Approved`，等于把陈旧状态记录在案。（第三轮再提；索引未在此修改）
+
+### Nice-to-Have
+
+- `fault_code` 的来源没写进快照表或接口表：它经 `run_faulted(run_id, code, detail)` 的 `code` 参数到达（ADR-0019 `HudFrame.fault_code` `:154`），而 `:128` 的信息清单只有「结束原因」。补一句即可。
+- `hud_safe_margin` 的下限 32 px 在最低支持分辨率下不可达（`round(0.05 × 720) = 36`），可标注为纯防御值。
+- `hud_short_cells` 的 `effective_satiety` 变量范围写 1–999，注册表 `effective_satiety` 是 [1, 9]；放宽不冲突，但可对齐。
+- 规则 18「净利总带符号」对 `running_net = 0` 未定义（`0` 还是 `+0`）；AC 17 只测 +39 / −46。
+- `:166` 的括注「容量可能在 `run_ended` 重置」不准：容量在 `end_run(reason)` 时清零（`stomach-capacity.md` 规则 2、`run-flow.md` 规则 24），`run_ended` 本身不重置；结论（`Ending` 期间只读最后一帧快照）仍然正确。
+
+### 判定说明
+
+lean 模式不派发 `creative-director`，主评审意见即最终意见。第三轮的唯一 blocker 是接口契约单元漏字段，本轮已按 `run-flow.md:138-150` 补齐 15 个字段并与全文读法一致；这是「HUD 为什么存在」的那两个数字（`running_net` / `shortfall`）能否到达实现者的关键，现已闭合。可用性契约（可见性、可用性、原因三件套只读 `action_availability()`，两个 `end_reason` 分域，不可用按钮仍可获焦）与 ADR-0013 §9、ADR-0019 D6.1 一致，也没有任何 AC 依赖 HUD 自己比较阈值。剩余条目全部是文档口径、命名与公式自洽层面的问题：没有一条会改变信号形状或让某条 AC 无法判定，因此不构成 blocking。真正需要在写 `design/ux/hud.md` 之前处理的是第 2、3、4 条（可用性原因词表以谁为准、投影字段命名、静态扫描判据），它们决定文案表与验收脚本的形态。
+
+### Scope Signal
+
+Rough scope signal: **L**（8 个硬上游 + 5 个下游 / 同级系统，10 组呈现公式，无新增 ADR；producer 应在排期前复核）。
+
+### Verdict: APPROVED
+
+0 条 blocking、18 条 recommended、5 条 nice-to-have。`systems-index.md:72` 的状态收口由编排会话完成（本次不修改索引）。本 GDD 未被修改。
+
+Reviewed-Content-Hash: design/gdd/in-game-hud.md b3bf25a6c9aae77d037a0a13a142d7cc62f3cf03
+Reviewed-Content-Hash: design/registry/entities.yaml 6fd2fcaa1a1417219f92a38d2bc3c767d46b25d5
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: .claude/rules/design-docs.md 638ca578625c5a3d24a5bafe0524777b351ab2f8
+Reviewed-Content-Hash: design/gdd/run-flow.md f584ae1193d3a9e039b38c02338cafc163efa92a
+Reviewed-Content-Hash: design/gdd/time-and-turns.md 78dcb4e9ce3a408138c7a08ff2464bc571447101
+Reviewed-Content-Hash: design/gdd/stomach-capacity.md 93968bd02251e306f5b99c7b1cc5800272e54a06
+Reviewed-Content-Hash: design/gdd/dish-values.md 1a899cb0831e3b8e3afebaed272862124d97f1c8
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md d8c7b56e7ffa8611ce9c271b25b064d38a8fb204
+Reviewed-Content-Hash: design/gdd/menu-waves.md b4eb4df304c1a82859ea02ee18d0162c9c5c4485
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
+Reviewed-Content-Hash: design/gdd/input.md 4ac257e9cab7df2ce607f4063416a308b56dccb4
+Reviewed-Content-Hash: design/gdd/data-config.md 8d799e593ad60b254814ede22b4f9b3fc8de99e4
+Reviewed-Content-Hash: docs/architecture/adr-0013-action-pipeline-end-judge.md 8bfc9f56972968772b727c67dcc714e2e71baf1f
+Reviewed-Content-Hash: docs/architecture/adr-0019-in-game-hud-binding-layout.md 23304c8212ab59cede6f6f3d81cd40cea079cde5
+Reviewed-Content-Hash: design/gdd/systems-index.md 3f1fa74ca6507898756185f9530eaf4ccfe9a27a
+
+## Re-stamp — 2026-11-17
+Status 头行由 `In Review` 改为 `Approved (2026-11-17)`；仅元数据，未改规则、公式、AC、依赖、契约或平衡数值（`.claude/rules/design-docs.md` 的 advisory 情形）。以下为当前字节的盖章：
+
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 6d7a4700f0f8b718eeb3bf0cbe9db7993df1f43d

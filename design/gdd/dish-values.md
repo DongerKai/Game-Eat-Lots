@@ -1,8 +1,8 @@
 # 菜品数值（Dish Values）
 
-> **Status**: Approved (2026-11-06)
+> **Status**: Approved (2026-11-17)
 > **Author**: user + agents
-> **Last Updated**: 2026-11-06
+> **Last Updated**: 2026-11-17
 > **Last Verified**: 2026-11-03
 > **Implements Pillar**: 每口都是算术题；没有白吃的菜；数字看得见地涨
 
@@ -86,6 +86,7 @@
 | 腻度与口味 | 下游 | `unit_value(d)`、`satiety(d)`、`cloying_group(d)` | 硬 |
 | 菜单波次 | 下游 | 菜池审查：`uv_span(M)`、`same_group_dominated_pairs(M)`；单次刷新健康门禁（`MenuWaves` 内部）：`opt_value(M, C, T)` | 硬（Vertical Slice 期） |
 | 结算与入场费 | 下游 | 单菜 `price(d)` 与 `unit_value(d)`；求和由结算在 int64 中完成 | 硬 |
+| 餐局流程 | 下游 | 单菜 `price(d)`（只读，用于本局 `running_net` 累加）；不读 `satiety` / `unit_value` / `opt_value` | 硬 |
 | 局内 HUD | 下游 | `price(d)`、`satiety(d)`；局内不请求 `unit_value` | 硬 |
 | 首局引导 | 下游 | 结算期的 `unit_value` 讲解数据 | 软 |
 
@@ -276,6 +277,7 @@ The `calibration_ratio` formula is defined as:
 | 腻度与口味 | 硬 | `unit_value(d)`、`satiety(d)`、`cloying_group(d)` | GDD 已写（`design/gdd/cloying-and-taste.md`） |
 | 菜单波次 | 硬（VS） | 菜池：`uv_span(M)`、`same_group_dominated_pairs(M)`；单次刷新健康门禁（`MenuWaves` 内部）：`opt_value(M, C, T)` | GDD 已写（`design/gdd/menu-waves.md`） |
 | 结算与入场费 | 硬 | `price(d)`、`unit_value(d)`；一局求和由结算在 int64 中完成 | GDD 已写（`design/gdd/settlement-and-entry-fee.md`） |
+| 餐局流程 | 硬（只读） | `price(d)`；本局 `running_net` 由餐局流程累加，不读其他数值 | GDD 已写（`design/gdd/run-flow.md`） |
 | 局内 HUD | 硬 | `price(d)`、`satiety(d)`；局内不请求 `unit_value` | GDD 已写（`design/gdd/in-game-hud.md`） |
 | 首局引导 | 软 | 结算期 `unit_value` 讲解数据 | GDD 已写（`design/gdd/first-run-onboarding.md`） |
 
@@ -376,7 +378,7 @@ The `calibration_ratio` formula is defined as:
 | # | 问题 | 负责人 | 目标解决时间 |
 |---|---|---|---|
 | 1 | 初始胃容量 20 格是暂定值（胃容量 GDD 未写）。若最终值不同，`opt_value`、`calibration_ratio` 与入场费必须重算。**已回答（2026-11-03）**：胃容量 GDD 确认 `C0 = 20`；数据归属见其 Open Question 1。 | game-designer（胃容量） | 胃容量 GDD 完成时 |
-| 2 | MVP 档口入场费建议 85 元（`calibration_ratio = 1.224`）。数据配置 GDD 公式示例里的 `entry_fee = 30` 只是示例，不是锁定值；最终值由「结算与入场费」确认。 | economy-designer（结算） | 结算 GDD 完成时 |
+| 2 | MVP 档口入场费建议 85 元（`calibration_ratio = 1.224`）。`data-config.md` 的公式示例已对齐为 `entry_fee = 85`；最终值仍由「结算与入场费」确认。 | economy-designer（结算） | 结算 GDD 完成时 |
 | 3 | 9 个 `cloying_group` 的归属尚未与「腻度与口味」核对；惩罚曲线可能要求合并或拆分分组，任何调整都要重跑支配审查。 | systems-designer（腻度） | 腻度 GDD 完成时 |
 | 4 | 12 道菜的首版数值未经原型验证。"被算穿"的风险由 `/prototype 点菜取舍与腻度` 判定；若原型显示比值排序仍然近似最优，需要扩大价格/饱腹分布或依赖腻度制造第二轴。 | game-designer + prototyper | Vertical Slice 前 |
 | 5 | 菜单波次是否允许重复抽取同一道菜。若允许，`opt_value` 的 0/1 背包假设失效，需改为有界背包。 | game-designer（菜单波次） | 菜单波次 GDD 完成时 |

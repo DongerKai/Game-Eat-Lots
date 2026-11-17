@@ -1077,3 +1077,161 @@ Reviewed-Content-Hash: design/gdd/save-system.md 1bd3148294c81eb9a186f218cbb390b
 Reviewed-Content-Hash: design/gdd/systems-index.md e0174253c2b36603edfef7b4d00d005380530feb
 Reviewed-Content-Hash: design/gdd/game-concept.md 37c487b5ca4f8898d9cef22c790b87625027b123
 Reviewed-Content-Hash: docs/architecture/adr-0006-deterministic-rng.md f8bbbce1efbe2312fb8283ea8c73d61591e92f7a
+
+---
+
+## Review — 2026-11-06 — Verdict: NEEDS REVISION
+
+Review mode: lean · Workflow: standard
+Scope signal: S（沿用 `systems-index.md:220` 的 scope 令牌；按技能的实施规模口径实为 L）
+Specialists: none（lean — Phase 3b 未运行）
+Blocking items: 3 | Recommended: 8
+
+**C1 回写与收据口径**：本文件最后一次 APPROVED（2026-11-04，收据 `4c2da74`）早于今日改动，而今日改动是**实质性**的（改 `wave_healthy` 判定式、一条变量下界与 AC 15/22），旧批准据 `.claude/rules/design-docs.md`「Review receipts and post-approval edits」失效，因此本轮是当前字节的**全文 lean 复审**，不是 delta。今日的 C1（健康门改整数交叉相乘）回写在公式 `:190`、变量表 `:200`（`ceil(9 × opt_value / 10)`，MVP 104 → 94）、AC 15 `:333`、AC 22 `:343`、注册表 `wave_healthy`（`:611-612`）与 `opt_value.notes` `:458`、ADR-0006 §4/§6（`:251`、`:306-314`、Validation #1 `:528` / #12 `:704`）、`control-manifest.md:108`、`dish-values.md:37/:241/:372` 之间已经一致，公式与注册表层已无第二种判定式残留；**漏掉的只有 Core Rule 9 `:35`** 这一处规范语句仍写浮点，以及 `DEGRADED` 分支与注册表元数据。本轮用整数 DP 穷举复核了全文统计：34,650 个有序 3×4 划分，可达最优最小 97（恰 510 个）、最大 104、全部 ≥ 94，`opt_value(20,10) = 104`，0.95 门槛拒 8.89%、接受均值 100.79（不收紧 100.53），`wave_size = 3` 时 104 占 4.55%——全部与正文一致；`wave_partition`/`advance_cost`/`preview_dishes`/`end_pickup`/`pool_override` 健康口径与 `run-flow.md:35-37`、`time-and-turns.md:53`、`in-game-hud.md:59/:372` 不冲突。
+
+Findings:
+
+| # | 级别 | file:line | 发现 | 违反的权威 |
+|---|---|---|---|---|
+| 1 | BLOCKING | `design/gdd/menu-waves.md:35` | Core Rule 9 仍把门槛写成「**可达最优 ≥ `0.9 ×` `opt_value(pool, C0, T)`**」。这是**规则语句**（不是理由叙述），也是本文件今日唯一未被 C1 覆盖的判定式写法；按它实现就会在 `src/feature/menu_waves/` 里写出一个 `float` 常量与浮点比较。改为 `10 × wave_reachable_opt ≥ 9 × opt_value(pool, C0, T)`（与 `:190`/`:200` 同形）。注：在 double 下该谓词对整数 `r` 与 `r ≥ ceil(9 × b / 10)` 在 `b ≤ 2000` 内尚未测到分歧，所以本条不是「已证实的错判」，而是**明文禁止的写法**——ADR 之所以禁止，是因为 `9 × b / 10` 不可精确表示（`104 → 93.60000000000001`）且是否越界依赖舍入与 `0.9` 的书写方式，一旦有人把 `0.9` 写成 `float(9) / 10` 或做累乘，行为就会漂移 | ADR-0006 §6 `docs/architecture/adr-0006-deterministic-rng.md:314`（「**不得**写成 `reachable < 0.9 * baseline`」）、Validation #1 `:528`、#12 `:704`（`src/feature/menu_waves/` 静态扫描禁 `float`）；`control-manifest.md:108`；与本文件 `:190`/`:200` 自相矛盾 |
+| 2 | BLOCKING | `design/gdd/menu-waves.md:191`（并 `:35`） | `DEGRADED` 只定义为「可达检查因**超节点预算**被跳过」，缺 ADR-0006 的另外两个来源：§4 `:251` 的 `BASELINE_CELL_BUDGET = 65536`（基准算不出 → `base = -1` → `DEGRADED` + `BASELINE_BUDGET_EXCEEDED`）与 §5 `:303` 的 `STATE_CELL_BUDGET = 262144`（→ `TRUNCATED`）。按本文件公式字面实现，`base < 0` 会走「其余」分支得 `HEALTHY`（`10 × r < 9 × (−1)` 恒假），与 ADR §6 `:324-328` 的 `if reach.truncated or base < 0: return DEGRADED` 相反；也与本文件 `:201`「`DEGRADED` 表示可达检查未执行」的较宽定义不自洽。AC 23 `:344` 只覆盖节点预算一条路径。后续档口（OQ5、更大 `T`）会真实触发 | ADR-0006 §4 `:251`、§5 `:300-304`、§6 `:316-332`；`control-manifest.md:108`；本文件 `:201` |
+| 3 | BLOCKING | `design/registry/entities.yaml:599-612` | `wave_healthy` 条目缺 `added:` 与 `revised:` 两个字段（其余条目均有），而它今日刚被实质改写；同一改动的 `opt_value` 已正确盖 `revised: "2026-11-06"`（`:460`）。缺必填字段 + 未留版本戳，下一个读注册表的会话无法判断该表达式是何时改的 | 注册表自身规则 `design/registry/entities.yaml:12`（值变更须 `revised:` 今日并留旧值注释）、`:47` 与 `:64`（必填 `added`）；同批 `opt_value` 的做法 |
+| 4 | RECOMMENDED | `design/gdd/menu-waves.md:206`（并 `:181`、`:293`、`:353`） | 散文仍以 `93.6` 表述下界（`:206`「100% 通过 93.6 的下界」，位于 Formulas 段内），而 `:200`/`:333` 的下界是 `94 = ceil(9 × 104 / 10)`；`:181` 写「0.9 阈值（94）」，同一门槛两种写法。均为理由叙述、整数判据下等价，但 Formulas 段内的 `93.6` 有被测试夹具照抄的风险，建议统一为「94（`ceil(9 × 104 / 10)`）」或 `9/10` | 本文件 `:200`/`:333`；`.claude/rules/design-docs.md`「Balance values must link to their source formula」 |
+| 5 | RECOMMENDED | `design/gdd/systems-index.md:67` | 索引已写 **Approved**，而本文件头部 `:3` 为 `In Review`（今日实质改动待复审）。索引超前于复审结论；本轮不改索引，建议改为 `Needs Revision` | `.claude/rules/design-docs.md`「Review receipts and post-approval edits」；本技能 Phase 5 的索引口径 |
+| 6 | RECOMMENDED | `design/gdd/menu-waves.md:281` | UI Requirements 的「本系统只发起扣除」正是 `time-and-turns.md:219`/`:259`/`:301` 点名要本文件统一措辞的一句（Owner：菜单波次）。语义可兼容，但唯一扣回合调用者是餐局流程，`advance()` 从不碰计数器；现有写法会诱导出第二个写入点 | `time-and-turns.md:53`（规则 13）、`:259`/`:301`；ADR-0006 §7 `docs/architecture/adr-0006-deterministic-rng.md:371-375`；`control-manifest.md:120` |
+| 7 | RECOMMENDED | `design/gdd/menu-waves.md:63` | 交互表「餐局流程」行列出 `get_run_menu() -> StringName[]`，但 `design/gdd/run-flow.md` 全文没有该接口（只有 `first-run-onboarding.md:154` 把它记在菜单波次名下）。归属与出借方不明 | `.claude/rules/design-docs.md`「Dependencies must be bidirectional」；`run-flow.md:122`/`:298` |
+| 8 | RECOMMENDED | `design/gdd/menu-waves.md:156`、`:179` | `wave_reachable_opt` 签名不含 `pool`，Output Range 写 `[0, opt_value(M, C0, T)]`，而 `:158`/`:190`/`:200` 与注册表 `:593` 用 `pool`，注册表 `variables` 还列了 `pool`（`:592`）。`:204` 已声明二者恒相同，属命名不统一 | 注册表 `wave_reachable_opt` `:582-597`；本文件 `:204` |
+| 9 | RECOMMENDED | `design/gdd/menu-waves.md:50`、`:282` | States 表与 UI Requirements 只给「跳过代价」而不给「可用性」：S4 的 `turns_remaining ≥ 2` 前置由 `run-flow.md:35`/`time-and-turns.md:53` 执行、由 `in-game-hud.md:372` 直接按 `turns_remaining` 置灰按钮，而 `in-game-hud.md:182` 又称「跳过/结束取餐的代价与**可用性**归菜单波次」。三分归属需本文件给出一个显式判据 | `in-game-hud.md:182`/`:372`；`run-flow.md:35`；本文件 `:31` |
+| 10 | RECOMMENDED | `design/gdd/in-game-hud.md:59` | 跳过按钮文案仍为「跳过本波 · 花 1 回合」，缺本文件要求的「放弃剩余 N 道」（`menu-waves.md:261`/`:279`/AC 20 `:341`）。HUD 已 Approved，属其下次修订 | 本文件 `:261`/`:279`/`:341` |
+| 11 | RECOMMENDED | `design/gdd/menu-waves.md:353`、`:355` | OQ2/OQ4 的「E[重掷] = 1.10」实为 E[尝试次数]（91.11% → 期望重掷 0.099）；沿用上轮，未改数值与结论 | 口径标签，无跨文档权威 |
+
+**Completeness**: 6/6 required at `standard` — Overview、Detailed Rules（`## Detailed Design`）、Formulas、Edge Cases、Dependencies、Acceptance Criteria。Formulas 因本系统定义阈值与代价而**必需**，已计入。`## Player Fantasy` 与 `## Tuning Knobs` 缺席，均为 `standard` 下的 advisory（Tuning Knobs 值得补：`wave_size`、0.9 下界、20 次重掷上限、`NODE_BUDGET`）；不阻断。
+
+**Dependency Graph**: 九个声明依赖全部存在 —— `data-config.md` ✓、`dish-values.md` ✓、`run-flow.md` ✓、`cloying-and-taste.md` ✓、`in-game-hud.md` ✓、`settlement-and-entry-fee.md` ✓、`meta-upgrades.md` ✓、`first-run-onboarding.md` ✓、`save-system.md` ✓。下游回指已核（`data-config.md:190`、`dish-values.md:87`、`run-flow.md:122`、`in-game-hud.md:169`、`settlement-and-entry-fee.md:342`、`meta-upgrades.md:348`、`first-run-onboarding.md:154`、`save-system.md:356`）。
+
+**Registry Values**: 按注册表 79 个条目名与数值键做全文检索（`wave_healthy`、`wave_reachable_opt`、`opt_value`、`advance_cost`/`wave_advance_cost`、`wave_size`/`wave_size_default`、`wave_partition`、`preview_dishes`、`visible_dishes`、`menu_vision`、`end_pickup`、`pool_override`）。数值层面无冲突：`:190`/`:200`/`:343` 与 `wave_healthy.expression`/`notes` 与 `opt_value.notes` 均为整数交叉相乘、94 下界；`wave_size = 4`（`:88`）与 `wave_size_default` 一致；`advance_cost = 1`（`:136`）显式对上 `wave_advance_cost = 1`；`preview_dishes` 公式（`:104`）与注册表 `:577` 逐字一致；`C0 = 20`、`T = 10` 与 `base_capacity`/`station_canteen_turn_budget` 一致；101/97 与注册表 `:595` 一致。唯一注册表问题为元数据类 blocking #3 与命名类 recommended #8。
+
+Reviewed-Content-Hash: design/gdd/menu-waves.md 4282c9a66552dbb5023418b9c19542c1b5787af3
+Reviewed-Content-Hash: design/registry/entities.yaml f7b5aded130f371160d84bdaf678f8530ddc0807
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: .claude/rules/design-docs.md 638ca578625c5a3d24a5bafe0524777b351ab2f8
+Reviewed-Content-Hash: docs/architecture/adr-0006-deterministic-rng.md 70c7c9246c99c906f4b524504a491d337a475e3d
+Reviewed-Content-Hash: docs/architecture/control-manifest.md 15a70b4ad03b641e3c3873772ec05137d76ecc50
+Reviewed-Content-Hash: design/gdd/run-flow.md 56f6f4866e1b5ab7c8a5a8f04d22078e7d05e1cb
+Reviewed-Content-Hash: design/gdd/time-and-turns.md eb20c7ac3b422dbf3d5dcec1759061c55de41cd8
+Reviewed-Content-Hash: design/gdd/in-game-hud.md fee7199048c3a124fcab2eccae8b88f93d1a69c0
+Reviewed-Content-Hash: design/gdd/dish-values.md 5f37fef5ac080b324a9b05a955d363dbae065a83
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 46ba1e41bba159828384590641c147dfc579e252
+Reviewed-Content-Hash: design/gdd/systems-index.md 3f1fa74ca6507898756185f9530eaf4ccfe9a27a
+Reviewed-Content-Hash: design/gdd/data-config.md 9ecc2a7c18aba33c64bc3391594748e1063851d2
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md d9314a9ea5813e2b921939d5275e97261557e4a9
+Reviewed-Content-Hash: design/gdd/save-system.md a7d54e3ba4d7f8a23be1d28a6c165bb422648abd
+
+---
+
+## Review — 2026-11-06 — Verdict: NEEDS REVISION（第 8 轮：健康门整数化 + `DEGRADED` 双来源的全量 lean 复审）
+
+Review mode: lean · Workflow: standard
+Scope signal: S（沿用 `systems-index.md:220` 的 scope 令牌；按技能的实施规模口径实为 L）
+Specialists: none（lean — Phase 3b 未运行）
+Blocking items: 1 | Recommended: 8
+Summary: 上一轮 3 条 blocking 中，规则 9 的浮点写法（`menu-waves.md:35`）已改为整数交叉相乘并显式禁止 `0.9 ×`；`DEGRADED` 在 GDD 侧已补齐两个来源（`:188-198`，AC 23a `:351` 钉 `BASELINE_CELL_BUDGET = 65536` → `baseline_opt = −1`，AC 23b `:352` 钉 `STATE_CELL_BUDGET = 262144` → `TRUNCATED`）；注册表 `wave_healthy` 补回了 `added`/`revised`。全文复核 34,650 个有序 3×4 划分、`opt_value(20,10) = 104`、下界 `94 = ceil(9×104/10)`、101/97/104 与 0.95 敏感性统计，数值一致。唯一 blocking 是注册表 `wave_healthy.expression`/`notes` 仍只承认「节点预算超限」一个 `DEGRADED` 来源——GDD 已修、注册表没跟上，按注册表实现会复活 `base = −1 → HEALTHY` 的误判。
+Prior verdict resolved: Yes（上一轮 3 条 blocking 全部关闭；但注册表条目只做了浮点→整数那一半，`DEGRADED` 来源未同步）
+
+Findings:
+- [BLOCKING] Registry Values（`design/registry/entities.yaml:611-612`）：`wave_healthy.expression` 与 `notes` 仍把 `DEGRADED` 定义为「可达检查因节点预算被跳过」这单一来源，缺 `baseline_opt = −1`（`BASELINE_CELL_BUDGET = 65536` → `BASELINE_BUDGET_EXCEEDED`）与 `STATE_CELL_BUDGET = 262144` / 波数×子集上限 → `TRUNCATED` 两个来源；与 `menu-waves.md:188-198`、`:35`、AC 23a、AC 23b 及 ADR-0006 §6 `:324-328` 相反，照注册表字面实现会得到 `10 × r < 9 × (−1)` 恒假的 `HEALTHY`。该条目同时缺注册表规则 `:11-12` 要求的旧值注释（`added`/`revised` 已补，旧值注释未补）。
+- [RECOMMENDED] Formulas（`:195`）：「判据顺序固定为 `UNHEALTHY` → `DEGRADED` → `HEALTHY`，与 ADR-0006 §6 对齐」不是 ADR 的实际顺序（ADR §6 `:322-328`：非空/覆盖 → `DEGRADED` → 交叉相乘 → `HEALTHY`）。结论等价（截断时交叉相乘不可判），但"对齐"字面不成立，建议照抄 ADR 的三步。
+- [RECOMMENDED] Formulas（`:207`）：变量 `可达检查已执行` 的定义只写「节点预算内完成」，而截断还有 `STATE_CELL_BUDGET` 与波数×子集两个来源（`:198`、AC 23b）；定义应覆盖三者。
+- [RECOMMENDED] Formulas（`:156`/`:179` vs `:190`/`:200`）：`wave_reachable_opt` 签名与 Output Range 用 `M`，判定式与注册表用 `pool`；`:204` 已声明恒同，属命名不统一（carried）。
+- [RECOMMENDED] Core Rules（`:35`）：「未达标就换下一个候选种子重掷」未区分 `UNHEALTHY` 与 `DEGRADED`；ADR §6 `:347-348` 与 AC 23 规定 `DEGRADED` 直接采用、不重掷。规则 9 应写明重掷只对 `UNHEALTHY`。
+- [RECOMMENDED] Acceptance Criteria（`:309-352`）：没有一条 AC 钉住「非空/覆盖失败优先于 `DEGRADED`」——ADR §6 的第一分支（截断 + 空波应返回 `UNHEALTHY`）无覆盖；建议补一条夹具。
+- [RECOMMENDED] Open Questions（`:361`/`:363`）：OQ2 写 `E[尝试次数] = 1.10`、OQ4 写 `E[重掷] 1.10`，同一数字两种口径（91.11% 通过 → 期望重掷 0.099）；数值与结论未变（carried）。
+- [RECOMMENDED] UI Requirements（`:63`）：`get_run_menu()` 已注明「消费者是首局引导、`run-flow.md` 不调用它」（与 `first-run-onboarding.md:154` 一致），但仍在「餐局流程」行的接口列里；建议移到本系统自有接口或单列。
+- [RECOMMENDED] systems-index（`:67`）：索引仍写 `Approved`，本文件头部 `:3` 为 `In Review`（2026-11-06 实质改动待复审）；本轮不改索引，建议编排会话改为 `In Review`。
+
+**Completeness**: 6/6 required at `standard` — Overview、Detailed Rules（`## Detailed Design`）、Formulas、Edge Cases、Dependencies、Acceptance Criteria；Formulas 因本系统定义阈值、预算与代价而必需。`## Player Fantasy` 与 `## Tuning Knobs` 缺席，均为 `standard` 下 advisory（Tuning Knobs 仍值得补：`wave_size`、九成下界、20 次重掷、`NODE_BUDGET`/`STATE_CELL_BUDGET`/`BASELINE_CELL_BUDGET`）。
+
+**Dependency Graph**: 九个声明依赖全部存在 —— `data-config.md` ✓、`dish-values.md` ✓、`run-flow.md` ✓、`cloying-and-taste.md` ✓、`in-game-hud.md` ✓、`settlement-and-entry-fee.md` ✓、`meta-upgrades.md` ✓、`first-run-onboarding.md` ✓、`save-system.md` ✓；下游回指逐份复核仍在（`data-config.md:190`、`dish-values.md:37`、`run-flow.md:123`、`in-game-hud.md:169`/`:389`、`settlement-and-entry-fee.md:342`、`meta-upgrades.md:11`、`first-run-onboarding.md:154`、`save-system.md:31`）。无断链，无单向依赖。
+
+**Registry Values**: 按注册表 79 个条目名全文扫描（`wave_healthy`、`wave_reachable_opt`、`opt_value`、`preview_dishes`、`wave_partition`、`wave_advance_cost`、`base_capacity`、`cloy_cap` 等，`_` 展开为 `[_ ]`），命中 8 个条目。数值层无冲突：`:104` 与 `preview_dishes`、`:190`/`:200` 与 `wave_healthy`、`:136` 与 `wave_advance_cost = 1`、`:88` 与 `wave_size_default = 4`、`:35`/`:174` 与 `base_capacity = 20`、`:142-148`/`:181` 与 `wave_reachable_opt.notes` 的 104/101/97 逐项一致；`94`、`104`、`97`、`34,650`、`0.95` 的散文统计与公式互洽。唯一冲突是 blocking 项的 `DEGRADED` 来源集，另有 `revised` 缺旧值注释。
+
+Reviewed-Content-Hash: design/gdd/menu-waves.md a0b26691ca0f6ba5cac4c01ac0704913179b43ed
+Reviewed-Content-Hash: design/registry/entities.yaml 1a9dceea86fa114cbbbe92eeaab97ff540737277
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: .claude/rules/design-docs.md 638ca578625c5a3d24a5bafe0524777b351ab2f8
+Reviewed-Content-Hash: docs/architecture/adr-0006-deterministic-rng.md 70c7c9246c99c906f4b524504a491d337a475e3d
+Reviewed-Content-Hash: docs/architecture/adr-0013-action-pipeline-end-judge.md 3e709cc7b5901dc11ba7ae9a7b7f73d19fc616e8
+Reviewed-Content-Hash: design/gdd/run-flow.md 346526135c3bfbf7829d9a9bc6955d9088722b80
+Reviewed-Content-Hash: design/gdd/time-and-turns.md 0f2ea128a9a42008413a15dd8608246513ef36f4
+Reviewed-Content-Hash: design/gdd/in-game-hud.md 27e2978106c35139e3a3d0f371472a7aafd5dc2a
+Reviewed-Content-Hash: design/gdd/stomach-capacity.md 43fc521a857c5ce53ba3e1855c271ae2ffdfb1b6
+Reviewed-Content-Hash: design/gdd/systems-index.md 3f1fa74ca6507898756185f9530eaf4ccfe9a27a
+Reviewed-Content-Hash: design/gdd/data-config.md 92b3a28fc63465eacf3a88d3fec13bdff9f9455f
+Reviewed-Content-Hash: design/gdd/dish-values.md 5f37fef5ac080b324a9b05a955d363dbae065a83
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md d8c7b56e7ffa8611ce9c271b25b064d38a8fb204
+
+---
+
+## Review — 2026-11-17 — Verdict: APPROVED（第 9 轮：注册表 `wave_healthy` 三来源补齐后的全量 lean 复审）
+
+Review mode: lean · Workflow: standard
+Scope signal: S（沿用 `systems-index.md:220` 的 scope 令牌；按技能的实施规模口径实为 L）
+Specialists: none（lean — Phase 3b 未运行）
+Blocking items: 0 | Recommended: 11
+Summary: 上一轮唯一的 blocking 已在注册表关闭 —— `design/registry/entities.yaml:611-612` 的 `wave_healthy.expression`/`notes` 现在列出三类 `DEGRADED` 来源（基准 `BASELINE_CELL_BUDGET` → `base < 0` / `BASELINE_BUDGET_EXCEEDED`；可达 DP 在 `STATE_CELL_BUDGET` 截断；可达检查因节点预算被跳过），写明 `Never HEALTHY when base < 0 or reach.truncated`，判据也换成整数交叉相乘 `10 * wave_reachable_opt < 9 * opt_value(...)`，并补回 `added` / `revised: "2026-11-06"` 与旧值说明。该条目与 `menu-waves.md:35`（规则 9）、`:188-198`（`DEGRADED` 区块）、AC 23 `:350` / 23a `:351` / 23b `:352`、ADR-0006 §4 `docs/architecture/adr-0006-deterministic-rng.md:251` / §5 `:300-304` / §6 `:322-328` 在判定集合、分数判据与优先级上逐项一致：`base < 0` 与两种截断都不再落回 `HEALTHY`。round-1 的两条亦复核仍在（规则 9 的整数交叉相乘与"不得写成 `0.9 ×`"；GDD 侧 `DEGRADED` 三触发齐全）。全文无残留浮点健康门（`0.9`/`0.95` 只出现在禁令与决策记录中），MVP 数值 94 / 104 / 97 / 101 / 34,650 / 0.95 的散文、公式与注册表互洽，AC 编号 1–23 + 23a/23b 无重复。
+Prior verdict resolved: Yes（2026-11-06 的唯一 blocking 已关闭；2026-11-04 的 APPROVED 针对旧字节，本轮按当前字节做全量复审）
+
+Findings:
+
+- [RECOMMENDED] Formulas（`:195`）：「判据顺序固定为 `UNHEALTHY` → `DEGRADED` → `HEALTHY`，与 ADR-0006 §6 对齐」仍不是 ADR 的实际三步（空/覆盖 → `DEGRADED` → 交叉相乘 → `HEALTHY`）。结论等价（截断时交叉相乘不可判），但"对齐"字面不成立；建议照抄 ADR 的三段式（carried）。
+- [RECOMMENDED] Formulas（`:207`）：变量 `可达检查已执行` 的定义仍只写"节点预算内完成了可达最优 DP"，而 `:198` 与 AC 23b 另有两个截断来源（`STATE_CELL_BUDGET`、波数 × 子集空间上限）；定义应覆盖三者（carried）。
+- [RECOMMENDED] Core Rules（`:35`）：「未达标就换下一个候选种子重掷」仍未区分 `UNHEALTHY` 与 `DEGRADED` —— AC 23 `:350` 与 ADR §6 `:347-348` 规定 `DEGRADED` 直接采用、不重掷。建议改为"仅 `UNHEALTHY` 重掷"。
+- [RECOMMENDED] Registry Values（`design/registry/entities.yaml:611-612`）：三来源未点名 ADR §5 `:303` 的第三个 `TRUNCATED` 触发（"波数 × 子集提前可判超限"），现由 "skipped over the node budget" 概括 —— 语义上覆盖（该预判即"一定超节点预算"），故不阻断，但与 `menu-waves.md:35`/`:198` 的三触发字面不一致，建议逐项列全。
+- [RECOMMENDED] Registry Values（`:612`）：旧值说明只述性质（"named only the node-budget skip"），既未给出旧表达式原文，也未点名改动它的 GDD，未满足注册表 `:11-12` 的"旧值 + 由哪份 GDD 改动"。
+- [RECOMMENDED] Formulas（`:156`/`:179` vs `:190`/`:200`、注册表 `:582-597`）：`wave_reachable_opt` 的签名与 Output Range 用 `M`，判定式与注册表用 `pool`（`:204` 已声明二者恒同，属命名不统一，carried）。
+- [RECOMMENDED] UI Requirements（`:63`）：`get_run_menu()` 已注明消费者是首局引导、`run-flow.md` 不调用，但仍留在「餐局流程」行的接口列；建议移到本系统自有接口（carried）。
+- [RECOMMENDED] UI Requirements（`:288`）：「放不进剩余容量的菜置灰……这不阻止玩家付费跳过」在 `:285` 已把可用性归 `run-flow` 之后仍读作无条件保证；`turns_remaining = 1` 时 `NO_TURNS` 会拦住付费跳过，建议补一句"是否可用读 `action_availability()`"。
+- [RECOMMENDED] Acceptance Criteria（`:350`）：`NODE_BUDGET` 由 DP 求值器消耗，不由"候选生成器"消耗，AC 23 的夹具措辞指向了错对象；建议改为"注入必然超 `NODE_BUDGET` 的求值夹具"。
+- [RECOMMENDED] Cross-References / 索引（`design/gdd/systems-index.md:67`）：索引仍写 `Approved`，本文件头部 `:3` 为 `In Review`；本轮按约束不改索引。
+- [RECOMMENDED] 跨文档（`docs/architecture/adr-0006-deterministic-rng.md:375`）：ADR §7 仍引「GDD 规则 5 说『本系统只发起扣除』」，该句已于 2026-11-06 从 `:287` 删除改为「只声明代价……从不写回合计数」；属 ADR 侧陈旧引文（owner architecture）。
+- [RECOMMENDED] Open Questions（`:361`/`:363`）：OQ2 写 `E[尝试次数] = 1.10`、OQ4 写 `E[重掷] 1.10`，同一数字两种口径（91.11% 通过 → 期望重掷 0.099，carried）。
+
+**Completeness**: 6/6 required at `standard` —— Overview、Detailed Rules（`## Detailed Design`）、Formulas、Edge Cases、Dependencies、Acceptance Criteria（`gdd-structure-check.sh` 输出 `PRESENT: Overview,Detailed Rules,Formulas,Edge Cases,Dependencies,Acceptance Criteria`）。Formulas 因本系统定义阈值、预算与代价而必需，已计入。`## Player Fantasy` 与 `## Tuning Knobs` 缺席，均为 `standard` 下 advisory（Tuning Knobs 仍值得补：`wave_size`、九成下界、20 次重掷、`NODE_BUDGET`/`STATE_CELL_BUDGET`/`BASELINE_CELL_BUDGET`）。
+
+**Dependency Graph**: 九个声明依赖全部存在 —— `data-config.md` ✓、`dish-values.md` ✓、`run-flow.md` ✓、`cloying-and-taste.md` ✓、`in-game-hud.md` ✓、`settlement-and-entry-fee.md` ✓、`meta-upgrades.md` ✓、`first-run-onboarding.md` ✓、`save-system.md` ✓；下游回指逐份复核仍在（`data-config.md:191`、`dish-values.md:278`、`run-flow.md:121`、`in-game-hud.md:19`、`settlement-and-entry-fee.md:342`、`meta-upgrades.md:348`、`first-run-onboarding.md:425`、`save-system.md:356`、`cloying-and-taste.md:245`）。无断链，无单向依赖。
+
+**Registry Values**: 按注册表 79 个条目名与数值键全文扫描（`_` 展开为 `[_ ]`，大小写不敏感）——`wave_healthy`、`wave_reachable_opt`、`opt_value`、`preview_dishes`、`wave_partition`、`wave_size(_default)`、`wave_advance_cost`、`base_capacity`、`station_canteen_turn_budget`、`cloy_cap`、`capacity_used`、`running_net`、`end_reason`。数值层无冲突：`:104` 与 `preview_dishes.expression`（`:577`）、`:190`/`:200`/`:339` 与 `wave_healthy`、`:136` 与 `wave_advance_cost = 1`、`:88` 与 `wave_size_default = 4`、`:35`/`:174` 与 `base_capacity = 20`、`:35`/`:175` 与 `station_canteen_turn_budget = 10`、`:142-148`/`:181`/`:211` 与 `wave_reachable_opt.notes` 的 104/101/97 逐项一致；`advance_cost ∈ {0,1}` 与 `transition_turn_cost = 0` 不冲突。唯一注册表问题为上述元数据类 recommended，无数值冲突。
+
+**Verdict 备注**：本轮 blocking 为零。round-2 的注册表修复在语义上完整（既不漏 `base < 0`，也不把截断误判为 `HEALTHY`），剩余 11 条均为文字精度、命名统一与跨文档陈旧引文，不改变任何规则、AC 或数值。
+
+- **建议 systems-index 状态**：`In Review`（当前 `:67` 为 `Approved`）；本轮按约束**未修改** `design/gdd/systems-index.md`。
+- **本 GDD 与注册表未被修改**：本次只评审。
+
+Reviewed-Content-Hash: design/gdd/menu-waves.md b4eb4df304c1a82859ea02ee18d0162c9c5c4485
+Reviewed-Content-Hash: design/registry/entities.yaml 6fd2fcaa1a1417219f92a38d2bc3c767d46b25d5
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: .claude/rules/design-docs.md 638ca578625c5a3d24a5bafe0524777b351ab2f8
+Reviewed-Content-Hash: docs/architecture/adr-0006-deterministic-rng.md 70c7c9246c99c906f4b524504a491d337a475e3d
+Reviewed-Content-Hash: docs/architecture/adr-0013-action-pipeline-end-judge.md 3e709cc7b5901dc11ba7ae9a7b7f73d19fc616e8
+Reviewed-Content-Hash: design/gdd/run-flow.md 34881a6a257179f401908799c00b8f396ad279ed
+Reviewed-Content-Hash: design/gdd/time-and-turns.md 78dcb4e9ce3a408138c7a08ff2464bc571447101
+Reviewed-Content-Hash: design/gdd/in-game-hud.md b8ead1263039519de2ff2ad9378fe43a8ea58373
+Reviewed-Content-Hash: design/gdd/dish-values.md 1a899cb0831e3b8e3afebaed272862124d97f1c8
+Reviewed-Content-Hash: design/gdd/data-config.md 36fd1ebaca36d1edee0c93b674f21d0418798713
+Reviewed-Content-Hash: design/gdd/cloying-and-taste.md d8c7b56e7ffa8611ce9c271b25b064d38a8fb204
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md d9314a9ea5813e2b921939d5275e97261557e4a9
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 46ba1e41bba159828384590641c147dfc579e252
+Reviewed-Content-Hash: design/gdd/save-system.md a7d54e3ba4d7f8a23be1d28a6c165bb422648abd
+Reviewed-Content-Hash: design/gdd/stomach-capacity.md 65248e9286c1f43dbf1c07e037544a10e0f0bb01
+Reviewed-Content-Hash: design/gdd/systems-index.md 3f1fa74ca6507898756185f9530eaf4ccfe9a27a
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md d9314a9ea5813e2b921939d5275e97261557e4a9
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 46ba1e41bba159828384590641c147dfc579e252
+Reviewed-Content-Hash: design/gdd/save-system.md a7d54e3ba4d7f8a23be1d28a6c165bb422648abd
+
+## Re-stamp — 2026-11-17
+Status 头行由 `In Review` 改为 `Approved (2026-11-17)`；仅元数据，未改规则、公式、AC、依赖、契约或平衡数值（`.claude/rules/design-docs.md` 的 advisory 情形）。以下为当前字节的盖章：
+
+Reviewed-Content-Hash: design/gdd/menu-waves.md af47aef125e14677602eeab6eed5ae98132c6113

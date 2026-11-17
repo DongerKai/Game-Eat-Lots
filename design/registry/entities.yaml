@@ -608,8 +608,10 @@ formulas:
       - C0
       - T
     output_range: "HEALTHY | DEGRADED | UNHEALTHY"
-    expression: "UNHEALTHY if any wave empty or waves do not partition M or (reachable check ran and wave_reachable_opt < 0.9 * opt_value(pool, C0, T)); DEGRADED if non-empty/partition pass but the reachable check was skipped over the node budget; HEALTHY otherwise"
-    notes: "Three-state gate (HEALTHY / DEGRADED / UNHEALTHY) for a generated partition. DEGRADED means the reachable check was skipped over the node budget. MVP lower bound 94 (0.9 x 104); the upper bound is not enforced here. Reroll up to 20 seeds; accept the best with a warning rather than blocking the run."
+    expression: "UNHEALTHY if any wave empty or waves do not partition M, or (reachable check ran and 10 * wave_reachable_opt < 9 * opt_value(pool, C0, T)); DEGRADED if non-empty/partition pass but (baseline base < 0 due to BASELINE_CELL_BUDGET or reach.truncated due to STATE_CELL_BUDGET or the reachable check was skipped over the node budget); HEALTHY otherwise"
+    notes: "Three-state gate (HEALTHY / DEGRADED / UNHEALTHY) for a generated partition. DEGRADED has three sources: baseline budget exceeded (base = -1, BASELINE_BUDGET_EXCEEDED), reachability DP truncated at STATE_CELL_BUDGET, or the reachable check skipped over the node budget. Never HEALTHY when base < 0 or reach.truncated. Integer cross-multiplication only (ADR-0006 §4/§5/§6); MVP lower bound 94 = ceil(9 x 104 / 10), upper bound not enforced here. Old expression/notes (2026-11-03, revised 2026-11-06) named only the node-budget skip as the DEGRADED source. Reroll up to 20 seeds; accept the best with a warning rather than blocking the run."
+    added: "2026-11-03"
+    revised: "2026-11-06"
   - name: total_value
     status: active
     source: design/gdd/settlement-and-entry-fee.md
@@ -686,30 +688,34 @@ formulas:
     source: design/gdd/settlement-and-entry-fee.md
     referenced_by:
       - design/gdd/settlement-and-entry-fee.md
+      - design/gdd/run-flow.md
+      - design/gdd/in-game-hud.md
     variables:
       - price
       - entry_fee
       - k
     output_range: [-99999, 999999]
     expression: "sum(price(d_i) for i in 1..k) - entry_fee"
-    notes: "Live HUD net profit. Must start at -entry_fee before the first dish. HUD must call this instead of summing prices itself, or the in-run and settlement numbers drift."
+    notes: "Settlement owns the pure function only. run-flow owns this run's single live accumulator (running_net = Σ price(eaten) − entry_fee, checked as a RunLog invariant on exit from Active); the HUD reads the snapshot copy and never sums prices itself. Must start at -entry_fee before the first dish."
     added: "2026-11-03"
-    revised: ""
+    revised: "2026-11-06"
 
   - name: shortfall
     status: active
     source: design/gdd/settlement-and-entry-fee.md
     referenced_by:
       - design/gdd/settlement-and-entry-fee.md
+      - design/gdd/run-flow.md
+      - design/gdd/in-game-hud.md
     variables:
       - entry_fee
       - price
       - k
     output_range: [0, 99999]
     expression: "max(0, entry_fee - sum(price(d_i) for i in 1..k))"
-    notes: "How much is still needed to break even; monotonically non-increasing, 0 after break-even. Paired with running_net on the HUD."
+    notes: "How much is still needed to break even; monotonically non-increasing, 0 after break-even. Settlement defines the pure function; run-flow publishes the run's single live copy in the snapshot (shortfall = max(0, −running_net)); the HUD only displays it."
     added: "2026-11-03"
-    revised: ""
+    revised: "2026-11-06"
 
   - name: capacity_used
     status: active
@@ -890,11 +896,12 @@ formulas:
     variables:
       - turns_remaining
       - no_eatable
+      - no_legal_action
     output_range: "NONE | TIME_EXHAUSTED | NO_EATABLE_DISH"
-    expression: "TIME_EXHAUSTED if turns_remaining = 0 else (NO_EATABLE_DISH if no_eatable else NONE)"
-    notes: "TIME_EXHAUSTED wins when both conditions hold. Evaluated once after init and once after each committed action."
+    expression: "TIME_EXHAUSTED if turns_remaining = 0 else (NO_EATABLE_DISH if (no_eatable or no_legal_action) else NONE)"
+    notes: "TIME_EXHAUSTED wins when both conditions hold. no_legal_action is the state-based exit: non-final wave, turns_remaining = 1, and no visible dish that can_fit (ADR-0013 §6 _no_legal_action). Capacity alone never ends a run. Evaluated once after init and once after each committed action."
     added: "2026-11-03"
-    revised: ""
+    revised: "2026-11-06"
 
   - name: capacity_total
     status: active
