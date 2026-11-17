@@ -132,7 +132,7 @@ Vertical Slice 加入第二个付费档口后，玩家在菜单里用钱包买�
 | 签名 | `spend(amount: int64, reason: SpendReason, extra: Dictionary = {}) -> SpendResult` |
 | `reason` | `STATION_UNLOCK`（唯一取值；枚举为未来的其他流水预留） |
 | `extra` | 本系统算好的 `{unlocks: {stations: [...], dishes: [...]}}`；局外升级不解释它，只并入事务 |
-| 校验顺序 | `DATA_NOT_READY` → `NOT_WRITABLE` → `NOT_IN_MENU` → `BUSY` → `INVALID_AMOUNT` → `INSUFFICIENT_FUNDS`；`amount < 0` 一律 `INVALID_AMOUNT`，钱包不变 |
+| 校验顺序 | `INVALID_AMOUNT`（`typeof != TYPE_INT` 或 `amount < 0`）→ `NOT_WRITABLE` → `NOT_IN_MENU` → `BUSY` → `RESERVED_NAMESPACE`（`extra` 含 `progression`）→ `INSUFFICIENT_FUNDS`；`amount < 0` 一律 `INVALID_AMOUNT`，钱包不变；`spend` 无 `DATA_NOT_READY` 守卫（ADR-0016 §8） |
 | 事务 | `wallet' = checked_sub_int64(wallet, amount)`；`save.commit({progression: {wallet: wallet', upgrade_levels: …}, …extra})` |
 | 失败 | 余额不足：`INSUFFICIENT_FUNDS`，不改内存、不写盘；写盘失败：恢复钱包、`extra` 不生效、返回 `COMMIT_FAILED` |
 | 成功 | 内存与磁盘一致后才返回；`progression_changed` 发一次 |

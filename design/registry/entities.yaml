@@ -1029,10 +1029,10 @@ formulas:
       - s.id
       - U.stations
     output_range: "true | false"
-    expression: "(s.unlock_cost = 0) or (s.id in U.stations)"
-    notes: "A station is playable when it is free or explicitly unlocked. Unknown ids are rejected before this formula."
+    expression: "gated(s) = (supports_station_selection() != true) and (s.unlock_cost > 0); station_available = not gated(s) and (s.unlock_cost = 0 or s.id in U.stations)"
+    notes: "Free stations (unlock_cost = 0) are never gated. Unknown id -> false; unlock_cost < 0 (corrupt data past the boot check) -> false as defence, never treated as a free station. A purchased paid station is still station_available = false while gated, but its id stays in U.stations -- the ledger is never pruned, so it becomes available again when the capability switch flips to true."
     added: "2026-11-03"
-    revised: ""
+    revised: "2026-11-06"
 
   - name: effective_unlocks
     status: active
@@ -1060,11 +1060,11 @@ formulas:
       - U
       - L
       - wallet
-    output_range: "OK | ALREADY_UNLOCKED | PREREQUISITE_LOCKED | INSUFFICIENT_FUNDS | INVALID_STATION_DATA"
-    expression: "INVALID_STATION_DATA if s.unlock_cost < 0; ALREADY_UNLOCKED if station_available; PREREQUISITE_LOCKED if any requires(s) level < 1; INSUFFICIENT_FUNDS if wallet < s.unlock_cost; else OK"
-    notes: "INVALID_STATION_DATA must precede INSUFFICIENT_FUNDS so a negative price can never reach spend(). requires(s) is empty until StationData.unlock_requires exists."
+    output_range: "OK | ALREADY_UNLOCKED | PREREQUISITE_LOCKED | INSUFFICIENT_FUNDS | INVALID_STATION_DATA | FEATURE_GATED"
+    expression: "INVALID_STATION_DATA if s.unlock_cost < 0; FEATURE_GATED if gated(s); ALREADY_UNLOCKED if station_available; PREREQUISITE_LOCKED if any requires(s) level < 1; INSUFFICIENT_FUNDS if wallet < s.unlock_cost; else OK"
+    notes: "Six outcomes; cost = null for ALREADY_UNLOCKED, FEATURE_GATED and INVALID_STATION_DATA, otherwise the price. INVALID_STATION_DATA must precede INSUFFICIENT_FUNDS and FEATURE_GATED so a negative price can never reach spend() nor hide behind the gate. FEATURE_GATED precedes ALREADY_UNLOCKED: a gated paid station never reports itself as unlocked. requires(s) is empty until StationData.unlock_requires exists."
     added: "2026-11-03"
-    revised: ""
+    revised: "2026-11-06"
 
   - name: station_unlock_cost
     status: active
@@ -1105,10 +1105,10 @@ formulas:
       - S
       - D
     output_range: "stations/stations_total + dishes/dishes_total"
-    expression: "S_eff = {s in S : s.unlock_cost = 0 or s.id in U.stations}; stations=|S_eff|, stations_total=|S|, dishes=sum(|s.dish_pool| for s in S_eff), dishes_total=|D|"
-    notes: "Display counters. An empty station list yields NoPlayableStation; the UI shows that error instead of 0/0."
+    expression: "S_vis = {s in S : not gated(s)}; S_eff = {s in S_vis : s.unlock_cost = 0 or s.id in U.stations}; stations=|S_eff|, stations_total=|S_vis|, dishes=sum(|s.dish_pool| for s in S_eff), dishes_total=sum(|s.dish_pool| for s in S_vis)"
+    notes: "Display counters. Gated stations are excluded from numerator and denominator alike: with supports_station_selection() = false (MVP) this reads 1/1 and 12/12, not 1/2 and 12/24. An empty visible set yields NoPlayableStation; the UI shows that error instead of 0/0."
     added: "2026-11-03"
-    revised: ""
+    revised: "2026-11-06"
 
   - name: onboarding_active
     status: active

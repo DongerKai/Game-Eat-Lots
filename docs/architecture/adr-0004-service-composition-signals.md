@@ -231,7 +231,7 @@ func ensure_baseline(report: LoadReport) -> int:      # 返回 CommitResult
 | `run_ended(run_id, end_reason)` | `RunFlow` | 结束判定命中、动作冻结之后 | `HudHost` → `Audio` → `Onboarding` | 只读；不得结算 |
 | `run_settled(run_id, result)` | `RunFlow` | `Handoff` 之后，`RunResult` 就绪 | `UIRoot`（收据编排）→ `Onboarding`（只 `STASH_RESULT`）→ `Audio` | `UIRoot` 发起结算编排（ADR-0007）；`Onboarding` 只暂存结果供首局引导 B4，不写盘、不发信号 |
 | `run_faulted(run_id, code, detail)` / `run_discarded(run_id)` | `RunFlow` | 进入 `Faulted` / 丢弃之后 | `HudHost`、`Onboarding`、`Audio`、`UIRoot`（提示条目） | 只记日志与展示 |
-| `run_config_assembled(config, plan)` | `UIRoot` | `RunConfig` 组装完成、`request_transition(Menu → Run)` 之前 | `AppRoot` → `Onboarding.configure(plan)` | 只读；`plan = get_first_run_preset()` 或 `null`；`RunConfig` 不新增字段（ADR-0020 决策 10） |
+| `run_config_assembled(config, plan)` | `UIRoot` | `RunConfig` 组装完成、`request_transition(Menu → Run)` 之前 | `AppRoot` → `Onboarding.configure(plan)` | 只读；`plan = FirstRunPlanner.plan()`（`FirstRunRunPlan`，ADR-0020 决策 2.3），未就绪时为 `null`；`RunConfig` 不新增字段（ADR-0020 决策 10） |
 | `save_status_changed(status)` | `SaveSystem` | 每次可写性/保存态变化后 | `UIRoot`（保存指示、禁用写入口）、`MetaUpgrades`、`Unlocks` | 只读；不得触发写盘 |
 | `progression_changed` / `unlocks_changed` | `MetaUpgrades` / `Unlocks` | 事务成功或回填改变集合后 | `UIRoot` → `Audio` | 刷新展示 |
 | `record_broken` / `milestone_earned` / `career_completed` | `Records` | 结算事务已应用后（不是写盘成功后；见 ADR-0007 D5） | `UIRoot`（收据印章）→ `Audio` | 展示 |

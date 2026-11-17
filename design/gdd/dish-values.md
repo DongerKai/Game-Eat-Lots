@@ -1,6 +1,6 @@
 # 菜品数值（Dish Values）
 
-> **Status**: In Review
+> **Status**: Approved (2026-11-06)
 > **Author**: user + agents
 > **Last Updated**: 2026-11-06
 > **Last Verified**: 2026-11-03

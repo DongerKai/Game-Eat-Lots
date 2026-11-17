@@ -112,6 +112,7 @@
 | `prepare_run(result: RunResult)` | 已结算结果 | `RecordsApplyResult` | 纯更新：返回状态、新命名空间（仅成功）与本次新达成的里程碑；不写盘 |
 | `snapshot()` | — | `RecordsSnapshot` | 只读视图，供界面与音效读取 |
 | `milestone_progress(id)` | 里程碑 id | `{current, threshold, unit, earned}` | 只读；用于展示「340 / 500」这类进度 |
+| `get_milestone_catalog()` | — | `MilestoneCatalog` | 只读；里程碑目录（id、条件文案、阈值、`required_for_completion`），供纪录页与完成判定展示（ADR-0018 §1） |
 | `record_broken(station_id, new_best, previous_best)` | — | 信号 | 新纪录替换旧纪录时发一次；首次建立纪录时 `previous_best = null` |
 | `milestone_earned(milestone_id)` | — | 信号 | 每条新达成里程碑发一次，按 id 升序 |
 | `career_completed()` | — | 信号 | 完成条件首次锁存时发一次；载入时补齐状态不发 |
@@ -456,8 +457,8 @@ The `career_complete` formula is defined as:
 
 **编排契约（S5）**
 
-35. **GIVEN** `prepare_run` 分别因四类失败返回（`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID`），**WHEN** 编排者处理返回值，**THEN** 每个结果都是 `RecordsApplyResult{applied: false, change: null}`；**AND** 同一事务里的 `progression` 与 `unlocks` 逐字段不变、commit spy 调用 0 次；**AND** 发出一次失败事件（`settlement_aborted` 或等价的 `run_faulted`），收据不进入成功态、`broke_even` / `loss` 结果 cue 不播放。
-36. **GIVEN** `prepare_run` 返回 `APPLIED`，**WHEN** 编排者处理，**THEN** `applied = true`、`change` 非空，且 `progression` / `unlocks` / `records` 在同一次 commit 中提交（commit spy 调用 1 次、载荷同时含三个命名空间）。
+35. **GIVEN** `prepare_run` 分别因四类失败返回（`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID`），**WHEN** 编排者处理返回值，**THEN** 每个结果都是 `RecordsApplyResult{applied: false, change: null}`；**AND** 同一事务里的 `progression` 与 `unlocks` 逐字段不变、commit spy 调用 0 次；**AND** 界面流程在同一帧发出 `settlement_aborted(run_id, code)` 恰好一次，`code` 与快照的 `abort_code` 同值（ADR-0007 D6），这是失败的结算事务**唯一**面向界面的信号；**AND** 不发出 `run_faulted`——`run_faulted` 只属于「生命周期无法继续、没有 `RunResult`」的故障局：上游在 `INIT` / `RUN` 阶段故障时由 `餐局流程` 发 `run_faulted(run_id, detail)`，没有收据、结算事务从不运行（ADR-0007 D7），本 AC 的四类失败都不属于此路径；**AND** 收据不进入成功态、`broke_even` / `loss` 结果 cue 不播放。
+36. **GIVEN** `prepare_run` 返回 `APPLIED`，**WHEN** 编排者处理，**THEN** `applied = true`、`change` 非空，且 `progression` 与 `records` 在同一次 commit 中提交（commit spy 调用 1 次、载荷恰为 `{progression, records}` 两个命名空间）；**AND** MVP / Vertical Slice 的载荷不含 `unlocks` 键——该键只在本局奖励解锁上线后才出现（ADR-0007 D4 第 4–5 步、ADR-0018 §13），写入 `unlocks` 键即为缺陷。
 37. **GIVEN** `prepare_run` 返回 `ALREADY_APPLIED`，**WHEN** 编排者处理，**THEN** 不发起任何 commit，也不发失败事件；界面按幂等处理，不重放成功 cue、不第二次标记「新纪录」。
 
 **存档安全编码（ADR-0018 §2）**

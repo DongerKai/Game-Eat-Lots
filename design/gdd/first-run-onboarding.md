@@ -1,6 +1,6 @@
 # 首局引导（First-Run Onboarding）
 
-> **Status**: Approved
+> **Status**: In Review
 > **Author**: user + Claude（autonomous 模式；systems-designer 与 qa-lead 按 Lean 模式仅复核 Formulas 与 Acceptance Criteria）
 > **Last Updated**: 2026-11-06
 > **Last Verified**: 2026-11-03
@@ -14,32 +14,32 @@
 
 ## Overview
 
-首局引导是《回本》的新玩家入口。它不新建一局流程，而是**接管生涯的第一局**：向组装 `RunConfig` 的一方提供一个首局预置（六道菜的菜池、教学入场费 40 元），在这一局里按固定顺序放几条讲解气泡，把「价格」「饱腹」「容量」「同口味重复」四个词在玩家第一次做决定之前解释清楚。
+首局引导是《回本》的新玩家入口。它不新建一局流程，而是**接管生涯的第一局**：由 `FirstRunPlanner` 产出唯一一份 `FirstRunRunPlan`（首局判定、六道菜的菜池、教学入场费 40 元、主菜单显示费），界面流程把其中的字段原样写进 `RunConfig`；在这一局里按固定顺序放几条讲解气泡，把「价格」「饱腹」「容量」「同口味重复」四个词在玩家第一次做决定之前解释清楚。
 
 它存在的原因是支柱 1 与反支柱之间的张力。支柱 1 要求每个决定都能被心算验证，反支柱要求「不需要查攻略就能看懂」；而一个 12 道菜、还要算腻度的菜单，第一次见面就是攻略。首局把菜单压到六道、把入场费降到教学价，让玩家在一局「认真玩就一定能回本、并且一定买得起第一项升级」的局面里先看到公式长什么样，再回到完整菜单。
 
 **为什么不是零入场费**：零费用会让 HUD 的三个核心读数在本局全部退化——`running_net` 从 0 起步、`shortfall` 恒为 0（一直显示「已回本」）、收据的 `return_ratio` 无定义（显示「免单」）。而这一局最该被看见的恰恰是「−40 → 还差 40 元 → 回本」这条线。教学价必须大于零。
 
-边界很清楚：**它拥有教学序列、文案、焦点约束、完成与跳过判定，以及首局预置的参数**；它不拥有 HUD 的绘制、输入的上下文机、餐局流程的生命周期、结算的求和与回本判定，也不写任何存档。它压入 `Blocked` 上下文时改变的只是「这一帧玩家能按什么」，不是「这一帧游戏算什么」。
+边界很清楚：**它拥有教学序列、文案、焦点约束、完成与跳过判定，以及 `FirstRunPlanner` / `FirstRunRunPlan`（首局判定与首局预置的唯一产出口）**；它不拥有 HUD 的绘制、输入的上下文机、餐局流程的生命周期、结算的求和与回本判定，也不写任何存档。它压入 `Blocked` 上下文时改变的只是「这一帧玩家能按什么」，不是「这一帧游戏算什么」。它压入 `Blocked` 上下文时改变的只是「这一帧玩家能按什么」，不是「这一帧游戏算什么」。
 
 ## Detailed Design
 
 ### Core Rules
 
-1. **职责边界**：本系统拥有首局的教学目标序列、气泡文案、焦点约束、完成/跳过判定，以及首局预置（`pool_override` 的六道菜与 `entry_fee_override = 40`）。它不拥有：局内一屏的布局与重绘（局内 HUD）、输入上下文与动作映射（输入）、一局的生命周期与动作仲裁（餐局流程）、净利与回本（结算与入场费）、收据屏与菜单（界面流程）、任何持久化（存档 / 纪录与里程碑）。**它读的上游一律只读，写出去的一律是请求或 payload。**
+1. **职责边界**：本系统拥有首局的教学目标序列、气泡文案、焦点约束、完成/跳过判定，以及 `FirstRunPlanner` 与 `FirstRunRunPlan`（`is_first_run` 判定、`pool_override` 的六道菜、`entry_fee_override = 40`、`menu_entry_fee`）。它不拥有：局内一屏的布局与重绘（局内 HUD）、输入上下文与动作映射（输入）、一局的生命周期与动作仲裁（餐局流程）、净利与回本（结算与入场费）、收据屏与菜单（界面流程）、任何持久化（存档 / 纪录与里程碑）。**它读的上游一律只读，写出去的一律是请求或 payload。**
 
-2. **只在首局运行**：唯一触发条件是 `RunConfig.is_first_run = true`。没有中途开关、没有设置项、没有「再看一次」入口；`is_first_run = false` 时本系统不初始化、不压上下文、不绘制任何元素。谁决定 `is_first_run` 归组装 `RunConfig` 的一方（界面流程），本系统只消费它。**组装方的判据必须是两项同时成立**（S11）：`records.career.runs_settled == 0` **且** `LoadReport.first_run_eligible = true`。`first_run_eligible` 由存档给出，只在载入结果为 `Fresh` / `Loaded` / `Migrated` 且 `runs_settled == 0` 时为 `true`；**载入结果为 `Recovered` 时恒为 `false`**——恢复出的备份可能早于第一次结算，单看 `runs_settled = 0` 会把老玩家重新塞回教学。本系统不读存档，也不重新推导这两项，只消费组装方给出的 `is_first_run`。
+2. **只在首局运行**：唯一触发条件是 `FirstRunRunPlan.is_first_run = true`。没有中途开关、没有设置项、没有「再看一次」入口；`is_first_run = false` 时本系统不初始化、不压上下文、不绘制任何元素。**首局判定由 `FirstRunPlanner` 唯一产出**（ADR-0020 决策 2.3）：它以两项同时成立为输入（S11）——`records.career.runs_settled == 0` **且** `LoadReport.first_run_eligible = true`——并写入 `FirstRunRunPlan.is_first_run`。`first_run_eligible` 由存档给出，只在载入结果为 `Fresh` / `Loaded` / `Migrated` 且 `runs_settled == 0` 时为 `true`；**载入结果为 `Recovered` 时恒为 `false`**——恢复出的备份可能早于第一次结算，单看 `runs_settled = 0` 会把老玩家重新塞回教学。`FirstRunPlanner` 只读这两项输入，其余部分不读存档；界面流程、主菜单与 `OnboardingHost` 一律只消费 `plan.is_first_run`，不得各自重算。
 
-3. **首局预置由本系统提供、由组装方写进 `RunConfig`**：`is_first_run = true` 时，界面流程在组装 `RunConfig` 之前向本系统取一份预置：
+3. **首局预置由 `FirstRunPlanner` 装进 `FirstRunRunPlan`、由界面流程原样写进 `RunConfig`**：`FirstRunPlanner.refresh()` 在 `Boot → Menu`、`Run → Menu` 结算之后、以及生涯删除之后各跑一次，产出唯一一份 plan。界面流程按 `plan.run_config_fields()` 组装，不直接读预置常量、不调用 `get_first_run_preset()`：
 
    | 字段 | 值 | 说明 |
    |---|---|---|
    | `pool_override` | `[dish_seafood_pot, dish_sweet_sour_pork, dish_braised_pork, dish_steamed_fish, dish_fried_chicken, dish_mapo_tofu]` | 六项，是 `station_canteen.dish_pool` 的非空子集（餐局流程的校验前提） |
    | `entry_fee_override` | `40` | 教学价；结算照常 `net_profit = total_value − 40`，收据显示正常回本率 |
 
-   本系统不理解这两个值如何被消费：`pool_override` 原样交给菜单波次，`entry_fee_override` 原样交给结算。**教学价不是新规则**——`entry_fee` 本来就是 ≥ 0 的整数、由 `RunConfig` 冻结整局；本系统只是为一个档口选了一个低费值，没有改写求和或回本。40 的取值理由见 Formulas 的 `first_run_pool`。
+   本系统不理解这些值如何被消费：`plan.pool_override` 原样交给菜单波次，`plan.entry_fee_override` 原样交给结算。**教学价不是新规则**——`entry_fee` 本来就是 ≥ 0 的整数、由 `RunConfig` 冻结整局；本系统只是为一个档口选了一个低费值，没有改写求和或回本。40 的取值理由见 Formulas 的 `first_run_pool`。
 
-   **主菜单必须显示本局实际要收的费**（S9）：`is_first_run = true` 时，主菜单开始按钮旁显示的入场费必须是 `entry_fee_override`（40），不是 `StationData.entry_fee`（85）。这两个数同时出现在屏幕上（菜单 85、结算扣 40）是契约缺陷：玩家会按 85 规划回本，却在收据上看到 40。界面流程在组装 `RunConfig` 时已知道 `is_first_run`，因此必须用同一个标记切换菜单上的读数；本系统不绘制菜单，只声明这个一致性要求。`entry_fee_override` 不被支持时按规则 19 降级：**此时菜单与结算都必须用 85**，且组装方必须在组装时就发现字段缺失（不能菜单显示 40、结算收 85——那是同一缺陷的两种表现）。
+   **主菜单必须显示本局实际要收的费**（S9）：主菜单开始按钮旁的入场费直接显示 `plan.menu_entry_fee`——`plan.is_first_run = true` 且 `plan.has_entry_fee_override()` 时为 40，否则为 `StationData.entry_fee`（85）。`RunConfig.entry_fee_override = plan.has_entry_fee_override() ? plan.entry_fee_override : null`，与菜单读数同源；两个数同时出现在屏幕上（菜单 85、结算扣 40）是契约缺陷：玩家会按 85 规划回本，却在收据上看到 40。`entry_fee_override` 不被支持时按规则 19 降级：`FirstRunPlanner` 在组装 plan 时就把它视为不存在（`menu_entry_fee = official_entry_fee`、`has_entry_fee_override() = false`），**此时菜单与结算同时用 85**，不允许一边 40 一边 85。
 
 4. **只压输入，不改规则**：本系统对一局唯一的写操作是 `push_context(Blocked, allow=[…])` / `pop_context()`。它不得写 `run_state`、不得开始或结束一局、不得消耗回合或容量、不得改变 `run_id`、不得广播 `run_started` / `run_ended`、不得改 `frozen`。气泡打开期间 `run_state` 仍是 `Active`，局内数字仍是最后一帧的合法值。
 
@@ -77,7 +77,7 @@
 
 14. **收据讲解是 payload，不是本系统绘制的界面**：`B4` 产出 `FirstRunExplanation`（两段短文案、逐行单位价值的取舍说明、一处替换建议、一条首笔升级建议），交给界面流程在收据屏上渲染。本系统不拥有收据的布局、顺序、字体或折叠；收据没有出现（放弃、故障、`init_failed`）时本系统静默结束，不补弹窗。
 
-15. **完成判定**：`beats_required` 全部展示过、且 `B4` payload 已交付，即视为完成，广播一次 `onboarding_finished(ALL_BEATS)`。完成不写任何持久化。**「下一局还算不算首局」只有一个判据，由组装方按 `records.career.runs_settled == 0 ∧ LoadReport.first_run_eligible` 判定**；`onboarding_finished` 只用于关闭本局的遮罩与讲解，**不参与该判定**——否则「先跳过、再放弃」会让下一局在第一局从未结算的情况下丢掉教学。
+15. **完成判定**：`beats_required` 全部展示过、且 `B4` payload 已交付，即视为完成，广播一次 `onboarding_finished(ALL_BEATS)`。完成不写任何持久化。**「下一局还算不算首局」只有一个判据，由 `FirstRunPlanner` 按 `records.career.runs_settled == 0 ∧ LoadReport.first_run_eligible` 产出**；`onboarding_finished` 只用于关闭本局的遮罩与讲解，**不参与该判定**——否则「先跳过、再放弃」会让下一局在第一局从未结算的情况下丢掉教学。
 
 16. **跳过**：模态 beat 上按 `ui_cancel`，或点击气泡上的「跳过引导」文字按钮，立即跳过本局的全部引导：弹出 `Blocked`、丢弃剩余 beat、不再显示任何提示与收据讲解，广播一次 `onboarding_finished(SKIPPED)`。**不二次确认**——跳过的代价为零，确认框只是多一次点击。跳过只影响本局，不写存档。
 
@@ -93,7 +93,7 @@
 
 21. **不改写任何上游记录**：`pool_override` 只选 id，不复制、不修改 `DishData`；`entry_fee_override` 只对一个 `run_id` 生效，不回写 `StationData.entry_fee`。
 
-22. **首局可重复进入，但不可重复获利**：首局被放弃时不结算、不入账，「下一局仍是首局」是合法结果；一旦结算，`career.runs_settled` 增加，组装方不再标记 `is_first_run`。**`Recovered` 载入是例外**：即使恢复出的 `runs_settled` 为 0，组装方也必须因 `first_run_eligible = false` 而不标记首局——否则一个已结算过的老玩家会在备份恢复后重看整段教学（S11）。本系统不参与这条判定，也不提供任何奖励。
+22. **首局可重复进入，但不可重复获利**：首局被放弃时不结算、不入账，「下一局仍是首局」是合法结果；一旦结算，`career.runs_settled` 增加，`FirstRunPlanner` 不再产出 `is_first_run = true`。**`Recovered` 载入是例外**：即使恢复出的 `runs_settled` 为 0，`FirstRunPlanner` 也必须因 `first_run_eligible = false` 产出 `is_first_run = false`——否则一个已结算过的老玩家会在备份恢复后重看整段教学（S11）。界面流程不参与这条判定，也不提供任何奖励。
 
 ### States and Transitions
 
@@ -101,7 +101,7 @@
 
 | 状态 | 进入条件 | 本系统可见行为 | 离开 |
 |---|---|---|---|
-| `Idle` | 未开局，或 `is_first_run = false` | 无 | `run_started` 且 `is_first_run` → `Intro` |
+| `Idle` | 未开局，或 `plan.is_first_run = false` | 无 | `run_started` 且 `plan.is_first_run` → `Intro` |
 | `Intro` | 首局开局，B0 待展示 | 模态气泡 + 遮罩；`Blocked[ui_accept, ui_cancel]` | B0 完成 → `Numbers`；跳过 → `Closed`；局结束/丢弃 → `Cancelled` |
 | `Numbers` | B0 完成 | 模态气泡；`Blocked[nav, ui_accept, ui_cancel]` | B1 完成 → `Coaching`；跳过 → `Closed`；局结束/丢弃 → `Cancelled` |
 | `Coaching` | B1 完成 | 无上下文限制；按事件显示 B2 / B3 | `run_ended` → `Closing`；跳过（仅模态 beat 可用，此状态无）→ 不适用；丢弃/故障 → `Cancelled` |
@@ -111,7 +111,7 @@
 
 | 从 | 触发 | 到 | 副作用 |
 |---|---|---|---|
-| `Idle` | `run_started`，`is_first_run = true` | `Intro` | 同步压 `Blocked`；请求首个锚点 |
+| `Idle` | `run_started`，`plan.is_first_run = true` | `Intro` | 同步压 `Blocked`；请求首个锚点 |
 | `Intro` | `ui_accept` | `Numbers` | 弹出旧白名单、压入 `B1` 白名单；不出局内动作 |
 | `Numbers` | 有焦点时 `ui_accept` | `Coaching` | 弹出 `Blocked`；显示 B2 |
 | `Coaching` | 焦点进入已计数组 | `Coaching` | 显示 B3（替换 B2）；两者都只展示一次 |
@@ -134,10 +134,11 @@
 | 腻度与口味 | 上游（间接） | 读 `focused_dish_id` 的组计数与 `extra_satiety` 用于 B3 触发与文案；不写计数 | 软 |
 | 界面流程 | 下游 | 读 `FirstRunPlanner` 产出的 `FirstRunRunPlan`（`is_first_run` / `menu_entry_fee` / `has_entry_fee_override()` / `run_config_fields()`），不直接读预置常量（ADR-0020 决策 2.3）；接收 `FirstRunExplanation` 并渲染收据讲解；**不据 `onboarding_finished` 判定首局**——`is_first_run` 由 `FirstRunPlanner` 唯一产出（输入为 `records.career.runs_settled == 0 ∧ LoadReport.first_run_eligible`）；主菜单显示的入场费必须与 `plan.menu_entry_fee` 及本次写入的 `RunConfig.entry_fee_override` 一致（S9） | 硬（UI） |
 | 局外升级 | 下游（仅文案） | `B4` 的「首笔升级建议」读升级目录与当前钱包，只出文字，不购买、不高亮按钮 | 软 |
-| 存档 | 无直接调用 | 不读写任何命名空间 | — |
+| 存档 | 上游（只读） | `FirstRunPlanner` 读 `LoadReport.first_run_eligible`；不写任何命名空间 | 硬（只读） |
+| 纪录与里程碑 | 上游（只读） | `FirstRunPlanner` 读 `snapshot().career.runs_settled`；不写任何纪录 | 硬（只读） |
 | 音效反馈 | 下游（订阅） | `onboarding_beat_shown(beat_id)`、`onboarding_finished(reason)` | 软 |
 
-**接口所有权**：本系统拥有 beat 序列、文案、锚点的使用方式、完成与跳过判定、首局预置的内容；HUD 拥有锚点矩形与焦点；输入拥有上下文合法性；餐局流程拥有一局的生命周期；界面流程拥有收据屏与预置的落位。
+**接口所有权**：本系统拥有 beat 序列、文案、锚点的使用方式、完成与跳过判定、`FirstRunPlanner` 与 `FirstRunRunPlan` 的全部字段；HUD 拥有锚点矩形与焦点；输入拥有上下文合法性；餐局流程拥有一局的生命周期；界面流程拥有收据屏，并只负责把 plan 字段原样写入 `RunConfig` 与菜单显示，不得另算。
 
 **信号**：
 
@@ -158,7 +159,7 @@ The `onboarding_active` formula is defined as:
 
 | Variable | Type | Range | Source | Description |
 |---|---|---|---|---|
-| `is_first_run` | bool | {true, false} | `RunConfig.is_first_run` | 组装方给出的首局标记 |
+| `is_first_run` | bool | {true, false} | `FirstRunRunPlan.is_first_run`（由 `FirstRunPlanner` 产出；界面流程原样写入 `RunConfig.is_first_run`） | 首局标记 |
 | `run_state` | enum | 8 个局内状态 | 餐局流程只读快照 | 本局的当前状态 |
 | `finished` | bool | {true, false} | 本系统 | 是否已广播过 `onboarding_finished` |
 
@@ -363,8 +364,8 @@ best_menu_fit    = satiety(best_menu) ≤ remaining_at_end
 
 - **If `pool_override` 被菜单波次忽略或校验失败**：本局按档口原菜池进行；B0/B1 不变，B2 的「六道菜 / 20 格」改为读取实际可见数并省略定量句；B3 只在真实出现重复组时触发。不报错、不中止开局。
 - **If `entry_fee_override` 不被支持**：本局仍按档口入场费扣款；B0 改说「这一局的入场费是 N 元，回本线就是它」，其余 beat 与 B4 不变。记录一条 warning 供验收发现契约缺失。
-- **If `is_first_run = true` 但存档已有 `runs_settled > 0`**：仍按首局运行（本系统只消费标记），不读存档判断；不产生错误。上线前应由组装方修正标记来源。
-- **If 载入结果为 `Recovered`**（主档损坏、从备份恢复，而备份早于第一次结算）：`LoadReport.first_run_eligible = false`，组装方必须给出 `is_first_run = false`，即使备份里的 `runs_settled = 0` 也不得重播教学（S11）。本系统不读存档；若组装方仍传 `true`，按上一条处理（照常运行、不报错），但这是组装方缺陷，不是本系统的降级路径。
+- **If `is_first_run = true` 但存档已有 `runs_settled > 0`**：仍按首局运行（本系统只消费 plan 标记），不读存档判断；不产生错误。这是 `FirstRunPlanner` 的输入缺陷，应由其修正标记来源。
+- **If 载入结果为 `Recovered`**（主档损坏、从备份恢复，而备份早于第一次结算）：`LoadReport.first_run_eligible = false`，`FirstRunPlanner` 必须产出 `is_first_run = false`，即使备份里的 `runs_settled = 0` 也不得重播教学（S11）。本系统其余部分不读存档；若 plan 仍为 `true`，按上一条处理（照常运行、不报错），但这是 planner 的缺陷，不是本系统的降级路径。
 - **If 首局被放弃、退出或故障**：立即弹出 `Blocked`、拆除遮罩与气泡、不产出 `B4`、不广播 `onboarding_finished`、不写任何东西。下一局仍是首局是合法结果。
 - **If 气泡打开期间玩家暂停**：`Paused` 生效时输入栈被清空，`Blocked` 失效；恢复回 `Run` 时本系统重新压入同一白名单。**若重新压入返回 `false`**：不重试，把当前 beat 降级为无遮罩的停靠提示，玩家可以直接操作——绝不出现「气泡还在但按键无效」的卡死。
 - **If 玩家在同一帧连按两次 `ui_accept`**：只推进一个 beat；第二个事件被丢弃。B0 与 B1 都在推进前调用 `输入.consume_action(ui_accept)`，HUD 的 `submit_action` 在同一帧拿不到该动作，因此不会误触一次吃菜。
@@ -403,9 +404,10 @@ best_menu_fit    = satiety(best_menu) ≤ remaining_at_end
 | 菜单波次 | 软 | 接收并应用 `pool_override`（当前只读 `StationData.dish_pool`，见 Open Questions） | GDD 已写（`design/gdd/menu-waves.md`） |
 | 局外升级 | 软（仅文案） | `B4` 的首笔升级建议读目录与钱包，只出文字 | GDD 已写（`design/gdd/meta-upgrades.md`） |
 | 音效反馈 | 软 | 订阅 `onboarding_beat_shown` / `onboarding_finished` | GDD 已写（`design/gdd/audio-feedback.md`） |
-| 存档 | 无直接调用 | 不读写任何命名空间 | GDD 已写（`design/gdd/save-system.md`） |
+| 存档 | 硬（只读） | `FirstRunPlanner` 读 `LoadReport.first_run_eligible`；不写任何命名空间 | GDD 已写（`design/gdd/save-system.md`） |
+| 纪录与里程碑 | 硬（只读） | `FirstRunPlanner` 读 `snapshot().career.runs_settled`；不写任何纪录 | GDD 已写（`design/gdd/records-and-milestones.md`） |
 
-**`is_first_run` 的三态真值表（推荐给组装方，本系统不实现）**：
+**`is_first_run` 的三态真值表（由 `FirstRunPlanner` 实现，界面流程只消费）**：
 
 计算式：`is_first_run = (career.runs_settled == 0) ∧ LoadReport.first_run_eligible`。
 
@@ -420,7 +422,7 @@ best_menu_fit    = satiety(best_menu) ≤ remaining_at_end
 
 **不属于依赖的关系**：
 
-- **存档 / 纪录与里程碑**：本系统不读 `career.runs_settled` 或 `LoadReport`、不写任何命名空间。`is_first_run` 由界面流程组装 `RunConfig` 时决定；本 GDD 只给出推荐规则（`runs_settled == 0 ∧ LoadReport.first_run_eligible`，见上表），不把它变成本系统的依赖。`first_run_eligible` 的定义归存档（S11）。
+- **存档 / 纪录与里程碑**：本系统只经 `FirstRunPlanner` 读 `career.runs_settled` 与 `LoadReport.first_run_eligible` 两项输入，不写任何命名空间。`is_first_run` 由 `FirstRunPlanner` 唯一产出（`runs_settled == 0 ∧ LoadReport.first_run_eligible`，见上表），界面流程只消费 `plan.is_first_run`。`first_run_eligible` 的定义归存档（S11）。
 - **时间与回合 / 胃容量**：本系统只读快照里的 `turns_remaining` / `capacity_used` / `capacity_total` 用于文案，不调用 `spend_turn` / `consume`。经餐局流程的只读快照，不另记依赖。
 - **数据配置**：六道菜 id 是 `station_canteen.dish_pool` 的子集，由菜单波次与菜品数值解析；本系统不直接查数据目录。
 
@@ -478,7 +480,7 @@ best_menu_fit    = satiety(best_menu) ≤ remaining_at_end
 | `design/gdd/cloying-and-taste.md` | 上游（值来源） | `group_count(g)` 与 `extra_satiety` 是 B3 的触发与文案来源；只读，不写计数（W2 已从下游改为上游） |
 | `design/gdd/meta-upgrades.md` | 下游（软） | `B4` 的首笔升级建议只读目录与钱包，不购买、不高亮 |
 | `design/gdd/audio-feedback.md` | 下游（软） | 订阅 `onboarding_beat_shown` / `onboarding_finished` |
-| `design/gdd/save-system.md` | 无直接调用 | 本系统不读写任何命名空间 |
+| `design/gdd/save-system.md` | 上游（只读） | `FirstRunPlanner` 读 `LoadReport.first_run_eligible`；本系统不写任何命名空间 |
 | `design/gdd/game-concept.md` | 概念 | 「第一局只给 6 道菜，价格与饱腹直接可见；结算时展示单位价值」 |
 | `design/gdd/systems-index.md` | 索引 | 第 18 行；索引已列本文件并标 `Approved`。**仍需在 `Depends On` 补 `腻度与口味`**（W2：`B3` 读其 `group_count(g)`）：第 74 行与第 187 行的依赖清单都要补，进度计数无需变化 |
 
@@ -488,7 +490,7 @@ best_menu_fit    = satiety(best_menu) ≤ remaining_at_end
 
 **首局识别与预置**
 
-1. **GIVEN** 生涯 `runs_settled = 0`、界面流程组装 `RunConfig`，**WHEN** 开局，**THEN** `RunConfig.is_first_run = true`、`pool_override` 恰为六道菜、`entry_fee_override = 40`；`capacity_total = 20`、`turns_total = 10`、六道菜按 `wave_size = 4` 分成 4+2 两波；本系统在 `run_started` 同帧压入 `Blocked`。
+1. **GIVEN** 生涯 `runs_settled = 0` 且 `LoadReport.first_run_eligible = true`、`FirstRunPlanner` 产出 `plan.is_first_run = true`、界面流程按 `plan.run_config_fields()` 组装 `RunConfig`，**WHEN** 开局，**THEN** `RunConfig.is_first_run = true`、`pool_override` 恰为六道菜、`entry_fee_override = 40`；`capacity_total = 20`、`turns_total = 10`、六道菜按 `wave_size = 4` 分成 4+2 两波；本系统在 `run_started` 同帧压入 `Blocked`。
 2. **GIVEN** `RunConfig.is_first_run = false`，**WHEN** 开局并完成若干动作，**THEN** 本系统从未压入上下文、从未绘制气泡、从未广播 `onboarding_beat_shown`。
 3. **GIVEN** 首局开局，**WHEN** 查看 `run_state` 与信号记录，**THEN** `run_state = Active`、`run_id` 未变、`run_started` 只广播一次、`run_ended` 未因引导广播。**截图留存**。
 4. **GIVEN** 首局按 `first_run_pool_invariants` 的最优解取五道，**WHEN** 查看收据，**THEN** `total_value` 等于五道价格之和（当前数据为 82）、`net_profit = total_value − 40`（当前 `+42`）、回本率 = `total_value / 40`（当前 `205.0%`、`return_percent_x10 = 2050`），钱包足以买下最便宜的容量升级（当前 12 元的「加宽胃袋」）。数值随 `DishData` 重算，不变式 6 必须仍成立。
@@ -534,7 +536,7 @@ best_menu_fit    = satiety(best_menu) ≤ remaining_at_end
 
 30. **GIVEN** 首局收局时只剩 1 格、被放弃的那道需要 2 格，**WHEN** 收据讲解生成，**THEN** `best_menu_fit = false`，文案说明「装不下、放弃是容量决定的」；两个高亮 id 仍给出，但注明为对照而非替换建议；**AND** 全文不含「最亏 / 白吃 / 浪费 / 下次先拿」。
 31. **GIVEN** 生涯已有 `runs_settled ≥ 1`，主档损坏、从备份恢复（`Recovered`）且备份里 `runs_settled = 0`，**WHEN** 载入并组装 `RunConfig`，**THEN** `LoadReport.first_run_eligible = false`、`is_first_run = false`，本系统不初始化、不显示任何气泡，玩家直接进入正常菜单。
-32. **GIVEN** `is_first_run = true`（`runs_settled = 0`、`first_run_eligible = true`），**WHEN** 查看主菜单开始按钮旁的入场费，**THEN** 显示 40，与本局 `RunConfig.entry_fee_override` 一致，不显示 85；**GIVEN** `entry_fee_override` 缺失而降级，**THEN** 菜单与本局都显示 85，两者仍一致并记录 warning。
+32. **GIVEN** `FirstRunPlanner` 产出 `plan.is_first_run = true` 且 `plan.has_entry_fee_override() = true`（`runs_settled = 0`、`first_run_eligible = true`），**WHEN** 查看主菜单开始按钮旁的入场费，**THEN** 显示 `plan.menu_entry_fee = 40`，与本局 `RunConfig.entry_fee_override` 一致，不显示 85；**GIVEN** `entry_fee_override` 缺失而降级（`plan.has_entry_fee_override() = false`），**THEN** 菜单与本局都显示 85，两者仍一致并记录 warning。
 
 ## Open Questions
 
