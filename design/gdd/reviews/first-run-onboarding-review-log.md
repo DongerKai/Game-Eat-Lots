@@ -413,3 +413,72 @@ Reviewed-Content-Hash: design/gdd/ui-flow.md 10331708e8493cb2d1022209c086ffc55ec
 Reviewed-Content-Hash: design/registry/entities.yaml 5d5722fcce313d3fcbe76129bf56fd232dc80735
 Reviewed-Content-Hash: docs/architecture/adr-0020-first-run-onboarding-beat-machine.md 5252deab0b23680664d07fe7ce1c7255e89240ed
 Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+
+---
+
+## Re-Review — 2026-11-06 (round 2)
+
+**Verdict: NEEDS REVISION**
+
+Review mode: lean · Workflow: standard · Scope signal: L
+Specialists: none (lean) · Blocking items: 3 | Recommended: 9
+Prior verdict: NEEDS REVISION (2026-11-06 round 1, receipt `4a521ab5`). This run re-read all 553 lines; no Godot on this machine, so this is a documentation review only — no engine or test run is claimed.
+Status: header `:3` reads `In Review` and `systems-index.md:75` reads `In Review` — they agree. `gdd-structure-check` reports the 6 sections present; Player Fantasy and Tuning Knobs are absent, both advisory at `standard`.
+
+### Prior cited contradictions — resolved?
+
+| Round-1 line | Claim then | Current text | Resolved |
+|---|---|---|---|
+| `:29` | rule 1 owned the preset, not the plan | `:29` owns `FirstRunPlanner` + `FirstRunRunPlan` (`is_first_run` / `pool_override` / `entry_fee_override` / `menu_entry_fee`) | **yes** |
+| `:31` | rule 2: "组装方的判据必须是两项同时成立" | `:31` planner is the sole producer, the conjunction is its *input*, 界面流程 / 主菜单 / `OnboardingHost` "一律只消费 `plan.is_first_run`，不得各自重算" | **yes** |
+| `:33` | rule 3: "界面流程…向本系统取一份预置" | `:33` "界面流程按 `plan.run_config_fields()` 组装，不直接读预置常量、不调用 `get_first_run_preset()`" | **yes** |
+| `:42` | menu fee decided by the assembler | `:42` menu shows `plan.menu_entry_fee`; degradation decided by `FirstRunPlanner` at plan-assembly time | **yes** |
+| `:80` | rule 15: next-run decision by 组装方 | `:80` by `FirstRunPlanner` on `runs_settled == 0 ∧ first_run_eligible` | **yes** |
+| `:96` | rule 22: "组装方不再标记 `is_first_run`" | `:96` planner produces `false` on `Recovered`; "界面流程不参与这条判定" | **yes** |
+| `:135` | interactions row said UI reads the preset | `:135` reads the plan only | **yes** |
+| `:140` | 接口所有权: UI owned 预置的落位 | `:141` UI "只负责把 plan 字段原样写入 `RunConfig` 与菜单显示，不得另算" | **yes** |
+| `:408-410` | truth table "推荐给组装方，本系统不实现" | `:410` "由 `FirstRunPlanner` 实现，界面流程只消费"; `:412` the gate formula | **yes** |
+| `:423` | "`is_first_run` 由界面流程组装 `RunConfig` 时决定" | `:425` "由 `FirstRunPlanner` 唯一产出…界面流程只消费 `plan.is_first_run`" | **yes** |
+| 存档 / 纪录与里程碑 rows | preset lookup attributed to UI | `:137` / `:138` are upstream read-only (`FirstRunPlanner` reads the two inputs); `:407` / `:408` restate the same reads | **yes** (but see R1 for table placement) |
+
+**Full-file sweep.** Searched every occurrence of 界面流程 / 组装 / 自行 / 计算 / `get_first_run_preset` / `FirstRunPreset` / `is_first_run` / `menu_entry_fee` / `has_entry_fee_override()` / `pool_override` / `entry_fee_override`. **No surviving rule, table, formula, edge case, dependency row or AC assigns the gate, the fee decision or the preset lookup to 界面流程, 主菜单 or `OnboardingHost`.** The ownership rewrite is complete: `FirstRunPlanner` is the single producer in Overview `:17`, boundary `:23`, rules 1–3 (`:29`–`:42`), rules 15/22 (`:80`, `:96`), the interactions rows (`:135`, `:137`, `:138`), 接口所有权 `:141`, the truth table `:410`–`:421`, the 不属于依赖 bullet `:425`, AC 1 `:493`, AC 28 `:532`, AC 31 `:538`, AC 32 `:539`.
+
+**Claimed inputs are legal.** `LoadReport.first_run_eligible` exists and means exactly what `:31` says — `save-system.md:52`–`:56` (rule 26: `(outcome ∈ {Fresh, Loaded, Migrated}) ∧ runs_settled == 0`, `Recovered` / `ReadOnly` / `Blocked` false), AC 31 `:431`, AC 32 `:432`, edge case `:242`. `records.snapshot().career.runs_settled` exists — `records-and-milestones.md:113` (`snapshot()` → `RecordsSnapshot`), `:69` / `:181` (`career.runs_settled`, int64). `ui-flow.md` now agrees: rule 8 `:57`, dependency row `:165`, `MainMenu` state row `:500`, AC 47 `:623`, AC 48 `:624` all read `plan.menu_entry_fee` / `has_entry_fee_override()` / `run_config_fields()` and forbid self-derivation. ADR-0020 D2.1 `:145`–`:175` (gate order, `Recovered`, `RECORDS_UNAVAILABLE`, `PRESET_INVALID`), D2.2 `:215` (`refresh()` on Boot→Menu, after Run→Menu settlement, after career deletion — matches `:33`), D2.3 `:219`–`:254` (`run_config_fields()`, menu fee source, degradation, `run_config_assembled(config, plan)`) match the plan contract; ADR-0004 `:234` registers the same handoff.
+
+### New findings — Blocking
+
+1. **[BLOCKING] Fee degradation contradicts the receipt rule it must degrade (`:90` rule 19, `:315`, `:366`, `:515` AC 17).** `:315` mandates that the receipt explanation state "首局入场费是教学价 40 元，正式食堂是 85 元". `:90` says on `entry_fee_override` failure only "B0 改说「这一局入场费 N 元」并省略「教学价」句，**其余 beat 不变**"; `:366` says "其余 beat 与 `B4` 不变"; AC 17 `:515` says "其余 beat 与收据讲解不变". Read together, the degraded run charges 85 while the receipt still says 40 — the exact mismatch `:42` and `ui-flow.md` AC 48 (`:624`, "不存在「85 元的行配 40 元的说明」") forbid. `ADR-0020:700` (D10 #3) and `:575` / `:623` (D7.2 `fee_note`) require `fee_note = ""` in that branch, and `ADR-0020:1077` makes it a validation case. Fix: state the condition on `:315` (`fee_is_override` / `entry_fee ≠ official_entry_fee`) and change `:90` / `:366` / AC 17 to "B4 不给教学价说明，其余 payload 不变". No AC currently asserts the *absence* of the fee note in the degraded receipt, so the degraded case is not independently covered.
+2. **[BLOCKING] Rule 19's ladder omits the planner-side failures it is supposed to head (`:90`, `:299`, `:317`).** The GDD never mentions `preset_valid` or a preset-invariant failure path; `:299` only says the seven invariants are recomputed by CI and startup self-check and that a failure means "数据改动破坏了首局", and `:317` only asks for a re-run. There is no rule for preset failure, `RecordsSnapshot` unavailable, or a missing `LoadReport.first_run_eligible` field. `ADR-0020:171` (`PRESET_INVALID` → `eligible = false`, ERROR, CI red), `:216` (`plan.is_first_run = false`, `plan.preset_valid = false`, ERROR, 这一局照常开始), `:698`–`:699` (D10 rows 1–2 treat rule 19 as the authority) and the ADR's own sync table `:1022` (#15: "规则 19 / 边界用例：预置不变式失败…没有统一措辞…把 D10 写进 AC 的降级用例") all assume these branches exist here. Add them to rule 19 and give ACs for preset failure (guide off, menu 85, run starts, ERROR) and records-unavailable.
+3. **[BLOCKING] `FirstRunExplanation` is still built at `run_settled` (`:108`, `:119`).** The `Closing` state row and the transition row say "`run_settled` … 构建并交付 `FirstRunExplanation`；广播 `onboarding_finished(ALL_BEATS)`". `ADR-0020:530`–`:531` (D7.1) splits the two moments — `run_settled` only stashes the result, construction happens on `Run → Menu` step 5 because the wallet and upgrade catalog are only updated by the settlement transaction (`:533`), and `ADR-0004:232` limits `run_settled` to `STASH_RESULT`. Building at `run_settled` computes the "首笔升级建议" from a pre-settlement wallet. The ADR's sync table `:1021` (#14) explicitly asks this GDD's state table to be reworded to ADR-0007; it has not been. Fix `:108` and `:119` (capture at `run_settled`, build + emit at `Run → Menu` step 5).
+
+### New findings — Recommended
+
+1. **`design/gdd/first-run-onboarding.md:399`** — 存档 (`:407`) and 纪录与里程碑 (`:408`) sit under the "**下游依赖方**" heading, but both rows read "`FirstRunPlanner` 读 …" and `:137` / `:138` / `:425` classify them as **上游（只读）**. Move both rows into the upstream table (or relabel the block); as written the bidirectional check asks save/records to treat onboarding as a dependent.
+2. **Host input artifact is stated two ways.** `:88` (rule 18) "只消费 `RunConfig.is_first_run`", `:128` and `:389` (餐局流程 row) `RunConfig.is_first_run`, AC 1 `:493` / AC 2 `:494` — versus `:31`, `:104`, `:114`, `:135`, `:410` and the formula variable table `:162` which say `plan.is_first_run`. `ADR-0020:175` says `OnboardingHost` consumes **`plan.is_first_run` only**, and `ADR-0020:254` / `ADR-0004:234` deliver it through `run_config_assembled(config, plan)` → `onboarding.configure(plan)`, a signal this GDD never names. Pick one source and name the handoff, otherwise "same-frame B0" (AC 1) depends on undocumented signal ordering.
+3. **Truth table `:416`.** The settled row lists `LoadReport.first_run_eligible = true (Loaded)` next to `runs_settled = +1`. That is only true of the *session's boot* `LoadReport`; a fresh load with `runs_settled ≥ 1` yields `false` (`save-system.md:54`, AC 31 `:431`), and `:31` itself defines the field as "`Fresh`/`Loaded`/`Migrated` 且 `runs_settled == 0`". Label the column "本次会话载入时的 `LoadReport`" or the row contradicts `:31`.
+4. **`save-system.md` residue** — `:52` "供组装 `RunConfig` 的一方使用", `:99` and `:284` "界面流程 … 读取 `LoadReport.first_run_eligible` 决定 `is_first_run`", `:371` "跨文件回写（S11，由界面流程执行）". All three still assign the gate to the UI, contradicting `ADR-0020:902` (Guideline 1) and this GDD's `:31`. The field itself is unchanged and legal; the reader needs an S11 wording refresh (not edited here).
+5. **`records-and-milestones.md` has no 首局引导 row at all** — no interactions row, no dependency row, no back-reference (§ Interactions and both dependency tables, `:336`–`:360`); `:113` scopes `snapshot()` to "供界面与音效读取", while `FirstRunPlanner` (Application, ADR-0020 D1) is a third reader. This GDD's `:138` / `:408` / `:425` claim a bidirectional read-only dependency that the upstream does not acknowledge.
+6. **`design/gdd/first-run-onboarding.md:485`** — Cross-References says "索引已列本文件并标 `Approved`" and "仍需在 `Depends On` 补 `腻度与口味`". Both are stale: `systems-index.md:75` reads `In Review` and its Depends On cell already lists 腻度与口味 (`:75`, `:197`).
+7. **`design/gdd/first-run-onboarding.md:404`** — "菜单波次（当前只读 `StationData.dish_pool`，见 Open Questions）" contradicts `:433` ("`initialize` 与健康检查已接受 `pool_override`") and OQ 2 `:546`, which is closed.
+8. **`design/gdd/first-run-onboarding.md:23`** — the sentence "它压入 `Blocked` 上下文时改变的只是「这一帧玩家能按什么」，不是「这一帧游戏算什么」。" appears twice in the same paragraph (rewrite residue).
+9. **Rule 19 `:90`** — the fee branch says "本局按 85 元入场" but neither the menu's 85 nor the required WARNING; both appear only at `:42` / `:366` / AC 32 `:539`. Since rule 19 is the ladder the ADR cites (`ADR-0020:694`), restate all three in the rule.
+
+### Registry Values
+No registry key touched by `cafff91`. Spot-checked `onboarding_active` (`entities.yaml:1113`), `first_run_entry_fee` (`:1300`), `first_run_pool_size` (`:1313`) against `:156`, `:38`, `:490` — unchanged and consistent. Balance values 40 / 85 / 20 / 10 / 82 / +42 / 205.0% / 12 are untouched by the rewrite and still arithmetic-consistent.
+
+### Dependency Graph
+All 13 named GDDs exist on disk (run-flow, in-game-hud, input, scene-flow, dish-values, settlement-and-entry-fee, menu-waves, cloying-and-taste, meta-upgrades, audio-feedback, save-system, records-and-milestones, ui-flow) plus game-concept and systems-index. No broken reference.
+
+### Verdict: NEEDS REVISION
+
+Approval is not re-stamped; the 2026-11-04 receipt remains invalid. No files other than this log were modified — items B1–B3 and R1–R9 are for the GDD author; R4 and R5 belong to `save-system.md` / `records-and-milestones.md`. `systems-index.md` already reads `In Review` and needs no change for this round.
+
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 164209b9a8b290ce0add49761fc59138696822a7
+Reviewed-Content-Hash: design/gdd/ui-flow.md 05d5a22e1e6376e45b9863166f8dd32310e7f006
+Reviewed-Content-Hash: design/gdd/save-system.md a7d54e3ba4d7f8a23be1d28a6c165bb422648abd
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 6964692c5d4850582e014c362342bcdb2ea0b28b
+Reviewed-Content-Hash: docs/architecture/adr-0020-first-run-onboarding-beat-machine.md 5252deab0b23680664d07fe7ce1c7255e89240ed
+Reviewed-Content-Hash: docs/architecture/adr-0004-service-composition-signals.md f35769ae953b312ef0d07124ac2f6293b95e220a
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/registry/entities.yaml 0646d0161ee8488d78ec5454abe3a61d0d0a14f9
+Reviewed-Content-Hash: design/gdd/systems-index.md 4714602ef782db915793ed55ee8f3c1f089ee886

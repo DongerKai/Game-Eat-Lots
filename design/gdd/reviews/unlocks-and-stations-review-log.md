@@ -371,3 +371,61 @@ Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43
 Reviewed-Content-Hash: design/gdd/save-system.md fa9f1bff8eede09aaf9a68dc7dcb3f7fb851ba1e
 Reviewed-Content-Hash: design/gdd/meta-upgrades.md 3fa3e55b62e80ebcb1ed150a57577416f639faf9
 Reviewed-Content-Hash: design/gdd/systems-index.md 2a3dabc219eb8765940d7f6aa93ccd7d4f0e41b9
+
+---
+
+## Re-Review — 2026-11-06 (round 2) — Verdict: APPROVED
+
+Review mode: lean · Workflow: standard
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 0 | Recommended: 11
+Freshness: target doc, registry and ui-flow all `CHANGED` since the previous entry (`design/gdd/unlocks-and-stations.md` `729311c` → `ecf95a3`), so this is a full re-read, not a delta review. Read: the whole GDD by heading, the six registry rows this system owns (`entities.yaml:1021-1111`), `ui-flow.md` rule 8 / AC 46, ADR-0016 §8, ADR-0017 §2–§6 plus its GDD Sync Check, `systems-index.md:70`.
+Completeness: 6/6 required sections at `standard` (`Player Fantasy` absent — advisory at this tier; the doc carries `Game Feel` instead).
+Prior verdict resolved: Yes — all five cross-document blockers closed by `cafff91`.
+Engine/tests: none run — no Godot on this machine; every claim below is a document comparison.
+
+### Prior Blocking Items — Verified
+
+1. **Registry `station_available` gate — RESOLVED.** `design/registry/entities.yaml:1032` now reads `gated(s) = (supports_station_selection() != true) and (s.unlock_cost > 0); station_available = not gated(s) and (s.unlock_cost = 0 or s.id in U.stations)`, term for term with GDD `:166-167` and ADR-0017 `:137-138`. Notes `:1033` cover all four claimed cases — free never gated, unknown id → `false`, `unlock_cost < 0` → `false` as defence, purchased-but-gated keeps its id in `U.stations` and recovers when the switch flips; `revised: "2026-11-06"` at `:1035`. AC 44 (`:535`) now follows from the registered formula instead of contradicting it.
+2. **Registry `unlock_decision` — RESOLVED.** `entities.yaml:1063` lists six outcomes including `PREREQUISITE_LOCKED` and `FEATURE_GATED`; `:1064` orders `INVALID_STATION_DATA → FEATURE_GATED → ALREADY_UNLOCKED → PREREQUISITE_LOCKED → INSUFFICIENT_FUNDS → OK`, identical to GDD `:224-231`, to rule 9 `:43` and to ADR-0017 §6 `:185-196`. `PREREQUISITE_LOCKED` is genuinely the sixth outcome (ADR §6 step 9) and not a `DATA_NOT_READY` case: the other five names in the GDD's validation string (`DATA_NOT_READY`, `NOT_WRITABLE`, `NOT_IN_MENU`, `UNKNOWN_STATION`, `BUSY`) are pre-formula guards that ADR §6 also keeps outside the outcome set. `cost = null` note `:1065` covers both cases the GDD names (`:63`, `:120`).
+3. **Registry `unlock_progress` — RESOLVED.** `entities.yaml:1108` now defines `S_vis = {s in S : not gated(s)}`, `S_eff ⊆ S_vis`, and takes both totals from `S_vis`; `:1109` states the MVP reading `1/1`, `12/12` and the `NoPlayableStation` no-`0/0` rule. Matches GDD `:299-307`, `:319`, `:321` and ADR-0017 `:179`.
+4. **ui-flow visibility — RESOLVED.** `design/gdd/ui-flow.md:59` (rule 8) and `:622` (AC 46) now **hide** the gated paid station: no rendered row, no disabled button, no 「需要档口选择器」 label, excluded from progress (`1/1`, `12/12`), `spend` 0 calls, `unlock` → `FEATURE_GATED`, `supports_station_selection()` the single switch. The label survives only as an explicit negation (`:59`, `:622`); `:166` and `:500` agree. No `1/2` / `12/24` and no locked-row text remain anywhere in ui-flow.
+5. **`spend` guard order — RESOLVED.** GDD `:135` now equals ADR-0016 §8 `:248` exactly: `INVALID_AMOUNT` (`typeof != TYPE_INT` or `amount < 0`) → `NOT_WRITABLE` → `NOT_IN_MENU` → `BUSY` → `RESERVED_NAMESPACE` (`extra` 含 `progression`) → `INSUFFICIENT_FUNDS`. Neither side carries a `DATA_NOT_READY` guard, and the GDD now says so explicitly (`:135`), so there is no guard present on one side and absent on the other.
+
+**GDD text leftovers:** no residual copy of the old formula — `U.stations \ S_ids` occurs only as the explicit rejection (`:200`) and inside the unknown-id wording of Output Range (`:215`). The GDD never contained 「需要档口选择器」 in any commit (`git log -S` matches only `ui-flow.md`).
+
+### Blocking Items
+
+- none.
+
+### Recommended
+
+1. GDD `:434` ("锁定档口和它的价格一直在列表里…**不隐藏**、不灰到看不见") and `:423` ("锁定档口可见") state visibility unconditionally, while rule 17 `:60` hides the only paid station in MVP. Scope both to `supports_station_selection() = true` (post-S8) — as written they are the pre-S8 visibility language.
+2. GDD `:444` gives the progress example `已解锁 1/2 档口 · 12/24 道菜` unqualified; with the switch false, rule 17 `:61` and AC 42 `:533` require `1/1 · 12/12`. Label it the selector-on example, as `:321` already does.
+3. GDD `:126` contradicts itself inside one sentence: "只有 `Unavailable`（数据未 `Ready`）才返回空数组；`NoPlayableStation` 且所有档口都被门禁时也返回空数组". Rewrite as "除 `Unavailable` 外，只有所有档口都被门禁的 `NoPlayableStation` 返回空数组".
+4. GDD `:120`'s `cost = null` list omits `INVALID_STATION_DATA` (registry `:1065` includes it) and `UNKNOWN_STATION` (ADR-0017 `:198` includes it). Registry and ADR agree with each other; widen the GDD row to match.
+5. ADR-0017 `:163` and its GDD Sync Check `:388` still assert the GDD writes `U.stations \ S_ids`; GDD `:195`/`:200` no longer does. Stale — the ADR is unchanged (`c362b96`) and belongs to the architecture session.
+6. GDD `:200` cites "ADR-0017 第 1 条"; the normalization rule it describes is §4 (`:147-163`). Carried.
+7. GDD `:55` cites "存档规则 80"; `save-system.md` Core Rules end at 26 (`:58`). Point at save rule 18 + AC 13. Carried.
+8. GDD `:128` heading still reads `spend` "需回写其 GDD" while `:383` says 已回写. Stale heading. Carried.
+9. Registry-only gaps in rows this system owns: `station_available` `variables:` (`:1027-1030`) omit `supports_station_selection()`, which its expression calls; `unlock_progress` (`:1106`) lists `D`, unused by its expression; `unlock_decision` (`:1058-1062`) omit `requires(s)`. Registry edits belong to the orchestration session.
+10. GDD `:116` `StationView` still has no `entry_fee` although `:441` requires the catalog row to show 入场费 (ADR-0017 `:178` likewise omits it). Carried. Also `:5` `Last Verified: 2026-11-03` trails `Last Updated`, and OQ 5 (`:552`, "锁定档口是否从第一局就可见") is already answered for MVP by rule 17.
+11. ui-flow `:622` (and `:59`) assert 「不存在『已购买但无法选择』…『已解锁档口』的中间状态」, while GDD AC 44 (`:535`) constructs exactly a purchased-but-gated ledger. The invariant is correct for states reachable without a selector; scope the sentence to that rather than to any ledger.
+
+**Header status:** GDD `:3` `In Review` == `design/gdd/systems-index.md:70` `In Review`. Index not edited.
+
+### Verdict: APPROVED
+
+All five cross-document blockers of the previous round are closed in `cafff91`, and the closing edits are exact rather than approximate: the three registry rows now encode the same `gated(s)` / `S_vis` / six-outcome contract as the GDD and ADR-0017, ui-flow hides the gated station everywhere instead of demanding a reason label, and the `spend` order is byte-comparable with ADR-0016 §8. The GDD's own normative text — rule 17, the API table, `station_available` / `effective_unlocks` / `unlock_decision` / `unlock_progress`, and ACs 42–45 — is internally consistent, `get_station_catalog()` lists only non-gated stations in every statement of it, and every progress denominator excludes gated stations (MVP `1/1`, `12/12`). The eleven recommended items are documentation hygiene: three unscoped legacy sentences in the GDD's UI/Game-Feel sections whose rule 17 is still normative and AC-pinned, one self-contradictory sentence about an empty catalog, two narrower-than-ADR null-cost lists, three stale cross-references, two registry-side omissions, and one ui-flow invariant that reads absolutist where AC 44 makes it conditional. None changes a rule, formula, AC or contract, so none blocks approval.
+
+Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md ecf95a3033756e6111b19a650435d745ea7fd2b0
+Reviewed-Content-Hash: design/registry/entities.yaml 0646d0161ee8488d78ec5454abe3a61d0d0a14f9
+Reviewed-Content-Hash: design/gdd/ui-flow.md 05d5a22e1e6376e45b9863166f8dd32310e7f006
+Reviewed-Content-Hash: docs/architecture/adr-0017-unlocks-station-purchase.md c362b96a4151622e13f12a67ea47e450c49c6142
+Reviewed-Content-Hash: docs/architecture/adr-0016-meta-upgrades-wallet.md 706e35071b31be2f0bb46ec426d40ba95ce430b4
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/systems-index.md 4714602ef782db915793ed55ee8f3c1f089ee886
+Reviewed-Content-Hash: design/gdd/save-system.md a7d54e3ba4d7f8a23be1d28a6c165bb422648abd
+Reviewed-Content-Hash: design/gdd/data-config.md cd42141a823868fc47650210cb108c0ae69259a0
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md 3fa3e55b62e80ebcb1ed150a57577416f639faf9
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 6964692c5d4850582e014c362342bcdb2ea0b28b

@@ -1244,3 +1244,55 @@ Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43
 Reviewed-Content-Hash: design/gdd/run-flow.md 56f6f4866e1b5ab7c8a5a8f04d22078e7d05e1cb
 Reviewed-Content-Hash: design/gdd/systems-index.md 2a3dabc219eb8765940d7f6aa93ccd7d4f0e41b9
 Reviewed-Content-Hash: docs/architecture/adr-0004-service-composition-signals.md 591e01debcd419210384fcf5813c3714a7f6164d
+
+---
+
+## Re-Review — 2026-11-06 (round 2)
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean)
+Prior verdict: NEEDS REVISION (2026-11-06)
+Fix commit verified: `cafff91` (ui-flow `05d5a22`, first-run-onboarding `164209b`, registry `0646d01`)
+Blocking items: 0 | Recommended: 5
+
+**Prior blocker — resolved: yes.** The degradation contract no longer stops at the receipt. `ReceiptScreen` (`:501`) now gates the 教学价 sentence on `plan.is_first_run ∧ plan.has_entry_fee_override()`, states the degraded branch explicitly (fee row = 档口费 MVP 85, **no** sentence), and keeps the fee row a literal read of `RunResult.entry_fee` ("该判定只决定文案是否出现，不产生任何数字"). New **AC 48** (`:624`) covers all three plan combinations (`true/true`, `true/false`, `false/–`), asserts 教学价句出现 ⇔ 入场费行 = 40 in both directions, and ties the degraded receipt to `RunConfig.entry_fee_override = null`. The 集成判据 (`:549`) now names the `FirstRunPlanner` fixed-`FirstRunRunPlan` fixture for AC 47–48, covering `is_first_run × has_entry_fee_override()`. Rule 8's `:57` invariant ("不允许一边 40 一边 85") is now honoured at every screen rather than only at the menu.
+
+**Claimed same-commit changes — all verified.**
+- Rule 10 (`:63`), Edge Case (`:385`) and AC 12 (`:570`) all carry `MILESTONE_CATALOGUE_INVALID` as the fourth settlement abort status; `:63` also states it is a `prepare_run` result (duplicate / illegal id, station-filtered career metric) and not a `load` outcome; AC 12 parameterises the fourth case and says it is fixture-triggered through `prepare_run`. Matches `records-and-milestones.md` rule 22 (`:48`), status table (`:139`), orchestrator contract (`:143`), AC 27 (`:445`), AC 27a (`:446`) and AC 35 (`:460`).
+- Rule 8 (`:59`), the `MainMenu` row (`:500`) and AC 46 (`:622`) now specify the gated paid station as **hidden**: no row, no disabled button, no 「需要档口选择器」/other reason label, absent from F6, `unlock` → `FEATURE_GATED`, `spend` never called, progress `1/1` / `12/12` with the station out of both numerator and denominator, and `supports_station_selection()` named the single switch (AC 46's second GIVEN flips only that switch). Matches `unlocks-and-stations.md` rule 17 (`:59`–`:65`, incl. `is_station_available = false`, `get_available_dishes = []`, ledger ids retained) and ADR-0017 §2/§3 (`:130`, `:137`–`:145`).
+
+**Fee chain — coherent, one value per branch.** menu `plan.menu_entry_fee` (`:57`, `:500`, `:623`) → `RunConfig.entry_fee_override = plan.has_entry_fee_override() ? plan.entry_fee_override : null` (`:57`, `:561`) → `RunLog.entry_fee` (`run-flow.md` AC 1 `:391`) → `RunResult.entry_fee` (`settlement-and-entry-fee.md` `:64`, `:143`; ui-flow `:501`) → receipt row (literal) → teaching-price sentence present only in the `is_first_run ∧ has_entry_fee_override()` branch (`:501`, AC 48). Normal first run: 40 / 40 / 40 / sentence. Degraded: 85 / null / 85 / no sentence. Non-first-run: 85 / null / 85 / no `FirstRunExplanation`. `supports_station_selection()` and the fee path share no variable, so the hidden-station change cannot move the fee.
+
+**AC numbering.** The Acceptance Criteria list runs 1–48 with no duplicate and no gap; no `27a`/`47a`/`48a` split exists in this file (the 27/27a split lives only in `records-and-milestones.md`). AC 48 appended cleanly after AC 47.
+
+**Whole-file sweep** for `教学价`, `40`, `85`, `has_entry_fee_override`, `get_first_run_preset`, `is_first_run`, `menu_entry_fee`, `entry_fee_override`: remaining hits are `:57` (plan fields + degradation clause), `:67`/`:564` (restart `is_first_run = false`, endorsed by ADR-0020 D2.3 `:241`), `:91` (`−40 dB`, unrelated), `:161`/`:435` (`first_run_eligible`), `:165`/`:170` (plan fields + prohibition; see the `run_config_assembled` recommendation), `:500`–`:501`, `:623`–`:624`. No surviving menu `is_first_run ? 40` derivation, no `get_first_run_preset()` fee read, no unconditional 教学价 requirement.
+
+**Completeness / header.** 6/6 sections required at `standard` present (Player Fantasy, Tuning Knobs absent — advisory). All 11 named dependency GDDs exist on disk. Header `Status: In Review` (`:3`) matches `systems-index.md` row 16 (`:73`, `In Review`); the index was not edited.
+
+**New findings**
+
+Blocking:
+- none
+
+Recommended:
+- [RECOMMENDED] `design/gdd/first-run-onboarding.md` rule 19 (`:90`), edge case (`:366`) and the 教学价 note (`:314`) still say a missing `entry_fee_override` leaves "其余 beat 不变" / "其余 beat 与 B4 不变" and that the receipt must state 「首局入场费是教学价 40 元，正式食堂是 85 元」. That contradicts AC 48 (`:624`) and ADR-0020 D10 (`:700`, degrade level 3 = "B4 无 fee_note"). Fix in that GDD (it is already `In Review`); ui-flow's rendering contract is unambiguous in the meantime. Out of scope here.
+- [RECOMMENDED] `run_config_assembled(config, plan)` is still absent from the 首局引导 dependency row (`:165`) and from the event list (`:170`) — the prior round's recommendation was **not** applied, despite being the only channel that hands `plan` to 首局引导 (ADR-0020 D2.3 `:254`; ADR-0004 D9 `:234`). The signal exists only in the ADRs, not in the GDD that owns UI events.
+- [RECOMMENDED] `design/registry/entities.yaml` `first_run_entry_fee` (`:1303`–`:1306`) still omits `design/gdd/ui-flow.md` from `referenced_by`; `station_canteen_entry_fee` (`:1208`–`:1212`) does the same while ui-flow restates 85 at `:500`–`:501` and `:623`–`:624`. Values themselves agree (40 / 85); registry hygiene is a separate pass.
+- [RECOMMENDED] AC 47 (`:623`) still does not name the WARNING's emitter; ADR-0020 D2.3 (`:240`) assigns it to `FirstRunPlanner` at plan-assembly time. Prior-round item, unchanged.
+- [RECOMMENDED] Rule 10 (`:63`) / AC 12 (`:570`) enumerate only the four `prepare_run` statuses, while ADR-0007 D5 (`:209`, `:217`–`:221`, `:225`) also aborts the transaction and emits `settlement_aborted` on re-entry, `ORCHESTRATOR_BUSY`, `RUN_ID_REUSED` and `INCONSISTENT_TRANSACTION_STATE`. ui-flow `:369` treats a second delivery of the same `run_id` as ignore + WARNING, which does not cover the different-digest `RUN_ID_REUSED` abort or say what the receipt shows for these four extra codes. Not part of the four-status set this round verified, but worth one sentence.
+
+Verdict: APPROVED
+
+Reviewed-Content-Hash: design/gdd/ui-flow.md 05d5a22e1e6376e45b9863166f8dd32310e7f006
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md 164209b9a8b290ce0add49761fc59138696822a7
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 6964692c5d4850582e014c362342bcdb2ea0b28b
+Reviewed-Content-Hash: design/gdd/unlocks-and-stations.md ecf95a3033756e6111b19a650435d745ea7fd2b0
+Reviewed-Content-Hash: design/registry/entities.yaml 0646d0161ee8488d78ec5454abe3a61d0d0a14f9
+Reviewed-Content-Hash: docs/architecture/adr-0020-first-run-onboarding-beat-machine.md 5252deab0b23680664d07fe7ce1c7255e89240ed
+Reviewed-Content-Hash: docs/architecture/adr-0007-run-state-settlement-transaction.md 57094895490eb9930cbed49fff8e3efe38817a9f
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: docs/architecture/adr-0017-unlocks-station-purchase.md c362b96a4151622e13f12a67ea47e450c49c6142
+Reviewed-Content-Hash: docs/architecture/adr-0004-service-composition-signals.md f35769ae953b312ef0d07124ac2f6293b95e220a
+Reviewed-Content-Hash: design/gdd/systems-index.md 4714602ef782db915793ed55ee8f3c1f089ee886
+Reviewed-Content-Hash: design/gdd/run-flow.md 56f6f4866e1b5ab7c8a5a8f04d22078e7d05e1cb
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
