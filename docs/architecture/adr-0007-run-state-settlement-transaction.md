@@ -238,7 +238,7 @@ AppRoot._on_state_changed 第 2 步
 | `run_id` / `station_id` | int64 / StringName | `RunResult` | 去重与标题 |
 | `result` | `RunResult`（深拷贝 `rows` 与 `upgrade_snapshot`） | `Settlement.settle` | 全部金额、容量、回合、回本率 |
 | `save_state` | `COMMITTED / UNSAVED / ABORTED` | 事务 | 「已保存」/「未保存」/「未入账、未记录」 |
-| `abort_code` | `StringName`（`&""` 表示无） | 事务 | 中止原因（debug 显示；玩家文案由 `ui-flow` 映射） |
+| `abort_code` | `int`（`AbortCode`；`NONE = 0` 表示无） | 事务 | 中止原因（debug 显示；玩家文案由 `ui-flow` 映射） |
 | `wallet_before` / `wallet_after` / `wallet_state` | int64 / int64 / enum | `MetaUpgrades` | 钱包差额与「入账失败」标记 |
 | `progression_delta` | int64 | 事务计算 | 收据上的「+N / −N」 |
 | `record_broken` / `previous_best` | bool / `int \| null` | `RecordsApplyResult` | 「新纪录」印章与旧值并排 |

@@ -26,7 +26,7 @@
 
 1. **职责边界**：本系统拥有按档口的最佳局纪录、生涯合计、里程碑判定、完成条件与这些事实的时间戳。它不拥有净利与回本率的计算（结算与入场费）、钱包与升级（局外升级）、档口与菜品的解锁（解锁与档口）、持久化写入（存档）、界面绘制（界面流程）或排行榜（在线挑战）。它保存结算算完的值，不替结算重算。
 2. **一局一次，只进不出**：本系统只在收到一份已结算的 `RunResult` 时更新一次。同一会话内 `run_id` 与上一次已应用的相同时，返回 `ALREADY_APPLIED`，不重复累计、不重复发信号。放弃、进入失败与局中退出从不产生 `RunResult`，因此从不产生纪录（结算规则 8）。
-3. **输入只读，不重算**：净利、总值、回本率、每行明细一律取自 `RunResult`，不读菜品价格、不重放腻度、不重新求和。收到结果时做一次一致性断言：`net_profit = total_value − entry_fee`；`entry_fee > 0` 时 `return_percent_x10 = floor(1000 × total_value / entry_fee)` 且 `return_ratio` 非空；`entry_fee = 0` 时两者都为 `null`。任一不成立返回 `INCONSISTENT_RESULT`，纪录不变。这条断言防的是上游状态损坏被固化成一条永久纪录。该错误与 `OVERFLOW` 都是**结算事务的致命错误**：提交编排者必须整笔放弃本次结算的 `progression` / `unlocks` 更新，不能只让纪录失败、钱包照常入账——同一份结算结果不能在两个命名空间里变成两种事实。
+3. **输入只读，不重算**：净利、总值、回本率、每行明细一律取自 `RunResult`，不读菜品价格、不重放腻度、不重新求和。收到结果时做一次一致性断言：`net_profit = total_value − entry_fee`；`entry_fee > 0` 时 `return_percent_x10 = floor(1000 × total_value / entry_fee)` 且 `return_ratio` 非空；`entry_fee = 0` 时两者都为 `null`。任一不成立返回 `INCONSISTENT_RESULT`，纪录不变。这条断言防的是上游状态损坏被固化成一条永久纪录。该错误与 `OVERFLOW` 都是**结算事务的致命错误**：提交编排者必须整笔放弃本次结算的 `progression` 更新（MVP / Vertical Slice 的载荷恰为 `{progression, records}`；`unlocks` 只是未来本局奖励解锁的预留槽位），不能只让纪录失败、钱包照常入账——同一份结算结果不能在两个命名空间里变成两种事实。
 4. **纪录按档口，不按全局**：每个档口各有一条最佳局纪录，以 `station_id` 为键。不同档口的入场费不同，绝对净利不可直接比较；按档口比较让每个档口都有自己的目标，也让「吃遍所有档口」的长期目标成立。
 5. **排名指标是净利**：同一档口内，最佳局由 `net_profit` 决定（有符号 int64）。总值、入场费、回本率、结束原因与升级快照随纪录一起冻结，只用于展示与复盘。选净利而不是回本率，因为净利是玩家在收据上看到的数、也是未来钱包的来源（结算 Open Question 3）；在单一档口内两者单调一致，而净利能直接回答「这一局赚了多少」。
 6. **严格更优才刷新，平局保留旧纪录**：新一局的 `net_profit` 严格大于旧纪录时才替换；恰好相等时旧纪录保留。平局不比较时间、不比较总值——比较一旦读时钟，纪录就依赖玩家机器的时钟回拨，历史也不再稳定。第一次结算没有旧纪录，无论净利正负都建立纪录。
@@ -45,7 +45,7 @@
 19. **不存逐局历史**：只存聚合与每档口最佳，不存「最近 N 局」列表。收据屏就是那一局的视图，再存一份历史只会在 `save_bytes` 上线性增长，而 MVP/Vertical Slice 没有任何消费者（存档 Open Question 7 的答案）。
 20. **单机信任模型**：本地纪录不防篡改，也不假装可信。将来在线挑战需要可信数据时，由服务端解决，不得把本地 `records` 当作排行榜数据（存档 Open Question 5、在线挑战）。
 21. **确定性与可测试性**：给定同一份起始 `records` 与同一份 `RunResult`，两次应用除时间戳外逐字段相同；不依赖帧率、随机数或 wall clock。时间戳是唯一允许变化的字段，测试必须把它排除在外。
-22. **每次应用返回显式状态，失败不等于成功（S5）**：`prepare_run` 一律返回 `RecordsApplyResult`（见「对外接口」），其中 `status` 是唯一权威判据——只有 `APPLIED` 表示可以提交，且此时 `change` 非空；`ALREADY_APPLIED` 是幂等空操作（这份结果此前已落账：不重新累计、不再提交任何命名空间、不重放成功音效）；`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID` 是**失败**，`applied = false`、`change = null`。失败时编排者必须整笔中止结算事务，并发出一个下游可订阅的失败事件（建议 `settlement_aborted(run_id, status)`；具体事件名归界面流程与音效反馈），**不得让收据进入成功态、不得播放 `broke_even` / `loss` 等结果 cue**。`status` 不允许缺省为成功，也不允许用「空 `change`」表示失败——下游必须只看 `status`。
+22. **每次应用返回显式状态，失败不等于成功（S5）**：`prepare_run` 一律返回 `RecordsApplyResult`（见「对外接口」），其中 `status` 是唯一权威判据——只有 `APPLIED` 表示可以提交，且此时 `change` 非空；`ALREADY_APPLIED` 是幂等空操作（这份结果此前已落账：不重新累计、不再提交任何命名空间、不重放成功音效）；`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID` 是**失败**，`applied = false`、`change = null`。失败时编排者必须整笔中止结算事务，并发出失败事件 `settlement_aborted(run_id, code)`（ADR-0007 D5；`code` 是事务的 `AbortCode`，不是本系统的 `status`），**不得让收据进入成功态、不得播放 `broke_even` / `loss` 等结果 cue**。`status` 不允许缺省为成功，也不允许用「空 `change`」表示失败——下游必须只看 `status`。
 
 ### States and Transitions
 
@@ -109,6 +109,8 @@
 | 接口 | 输入 | 输出 | 说明 |
 |---|---|---|---|
 | `load(saved: Dictionary)` | 存档命名空间 | `RecordsLoadReport` | 载入后调用一次；做语义校验并产出警告列表 |
+| `initialize()` | — | `RecordsLoadReport` | 启动时由 `BootSequence` 在 `Save.load()` 之后调用一次；内部读 `save.get_namespace("records")` 再调用 `load(saved)`（ADR-0018 §12） |
+| `reset_after_career_delete()` | — | `void` | 玩家删除生涯后由 `AppRoot` 调用：清空 `records`、重置 `_last_applied_run_id`，不发信号、不读旧档（ADR-0018 §12） |
 | `prepare_run(result: RunResult)` | 已结算结果 | `RecordsApplyResult` | 纯更新：返回状态、新命名空间（仅成功）与本次新达成的里程碑；不写盘 |
 | `snapshot()` | — | `RecordsSnapshot` | 只读视图，供界面与音效读取 |
 | `milestone_progress(id)` | 里程碑 id | `{current, threshold, unit, earned}` | 只读；用于展示「340 / 500」这类进度 |
@@ -131,16 +133,16 @@
 
 | `status` | `applied` | `change` | 编排者必须做什么 | 界面 / 音效可以做什么 |
 |---|---|---|---|---|
-| `APPLIED` | `true` | 非空 | 把 `change.records` 与 `progression` / `unlocks` 并入**同一事务**提交 | 正常成功路径：显示收据与结果 cue |
+| `APPLIED` | `true` | 非空 | 把 `change.records` 与 `progression` 并入**同一事务**提交（MVP / Vertical Slice 载荷恰为 `{progression, records}`；`unlocks` 仅未来本局奖励解锁） | 正常成功路径：显示收据与结果 cue |
 | `ALREADY_APPLIED` | `false` | `null` | **空操作**：不再累计、不再提交任何命名空间（这份结果此前已原子落账） | 不重放成功 cue、不第二次标「新纪录」；按幂等处理 |
-| `INCONSISTENT_RESULT` | `false` | `null` | **整笔中止**：`progression` / `unlocks` 一律不提交；发失败事件 | 不得进入成功态；收据显示「结算未入账」并给出原因 |
+| `INCONSISTENT_RESULT` | `false` | `null` | **整笔中止**：不提交任何命名空间（钱包步骤不执行、事务不构造）；发失败事件 | 不得进入成功态；收据显示「结算未入账」并给出原因 |
 | `OVERFLOW` | `false` | `null` | 同上 | 同上 |
 | `DATA_NOT_READY` | `false` | `null` | 同上；不得用默认纪录兜底 | 同上 |
 | `MILESTONE_CATALOGUE_INVALID` | `false` | `null` | 同上；不得跳过里程碑后照常提交纪录 | 同上 |
 
-**失败事件**：任一失败 status 下，编排者在返回菜单（或停留在收据屏的错误态）之前必须发出一个可订阅的失败事件，供界面与音效区分「未入账」与「成功」——建议 `settlement_aborted(run_id: StringName, status: StringName)`。该事件名与订阅关系归界面流程与音效反馈（见最终报告的跨文件清单）；本系统只规定「必须有一个可观测的失败信号」，不规定它的名字。
+**失败事件**：任一失败 status 下，编排者在返回菜单（或停留在收据屏的错误态）之前必须发出失败事件 `settlement_aborted(run_id, code)`，供界面与音效区分「未入账」与「成功」。事件名、参数与发出者由 ADR-0007 D5 与 Key Interfaces 固定：`UIRoot` 在整笔中止时发出恰好一次，`code` 是该事务的 `AbortCode`；它不是 `prepare_run` 的 `RecordsApplyResult.status`，也不是自由格式字符串。本系统只负责让四类失败可观测。
 
-**结算提交编排者的契约**：本系统不决定事务边界。`prepare_run` 返回 `APPLIED` 时，`change.records` 必须由同一个编排者与其他命名空间（局外升级的 `progression`、解锁的 `unlocks`）合并为**一次**提交，且该事务在写盘失败时整体延后重试、不逐命名空间回滚。`prepare_run` 返回任何失败 status（`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID`）时，编排者必须中止整笔结算事务，不得提交其他命名空间；`ALREADY_APPLIED` 时按幂等空操作处理，同样不提交。编排者身份已定：界面流程在 `Run → Menu` 交付时调用 `SettlementTransaction.apply()`，由它按「纪录 → 钱包」的顺序合并并做唯一一次 `commit`（ADR-0007 D2–D4）。
+**结算提交编排者的契约**：本系统不决定事务边界。`prepare_run` 返回 `APPLIED` 时，`change.records` 必须由同一个编排者与局外升级的 `progression` 合并为**一次**提交（MVP / Vertical Slice 载荷恰为 `{progression, records}`；`unlocks` 只是未来本局奖励解锁的预留槽位，ADR-0007 D3 / D4），且该事务在写盘失败时整体延后重试、不逐命名空间回滚。`prepare_run` 返回任何失败 status（`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID`）时，编排者必须中止整笔结算事务，不得提交其他命名空间；`ALREADY_APPLIED` 时按幂等空操作处理，同样不提交。编排者身份已定：界面流程在 `Run → Menu` 交付时调用 `SettlementTransaction.apply()`，由它按「纪录 → 钱包」的顺序合并并做唯一一次 `commit`（ADR-0007 D2–D4）。
 
 ## Formulas
 
@@ -349,7 +351,7 @@ The `career_complete` formula is defined as:
 
 本系统的只读加载器与数据配置的 `Ready` 门并列：任一失败则不进入游戏。`MilestoneData` 不进入 data-config schema。
 
-**对存档的契约澄清（provisional）**：存档规则 18 规定「纪录写盘失败保留内存并重试」，规则的状态表又规定「一次结算引起的钱包、纪录与解锁变化合并为同一个事务」。两条同时成立时，混合事务的失败策略必须明确：本系统要求**结算来源的事务整体延后重试**（钱包、纪录、解锁一起留在内存），而不是钱包回滚、纪录保留——否则同一份结算结果会在两个命名空间里出现不同的事实。购买来源的事务仍按存档规则 17 回滚，两者按事务来源区分。若 `prepare_run` 返回错误，该事务**不提交**（不是延后重试），其他命名空间也不得写入。
+**对存档的契约澄清（provisional）**：存档规则 18 规定「纪录写盘失败保留内存并重试」，规则的状态表又规定「一次结算引起的钱包、纪录与解锁变化合并为同一个事务」。ADR-0007 D3 把其中的「解锁」限定为**本局奖励解锁**：MVP / Vertical Slice 的结算载荷恰为 `{progression, records}` 两个命名空间，`unlocks` 只是未来预留的槽位。两条同时成立时，混合事务的失败策略必须明确：本系统要求**结算来源的事务整体延后重试**（钱包与纪录一起留在内存，未来的本局奖励解锁同此），而不是钱包回滚、纪录保留——否则同一份结算结果会在两个命名空间里出现不同的事实。购买来源的事务仍按存档规则 17 回滚，两者按事务来源区分。若 `prepare_run` 返回错误，该事务**不提交**（不是延后重试），其他命名空间也不得写入。
 
 **对未设计系统的前置契约（provisional）：**
 
@@ -457,8 +459,8 @@ The `career_complete` formula is defined as:
 
 **编排契约（S5）**
 
-35. **GIVEN** `prepare_run` 分别因四类失败返回（`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID`），**WHEN** 编排者处理返回值，**THEN** 每个结果都是 `RecordsApplyResult{applied: false, change: null}`；**AND** 同一事务里的 `progression` 与 `unlocks` 逐字段不变、commit spy 调用 0 次；**AND** 界面流程在同一帧发出 `settlement_aborted(run_id, code)` 恰好一次，`code` 与快照的 `abort_code` 同值（ADR-0007 D6），这是失败的结算事务**唯一**面向界面的信号；**AND** 不发出 `run_faulted`——`run_faulted` 只属于「生命周期无法继续、没有 `RunResult`」的故障局：上游在 `INIT` / `RUN` 阶段故障时由 `餐局流程` 发 `run_faulted(run_id, detail)`，没有收据、结算事务从不运行（ADR-0007 D7），本 AC 的四类失败都不属于此路径；**AND** 收据不进入成功态、`broke_even` / `loss` 结果 cue 不播放。
-36. **GIVEN** `prepare_run` 返回 `APPLIED`，**WHEN** 编排者处理，**THEN** `applied = true`、`change` 非空，且 `progression` 与 `records` 在同一次 commit 中提交（commit spy 调用 1 次、载荷恰为 `{progression, records}` 两个命名空间）；**AND** MVP / Vertical Slice 的载荷不含 `unlocks` 键——该键只在本局奖励解锁上线后才出现（ADR-0007 D4 第 4–5 步、ADR-0018 §13），写入 `unlocks` 键即为缺陷。
+35. **GIVEN** `prepare_run` 分别因四类失败返回（`INCONSISTENT_RESULT` / `OVERFLOW` / `DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID`），**WHEN** 编排者处理返回值，**THEN** 每个结果都是 `RecordsApplyResult{applied: false, change: null}`；**AND** 同一事务里的 `progression` 逐字段不变（MVP / Vertical Slice 的载荷本就不含 `unlocks`）、commit spy 调用 0 次；**AND** 界面流程在同一帧发出 `settlement_aborted(run_id, code)` 恰好一次，`code` 是结算事务的 `AbortCode` 枚举值（int），与快照的 `abort_code` 同值（ADR-0007 Key Interfaces `AbortCode`、D5 失败矩阵；快照字段见 D6）——它不是 `prepare_run` 的 `RecordsApplyResult.status`（两者是不同枚举：`AbortCode` 的成员带 `RECORDS_` 前缀，仅 `MILESTONE_CATALOGUE_INVALID` 同名），也不是自由格式字符串；这是失败的结算事务**唯一**面向界面的信号；**AND** 不发出 `run_faulted`——`run_faulted` 只属于「生命周期无法继续、没有 `RunResult`」的故障局：上游在 `INIT` / `RUN` 阶段故障时由 `餐局流程` 发 `run_faulted(run_id, detail)`，没有收据、结算事务从不运行（ADR-0007 D7），本 AC 的四类失败都不属于此路径；**AND** 收据不进入成功态、`broke_even` / `loss` 结果 cue 不播放。
+36. **GIVEN** `prepare_run` 返回 `APPLIED`，**WHEN** 编排者处理，**THEN** `applied = true`、`change` 非空，且 `progression` 与 `records` 在同一次 commit 中提交（commit spy 调用 1 次、载荷恰为 `{progression, records}` 两个命名空间）；**AND** MVP / Vertical Slice 的载荷不含 `unlocks` 键——该键只在本局奖励解锁上线后才出现（ADR-0007 D4 第 4–5 步、ADR-0018 §13），写入 `unlocks` 键即为缺陷。**AND** 若同帧钱包返回 `WALLET_OVERFLOW`，载荷退化为只含 `{records}` 一个命名空间：事务省略 `progression` 键、不中止整笔事务、不回滚纪录，收据仍显示「新纪录」印章与「入账失败」（ADR-0007 D4 第 3 / 5 步、D5 失败矩阵）。
 37. **GIVEN** `prepare_run` 返回 `ALREADY_APPLIED`，**WHEN** 编排者处理，**THEN** 不发起任何 commit，也不发失败事件；界面按幂等处理，不重放成功 cue、不第二次标记「新纪录」。
 
 **存档安全编码（ADR-0018 §2）**
