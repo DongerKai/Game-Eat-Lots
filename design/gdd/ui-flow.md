@@ -1,6 +1,6 @@
 # 界面流程 (UI Flow)
 
-> **Status**: In Review
+> **Status**: Approved (2026-11-06)
 > **Author**: user + game-designer（自动设计模式；`systems-designer` 与 `qa-lead` 评审）
 > **Last Updated**: 2026-11-06
 > **Last Verified**: 2026-11-04

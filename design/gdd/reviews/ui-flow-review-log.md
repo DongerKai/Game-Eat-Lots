@@ -1336,3 +1336,46 @@ Reviewed-Content-Hash: design/gdd/ui-flow.md 6877268e1b9467a39c460f612d26f041799
 Reviewed-Content-Hash: design/gdd/records-and-milestones.md 42ead9feed8a3bc1b45225d3f584c77d66120ca8
 Reviewed-Content-Hash: docs/architecture/adr-0007-run-state-settlement-transaction.md 27029b18c6265825a3ffb4def6849166fb5736aa
 Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+
+---
+
+## Re-Review — 2026-11-06 (round 4)
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean)
+Prior verdict: NEEDS REVISION (2026-11-06, round 3)
+Fix commit verified: `cfce2cc`
+Blocking items: 0 | Recommended: 3
+
+**What changed** — `cfce2cc` rewrites only the trailing 「其余中止触发」 paragraph of rule 10 (`:63`, one line changed in this file; the rest of the commit is other GDDs, their logs and the index). All five round-3 items are addressed in that one line: B1 — `ORCHESTRATOR_BUSY` now shares the 「结算数据异常，未入账、未记录」 copy instead of being excluded from it; B2 — the trigger is relabelled 事务对象重入（`_applying == true`） rather than 「同一 `run_id` 重入」, and same-`run_id` same-digest redelivery is explicitly **not** an abort; R1 — `INCONSISTENT_TRANSACTION_STATE` added; R2 — the purchase-path `BUSY` is now qualified as `局外升级` 处于 `BUSY` and named by its code `ORCHESTRATOR_BUSY`; R3 — 「收据内容与叫号行为按各自路径处理」 replaced by the concrete outcomes, with `RUN_ID_REUSED` stated as 「不产生第二张收据」.
+
+**Verification against ADR-0007 D5, trigger by trigger**
+- 事务对象重入（`_applying == true`）→ `APPLY_REENTRANT`: ADR `:220` (row 「事务对象重入（`_applying == true`）」, 收据 「与上一张收据相同（不新建）」, 「记 ERROR；不 commit」); corroborated by ADR `:286` (`_applying` guard) and `:397` (constraint 15). ui-flow `:63` says 复用上一张收据、不新建 — same outcome, no new receipt asserted.
+- `局外升级` 处于 `BUSY`（异常路径）→ `ORCHESTRATOR_BUSY`: ADR `:221`, 丢弃 **全部**, 保留 无, 收据 「结算数据异常，未入账、未记录」. ui-flow uses the identical string and the same trigger qualifier 「（异常路径）」. Character-for-character match with the records-fatal cell at ADR `:217`; B1 resolved.
+- 同 `run_id` 不同摘要 → `RUN_ID_REUSED`: ADR `:209` 「记 ERROR；这是上游 bug，不产生第二张收据」; ui-flow 「记 ERROR、不产生第二张收据」 — match, and no receipt content is claimed for a receipt that must not exist.
+- `records` 返回 `ALREADY_APPLIED` 而钱包不是 → `INCONSISTENT_TRANSACTION_STATE`: ADR `:210` 「必须中止并记 ERROR」; ui-flow 「中止并记 ERROR」 — match. R1 resolved.
+- 同 `run_id` 同摘要重复投递: ADR `:206`–`:208` (cached snapshot, `commit` 0 on retry, no re-open) and `:228` (「同一 `run_id` 的重复投递不重发任何信号」). ui-flow says it is **not** an abort, emits nothing, reopens no receipt — match; B2's contradictory reading is gone.
+- All four codes exist in Key Interfaces `enum AbortCode` (ADR `:332`–`:338`), so no invented identifier.
+
+**Consistency with the idempotency chain** — rule 9 `:61` (「不为同一 `run_id` 打开第二张收据」), AC 11 `:569` (「同一 `R` 再次交付不改变任何调用计数」), records rule 22 `:48` (`ALREADY_APPLIED` = 幂等空操作, 不重新累计/不再提交) and records AC 35 `:462` (「这是失败的结算事务**唯一**面向界面的信号」, no `run_faulted`). The paragraph asserts no second or new receipt for `APPLY_REENTRANT` / `RUN_ID_REUSED`, and no signal for redelivery; none of the four conflicts with those four statements. The `ALREADY_APPLIED`-but-wallet-not case is the one place records calls itself a no-op while the transaction aborts, and rule 22 scopes that no-op to records' own writes («不再提交任何命名空间»), which the abort does not contradict.
+
+**Receipt/copy sweep** — the only player copy asserted anywhere in the paragraph is the shared 「结算数据异常，未入账、未记录」 for records-fatal and `ORCHESTRATOR_BUSY`, exactly as ADR `:217` / `:221`. No copy is attributed to `APPLY_REENTRANT` (it inherits the previous receipt), `RUN_ID_REUSED` (no second receipt) or `INCONSISTENT_TRANSACTION_STATE` (ADR silent).
+
+**AC numbering, signal uniformity, no collateral regression** — 48 `GIVEN` acceptance criteria, sequence 1…48, unique and gap-free; AC 12 `:570` (the `AbortCode` mapping) and AC 48 `:624` intact. `settlement_aborted(run_id, code)` at `:63`, `:93`, `:162`, `:170`, `:385`, `:436`, `:443`, `:456`, `:477`, `:533`, `:570` — every occurrence uses `(run_id, code)`; no surviving `(run_id, status)` or two-argument form. `git diff af9cba7 cfce2cc -- design/gdd/ui-flow.md` is that single line, so rules 1–9, 11–28, Formulas, Edge Cases, Dependencies and ACs are byte-identical to the round-3 text. Header `:3` `In Review` matches `systems-index.md` row 16 (`:73`, Status `In Review`); the index was not edited.
+
+**New findings**
+
+Blocking:
+- none.
+
+Recommended:
+- [RECOMMENDED] ADR-0007 `:225` still enumerates only 「`records` 致命、重入、`BUSY`、`RUN_ID_REUSED`」 and omits `INCONSISTENT_TRANSACTION_STATE`, which ui-flow `:63` now says emits the signal and which the ADR's own matrix `:210` requires to abort and log ERROR. The ADR is byte-identical to round 3 (hash `27029b18…`), so the stale side is the ADR sentence, not this paragraph: ui-flow now follows both the matrix and the bullet's own lead clause 「只在『整笔中止』时」, and a commit-0 abort with no signal would leave the audio layer unable to cancel result cues. Ranked Recommended, not Blocking, because round 3 ranked the identical asymmetry Recommended and ui-flow's reading is the only internally coherent one. Fix the ADR bullet list in a separate pass (this review does not edit ADRs).
+- [RECOMMENDED] No acceptance criterion covers the four new triggers. AC 12 `:570` parameterises only the four records-fatal statuses, and the Edge Cases block `:385`–`:388` still ends at `WALLET_OVERFLOW`, write failure and duplicate delivery. The paragraph is implementable but not QA-verifiable from this file; add one parameterised AC per code (`APPLY_REENTRANT` / `ORCHESTRATOR_BUSY` / `RUN_ID_REUSED` / `INCONSISTENT_TRANSACTION_STATE`) on the next substantive edit of the abort paths. ADR test plan `:573` likewise asserts only the records-fatal case.
+- [RECOMMENDED] Minor completeness: ui-flow states ERROR logging only for `RUN_ID_REUSED` and `INCONSISTENT_TRANSACTION_STATE`, while ADR `:220`–`:221` also require 「记 ERROR」 for `APPLY_REENTRANT` and `ORCHESTRATOR_BUSY`, and ADR `:220` requires 不 commit / `:221` 丢弃全部 for those two — neither is restated. The receipt outcome for `INCONSISTENT_TRANSACTION_STATE` is likewise unstated on both sides (ADR `:210` is silent), so nothing is contradicted; this is the same class of gap as R3, one step smaller.
+
+Verdict: APPROVED
+
+Reviewed-Content-Hash: design/gdd/ui-flow.md 6cbac6ebfb362c23c437a3194d17ddcfc720baf8
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 213f8dbe40b44748fc32857680f09991fff9d612
+Reviewed-Content-Hash: docs/architecture/adr-0007-run-state-settlement-transaction.md 27029b18c6265825a3ffb4def6849166fb5736aa
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
