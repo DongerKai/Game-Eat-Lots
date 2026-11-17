@@ -1,13 +1,13 @@
 # Interaction Pattern Library（交互模式库）
 
-> **Status**: In Design — 首版目录与 15 条模式已定义；`Gaps & Patterns Needed` 列出尚未出规格的屏幕所需模式。
+> **Status**: In Design — 15 条模式已定义；`design/ux/` 下 10 个屏幕规格均已出（HUD、主菜单、收据、升级、纪录、设置、暂停、确认框、只读/Blocked 说明、首局引导层、错误屏），本库作为它们的上位约定。
 > **Author**: user + ux-designer
-> **Last Updated**: 2026-11-05
+> **Last Updated**: 2026-11-06
 > **Template**: Interaction Pattern Library
 > **Accessibility Tier**: Standard（`design/accessibility-requirements.md`）
 > **Platform**: PC；键盘/鼠标为主、手柄部分支持、无触屏（`.claude/docs/technical-preferences.md`）
-> **Sources**: `design/ux/hud.md`（唯一已完成的屏幕规格）、`design/gdd/ui-flow.md` 屏幕契约与规则 1–28、`design/gdd/input.md` 规则 1–12、各系统 GDD 的 `## UI Requirements`
-> **Sibling Specs**: `design/ux/hud.md`（局内 HUD）。其余屏幕规格尚未创建，见 Gaps。
+> **Sources**: `design/ux/` 下 11 个屏幕规格、`design/gdd/ui-flow.md` 屏幕契约与规则 1–28、`design/gdd/input.md` 规则 1–12、各系统 GDD 的 `## UI Requirements`
+> **Sibling Specs**: `hud.md`、`main-menu.md`、`receipt-screen.md`、`upgrade-screen.md`、`records-screen.md`、`settings-modal.md`、`pause-overlay.md`、`confirm-modal.md`、`readonly-notice.md`、`onboarding-layer.md`、`error-screen.md`。
 
 ---
 
@@ -425,28 +425,28 @@
 
 ## Gaps & Patterns Needed
 
-### 已有模式但屏幕规格未写
+### 已出规格的屏幕与复用的模式
 
-以下屏幕已由 `ui-flow` 给出内容契约，但尚无 `design/ux/*.md` 规格。它们落地时应直接引用本库，不再发明新交互；若发现契约缺口，先补本库再写屏幕：
+以下屏幕均已落地为 `design/ux/*.md` 规格，实现时直接引用本库，不再发明新交互；若发现契约缺口，先补本库再改屏幕：
 
-| 屏幕 | 将复用 | 待定 |
+| 屏幕 | 规格 | 复用模式 |
 |---|---|---|
-| `MainMenu` | PAT-03、08、13、14 | 入场费/钱包的常驻位置与空钱包文案 |
-| `ReceiptScreen` | PAT-04、09、12、13 | 滚动与跳过的视觉表现；长收据的分段/折叠；印章与旧最佳的并排布局 |
-| `UpgradeScreen` | PAT-03、06、14 | 目录滚动、`BUSY` 进行中态 |
-| `RecordsScreen` | PAT-09、14 | 里程碑分组折叠、完成横幅与「新达成」条的避让 |
-| `SettingsModal` | PAT-15、06 | 滑杆步进/加速曲线；分区标题；删除生涯的次级分区 |
-| `PauseOverlay` | PAT-06、13 | `Ending` 后隐藏「放弃本局」时的布局稳定性 |
-| `ConfirmModal` | PAT-02、06 | 长后果文案的换行与最大宽度 |
-| `ReadOnlyNotice` / `BlockedModal` | PAT-07、08 | 双出口/三出口的按钮排列 |
-| 首局引导层 | PAT-11、02 | 气泡版式、聚光遮罩边缘、跳过入口位置 |
-| `ErrorScreen` | PAT-07、09 | debug 信息区的折叠 |
+| `MainMenu` | `main-menu.md` | PAT-03、08、13、14 |
+| `ReceiptScreen` | `receipt-screen.md` | PAT-04、09、12、13 |
+| `UpgradeScreen` | `upgrade-screen.md` | PAT-03、06、14 |
+| `RecordsScreen` | `records-screen.md` | PAT-09、14 |
+| `SettingsModal` | `settings-modal.md` | PAT-15、06 |
+| `PauseOverlay` | `pause-overlay.md` | PAT-06、13 |
+| `ConfirmModal` | `confirm-modal.md` | PAT-02、06 |
+| `ReadOnlyNotice` / `BlockedModal` | `readonly-notice.md` | PAT-07、08 |
+| 首局引导层 | `onboarding-layer.md` | PAT-11、02 |
+| `ErrorScreen` | `error-screen.md` | PAT-07、09 |
 
 ### 尚未定义的新模式
 
-- **收据滚动与跳过**：`ui-flow` 规则 14 定义了时序与事件，但「滚动中」的视觉、跳过提示、焦点保持未定。
-- **设置滑杆的键盘/手柄步进**：`ui-flow` 规则 24 只给了范围，没有步长与重复曲线。
-- **列表滚动与焦点可见性**：当目录超过一屏时，焦点移出可视区如何滚动、滚动条是否显示，未定。
+- **收据滚动与跳过**：已由 `receipt-screen.md` 定义（滚动中视觉、跳过提示、焦点保持）；本库只保留跨屏约束。
+- **设置滑杆的键盘/手柄步进**：已由 `settings-modal.md` 定义步长与重复曲线。
+- **列表滚动与焦点可见性**：已由 `upgrade-screen.md` / `records-screen.md` 定义（焦点移出可视区时的滚动与滚动条）。
 - **档口选择器（未来）**：MVP 关闭；开启时需要「选择器 + 解锁」组合模式，届时新增而非改写现有模式。
 
 ### Open Questions
