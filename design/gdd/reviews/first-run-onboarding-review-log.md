@@ -482,3 +482,71 @@ Reviewed-Content-Hash: docs/architecture/adr-0004-service-composition-signals.md
 Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
 Reviewed-Content-Hash: design/registry/entities.yaml 0646d0161ee8488d78ec5454abe3a61d0d0a14f9
 Reviewed-Content-Hash: design/gdd/systems-index.md 4714602ef782db915793ed55ee8f3c1f089ee886
+
+---
+
+## Re-Review — 2026-11-06 (round 3)
+
+**Verdict: APPROVED**
+
+Review mode: lean · Workflow: standard · Scope signal: L
+Specialists: none (lean) · Blocking items: 0 | Recommended: 7
+Prior verdict: NEEDS REVISION (round 2, receipt `164209b9`). This run re-read all 580 lines after `af9cba7`; documentation review only — no Godot on this machine, so no engine or test run is claimed.
+
+Status: header `:3` reads `In Review`; `systems-index.md:75` reads `In Review` — they agree. `gdd-structure-check` reports the 6 required sections present; Player Fantasy and Tuning Knobs absent, both advisory at `standard`.
+
+### Prior findings — resolved?
+
+| Round-2 finding | Current text | Resolved |
+|---|---|---|
+| B1 — degraded run charged 85 while the receipt still said 40 (`:90`/`:315`/`:366`/AC 17 `:515`) | Rule 14 `:78`: `fee_note` exists only when `plan.is_first_run ∧ plan.has_entry_fee_override()`; level 5 `:96`/`:90`: B4 emits no `fee_note`, fee row is `RunResult.entry_fee` (85), rest of the payload unchanged; formula rationale `:336`, edge case `:387` and AC 17 `:536` made conditional. AC 17 covers override-true (sentence ⇔ 40 row) and override-false (85 row, no sentence); the `is_first_run = false` combination is covered by rule 2 / AC 2. No surviving "receipt unchanged" claim: the only `其余 beat 不变` left (`:105`) is level 14 (`group_counts`), not the receipt. | **yes** |
+| B2 — ladder omitted preset / records / missing-field failures (`:90`) | Rule 19 `:90`–`:107` is now an ordered 14-level ladder: preset invariant (`:92`, `preset_valid = false`, ERROR + CI red, run still starts, menu 85), `RECORDS_UNAVAILABLE` (`:93`, WARNING), unreadable `LoadReport` (`:94`, WARNING, explicitly ADR-undefined), missing `first_run_eligible` (`:95`, derive via save rule 26), then the nine prior levels (`:96`–`:105`). New ACs 33–35 `:564`–`:566`. | **yes** |
+| B3 — `FirstRunExplanation` built at `run_settled` (`:108`/`:119` then) | B4 trigger `:54`, rule 14 `:78`, rule 15 `:80`, `Closing` row `:125`, transitions `:136`–`:138`, timing note `:142`, interface rows `:156`/`:424`, edge case `:395`, AC 20 `:542`, AC 22 `:544` all put build + `explanation_ready` + `onboarding_finished(ALL_BEATS)` at `Run → Menu` step 5, with `run_settled` stashing only. Matches ADR-0020 D7.1 `:530`–`:535` (`:533` names the step-2 wallet write) and ADR-0004 D8 `:211`–`:215` (step 2 receipt mount, step 5 onboarding) / D9 `:232` (`STASH_RESULT` only). | **yes** |
+
+### Timing, end to end
+
+Stash at `run_settled` (`:136`, deep copy of `RunResult` + `get_run_menu()`, no wallet read) → build at step 5 after the step-2 settlement commit has credited the wallet and the receipt root is mounted (`:78`, `:142`) → delivered before that frame's first draw (`:78`, `:137`, `:142`). This leaves ui-flow rule 9 (`ui-flow.md:61`) and AC 11 (`:569`) untouched: the receipt still opens in the delivery frame; the payload arrives later in the same frame, which rule 14 now permits explicitly. Rejected transition (`:138`, `:142`): stays `Closing`, keeps the stash, waits for the `Handoff` resend, and does not re-send the completion signal. `run_faulted`/`run_discarded` while `Closing` → `Cancelled`, stash cleared, no delivery, no completion (`:142`, AC 20 `:542`). Signal order `explanation_ready` → `onboarding_finished(ALL_BEATS)`, each exactly once (`:80`, `:142`; ADR-0020 D7.4 `:637`); the `Closing → Closed` transition is the only side-effect site, so a resend after success cannot double-fire.
+
+### Ladder audit (levels 1–14)
+
+Ordered and deterministic: the four planner-side levels (`:92`–`:95`) each force `is_first_run = false`, so the first failing one decides, and the operational levels (`:96`–`:105`) compose because they touch different inputs ("各自记录、互不替代", `:90`). Relative order of the twelve shared rows matches ADR-0020 D10 `:698`–`:709` exactly (preset → eligibility field → fee → pool → anchor → metrics → unit value → upgrade catalogue → text → safe position → re-push → group counts); the two added rows are planner-side and D10 has no contradictory row (`RECORDS_UNAVAILABLE` is already a `FirstRunGate` outcome in D2.1 `:170`). Fee rule 3 (`:42`) holds at every level: 1–3, level 4 derived false, and level 5 all land on menu = charge = 85; no level leaves 40 next to 85. States table agrees: `Idle` covers `plan.is_first_run = false` (`:121`); levels 5–13 stay on the normal `Intro → … → Closed` path; 11 (B0/B1 text missing) and 12 close `Closed`; `Cancelled` remains rule 17's.
+
+### New findings — Blocking
+
+None.
+
+### New findings — Recommended
+
+1. **Rule 19 summary contradicts level 4 (`:107`).** `:107` says only levels 1–3 stop at `Idle` and "其余各级仍走完整 `Intro → … → Closed`", but level 4's derived-false branch (`:95`) says "同第 2 级（菜单 85、引导不激活）", i.e. also `Idle`; and level 11 closes only when B0/B1 text is missing, not on every level-11 hit. Reword to "第 1–3 级、第 4 级派生为 false 时 … 第 11 级仅在 B0/B1 缺文案时、第 12 级以 `Closed` 收尾". Implementation is still determined by the level text, so this does not block.
+2. **Level 3 has no re-evaluation point (`:94`).** Levels 1, 2 and 4 state one (`:92` next `Boot → Menu` / `Run → Menu`; `:93` next `Boot → Menu`; `:95` every `refresh()`); level 3 states none, so a transient unreadable `LoadReport` leaves the guide off with no stated recovery.
+3. **Level 4 / AC 35 derivation drops the `runs_settled == 0` conjunct (`:95`, `:566`).** `save-system.md` rule 26 (`:52`–`:54`) defines `first_run_eligible = (outcome ∈ {Fresh, Loaded, Migrated}) ∧ runs_settled == 0`; the GDD derives from `outcome` alone and asserts "字段值 == 派生值". On a `Loaded` save with `runs_settled ≥ 1` the derived value is `true` while the field's own definition is `false`, and AC 35 only tests `runs_settled = 0`. Carry the conjunct (or say the gate applies it separately) so the debug assert cannot fail spuriously. Behaviour of `is_first_run` is unaffected because rule 2 states the conjunction.
+4. **ADR-0020 is now stale about this ladder (outside this file).** D10 `:692`–`:709` still says "严格按 GDD 规则 19 的顺序" and "固定 12 级"; sync row 15 `:1022` repeats "12 级"; Related `:1083` says "AC 1–32" (now 35). The shared rows agree behaviourally, but the numbering shifted (ADR #2 eligibility = GDD level 4, ADR #3 fee = level 5, …), and D2.1 `:166`–`:173` evaluates eligibility → `RECORDS_UNAVAILABLE` → preset, the reverse of GDD levels 1–2, so when both records and preset fail the two documents log different reasons/severities (WARNING vs ERROR + CI red). Reconcile the ADR.
+5. **`settlement_aborted` path is unspecified.** Rule 17 `:84`–`:86`, rule 19, AC 20 `:542` and AC 22 `:544` cover fault / discard / `init_failed` only. `ui-flow.md` rule 10 (`:63`) and `records-and-milestones.md` rule 22 define an abort path on which the receipt still opens in an error state and the wallet is deliberately not credited — so AC 22's "钱包已入账之后" does not hold, and the GDD never says whether B4 is delivered, degraded, or silent. State the behaviour (silence is the safer default).
+6. **AC 17 does not restate ui-flow AC 48's third combination (`:536` vs `ui-flow.md:624`).** `ui-flow.md` AC 48 adds `plan.is_first_run = false` → the whole explanation block is absent. The GDD implies this via rule 14's conjunction and rule 2 / AC 2, so the observable behaviour agrees in all three combinations; adding the third branch to AC 17 would make the parity literal.
+7. **Carried over from round 2, still open (advisory).** `:506` still says the index marks this doc `Approved` and still needs `腻度与口味` in `Depends On` — `systems-index.md:75` reads `In Review` and already lists it at `:75`/`:197`; `:23` still repeats one sentence twice; `:88`/`:149` still say `RunConfig.is_first_run` where `:31`/`:183` say `plan.is_first_run`, and the `run_config_assembled(config, plan)` handoff (ADR-0004 D9 `:234`) is never named; `:425` still says 菜单波次 "当前只读 `StationData.dish_pool`" (closed by OQ 2 `:573`); `:428`–`:429` keep the save / records rows under 下游依赖方 while both read as 上游（只读）; truth-table row `:437` still pairs `runs_settled = +1` with `first_run_eligible = true（Loaded）` without saying it is the session-boot report.
+
+### AC numbering and testability
+
+ACs run 1–35 with no duplicate or skipped number (`:514`–`:566`); multi-branch ACs stay under one number (17, 32, 34, 35), no `Na` splits. AC 33–35 are each independently executable with fixtures: 33 (injected invariant violation → ERROR, CI red, `Idle`, run `Active`, recovery on next `Boot → Menu`), 34 (records-unavailable and unreadable-report stubs → `is_first_run = false`, WARNING, menu 85, run starts), 35 (`Loaded`/`Recovered` fixtures → derived true/false). The only untestable clause is level 4's "字段值 == 派生值" assert when the field is missing (R3).
+
+### Registry Values
+
+`onboarding_active` (`entities.yaml:1113`), `first_run_entry_fee` (`:1300`, value 40), `first_run_pool_size` (`:1313`, value 6) — consistent with `:38`, `:178`, `:109`; the registry is unchanged in `af9cba7` (`0646d016`).
+
+### Dependency Graph
+
+All 15 named GDDs exist on disk (run-flow, in-game-hud, input, scene-flow, dish-values, settlement-and-entry-fee, menu-waves, cloying-and-taste, meta-upgrades, audio-feedback, save-system, records-and-milestones, ui-flow) plus game-concept and systems-index. No broken reference.
+
+### Verdict: APPROVED
+
+All three round-2 blockers are closed with line-level evidence; the new 14-level ladder is ordered, fee-consistent and state-table-consistent; the step-5 timing is coherent with ADR-0020 D7.1, ADR-0004 D8/D9 and ui-flow rule 9. R1–R3 and R6–R7 are wording/coverage polish inside this GDD; R4 and R5 need `ADR-0020` (and, for R5, a sentence here) rather than a redesign. No files other than this log were modified; `systems-index.md` already reads `In Review` and needs no change.
+
+Reviewed-Content-Hash: design/gdd/first-run-onboarding.md db9974d616c2157fb07a9f235fe7233c4bb5229b
+Reviewed-Content-Hash: design/gdd/ui-flow.md 6877268e1b9467a39c460f612d26f041799e3afe
+Reviewed-Content-Hash: design/gdd/save-system.md a7d54e3ba4d7f8a23be1d28a6c165bb422648abd
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 42ead9feed8a3bc1b45225d3f584c77d66120ca8
+Reviewed-Content-Hash: docs/architecture/adr-0020-first-run-onboarding-beat-machine.md 5252deab0b23680664d07fe7ce1c7255e89240ed
+Reviewed-Content-Hash: docs/architecture/adr-0004-service-composition-signals.md f35769ae953b312ef0d07124ac2f6293b95e220a
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/registry/entities.yaml 0646d0161ee8488d78ec5454abe3a61d0d0a14f9
+Reviewed-Content-Hash: design/gdd/systems-index.md 5b994d97dce3c23ce4ec3c4afd0054b9663209e8

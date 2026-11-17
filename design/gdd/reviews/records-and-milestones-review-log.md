@@ -595,3 +595,87 @@ Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43
 Reviewed-Content-Hash: design/gdd/audio-feedback.md b02b3fa05db215dff9f4882849161e7651506ef4
 Reviewed-Content-Hash: design/gdd/systems-index.md 4714602ef782db915793ed55ee8f3c1f089ee886
 Reviewed-Content-Hash: .claude/rules/design-docs.md 638ca578625c5a3d24a5bafe0524777b351ab2f8
+
+---
+
+## Re-Review — 2026-11-06 (round 3)
+
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean — Phase 3b not run)
+Blocking items: 0 | Recommended: 5
+Documentation-only pass: no engine, test or CI run was performed. All line numbers are against the working tree at `af9cba7`; contents were read directly, not inferred from the commit message.
+
+Prior verdict resolved: Yes — all three round-2 blockers are closed in the body text as well as the acceptance criteria, not only in the ACs.
+
+### 三条 blocker 复核（对照当前正文）
+
+| 上一轮 blocker | 当前正文 | 结论 |
+|---|---|---|
+| ① 失败事件在 `:48` / `:141` 写作 `(run_id, status)`，`:141` 又说「不规定它的名字」 | 规则 22（`:48`）现为「发出失败事件 `settlement_aborted(run_id, code)`（ADR-0007 D5；`code` 是事务的 `AbortCode`，不是本系统的 `status`）」；失败事件段（`:143`）现为「事件名、参数与发出者由 ADR-0007 D5 与 Key Interfaces 固定：`UIRoot` 在整笔中止时发出恰好一次，`code` 是该事务的 `AbortCode`；它不是 `…status`，也不是自由格式字符串」；AC 35（`:462`）同口径。全文检索 `run_id, status`、`run_id: StringName`、「不规定它的名字」、「建议 `settlement_aborted`」**零命中** | ✓ 已解决（实质） |
+| ② `unlocks` 在 `:29` / `:134` / `:143` / `:352` 仍被要求并入同一次提交 | `:29`、`:136`、`:145`、`:354` 均改为「MVP / Vertical Slice 载荷恰为 `{progression, records}`；`unlocks` 只是未来本局奖励解锁的预留槽位」；AC 35（`:462`）「载荷本就不含 `unlocks`」、AC 36（`:463`）「写入 `unlocks` 键即为缺陷」。全文 `unlocks` 共 8 处，除上述限定句外只剩 OQ1（`:482`）与 OQ4（`:485`）的「未来」语境——**没有任何必合并 mandate 残留**。原 `:134` 的 `INCONSISTENT_RESULT` 行（现 `:138`）改写为「不提交任何命名空间（钱包步骤不执行、事务不构造）」，不再列举命名空间 | ✓ 已解决（实质） |
+| ③ `code` 的取值域三方不一致（ADR-0007 D6 `StringName` vs Key Interfaces `int AbortCode` vs ui-flow AC 12 `code == status`） | AC 35（`:462`）改为「`code` 是结算事务的 `AbortCode` 枚举值（int），与快照的 `abort_code` 同值（ADR-0007 Key Interfaces `AbortCode`、D5 失败矩阵；快照字段见 D6）」，并明写「它不是 `RecordsApplyResult.status`」；ADR-0007 D6（`:241`）已改为 `int`（`AbortCode`；`NONE = 0`），与其自身枚举（`:332-338`）和 `ReceiptSnapshot.abort_code: int`（`:354`）、`settlement_aborted.emit(…, snapshot.abort_code)`（`:373`）一致；ui-flow AC 12（`:570`）不再断言 `code == status`，改为四码逐一映射 | ✓ 已解决（三方一致） |
+
+**上一轮 Recommended 的落地情况**：AC 36 的 `WALLET_OVERFLOW` 分支（`:463`）已加；接口表（`:112-113`）已补 `initialize()` / `reset_after_career_delete()`；ui-flow 规则 10（`:63`）已补第四码与「其余中止触发」；ui-flow AC 12（`:570`）已写出四码映射。仍未落地：`pending_events` 仍无 AC（上一轮 #5）、`load` 的参数类型（上一轮 #6 后半）、ADR-0018 Validation Criteria 的 AC 映射（上一轮 #7）——见下方 Recommended。
+
+### AbortCode 三方对齐（逐项核对）
+
+| 事实 | 本 GDD | ADR-0007 | `ui-flow.md` |
+|---|---|---|---|
+| 事件名与签名 | `settlement_aborted(run_id, code)`（`:48`、`:143`、`:462`） | D5（`:217`、`:225`）、Key Interfaces（`:373`） | 规则 10（`:63`）、`:93`、`:170`、边界用例（`:385`） |
+| `code` 的类型 | 事务的 `AbortCode`（int），不是 `status`（`:48`、`:143`、`:462`） | `enum AbortCode`（`:332-338`）、`abort_code: int`（`:241`、`:354`） | `AbortCode`（`int`，ADR-0007 Key Interfaces）（`:570`） |
+| 四类失败 → 码 | 未逐一列举，只声明「是 `AbortCode`、不是 `status`」（`:462`） | 枚举给出四个 `RECORDS_*` 成员（`:334-335`），未给映射表 | `INCONSISTENT_RESULT → RECORDS_INCONSISTENT`、`OVERFLOW → RECORDS_OVERFLOW`、`DATA_NOT_READY → RECORDS_DATA_NOT_READY`、`MILESTONE_CATALOGUE_INVALID → MILESTONE_CATALOGUE_INVALID`（`:570`） |
+| 其余中止触发 | 不展开（`code` 仍是 `AbortCode`） | 重入 / `BUSY` / `RUN_ID_REUSED`（D5 `:225`），另有 `INCONSISTENT_TRANSACTION_STATE`（`:210`） | 重入 / `BUSY` / `RUN_ID_REUSED`（`:63`） |
+| `WALLET_OVERFLOW` 不是中止 | AC 36（`:463`）「不中止整笔事务、不回滚纪录」 | D5（`:225`）「`WALLET_OVERFLOW` 与写盘失败**不是中止**，不发该事件」 | 边界用例（`:386`）钱包不变、纪录照常更新 |
+
+枚举名逐字比对：`RECORDS_INCONSISTENT` / `RECORDS_OVERFLOW` / `RECORDS_DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID` 在 ui-flow（`:570`）与 ADR-0007（`:334-335`）完全一致；本 GDD 不列名，故不产生冲突（自足性见 Recommended 1）。
+
+### 上一轮 Recommended 复核（AC 36 / 接口表 / ui-flow）
+
+- **AC 36 的 `WALLET_OVERFLOW` 分支（`:463`）与 ADR-0007 D4 第 3 步（`:189`）、D5（`:218`）逐项吻合**：`progression` 键不加入事务、`records` 照常提交、`save_state` 仍为 `COMMITTED` / `UNSAVED`、收据「入账失败」+ 新纪录印章保留、不重试入账。与 `meta-upgrades.md` 的钱包契约同口径：规则 4（`:33`）「钱包保持原值，本局仍照常结算给纪录系统，界面显示入账失败」、公式 Output Range（`:146`）与 AC 6（`:451`）「`commit` 恰好一次且载荷只含 `records`（不含 `progression`）」；ui-flow 边界用例（`:386`）同样写「新纪录印章按纪录结果正常显示」。**payload 确实只剩 `{records}`，确实不中止、不回滚。**
+- **接口表（`:112-113`）** 的 `initialize()` 与 `reset_after_career_delete()` 与 ADR-0018 §12（`:411`、`:413`）逐句对应：前者「读命名空间 → `load()` → `_validate_catalogue()`」，后者「置 `_records = _empty_records()`、`_last_applied_run_id = 0`、`_loaded = true`；不发信号、不读旧档；由 `AppRoot` 在 `save.delete_career()` 成功后调用」。
+- **ui-flow（`:63` / `:570` / `:385`）与本 GDD 的 `prepare_run` / `load` 分工一致**：`MILESTONE_CATALOGUE_INVALID` 由 `prepare_run` 报（目录不可用），`load` 只解析已存纪录，对应规则 22（`:48`）、状态表（`:141`）、AC 27（`:447`）/ AC 27a（`:448`）。ui-flow 头部现为 `In Review`，索引 `:73` 同为 `In Review`。
+
+### Collateral 检查
+
+- **AC 编号**：正文为 1–40 加一条 `27a`（`:418-470`），逐个出现且各一次；本轮改动（AC 35/36，并新增接口表两行）未挤占或复用编号，37–40 仍按原序。
+- **`pending_events`**：`:132` 语义未变（与实发信号同序同内容、无信号为空数组、失败恒空、不是延迟队列），仍与 ADR-0018 §10 一致。
+- **`prepare_run` 所有权**：`:145` 仍写「编排者身份已定：界面流程在 `Run → Menu` 交付时调用 `SettlementTransaction.apply()`」，与 ui-flow 规则 10（`:63`）的「界面流程是 MVP 的结算事务编排者」及 ADR-0007 D2 一致；本 GDD 未越过所有权改写编排序。
+- **`save-system.md` 仍同意两命名空间提交**：规则 18（`:44`）把结算来源的钱包（`progression`）、纪录（`records`）与解锁统一为「先记内存 + 标 dirty、写盘失败不逐命名空间回滚」；下游表（`:97`、`:282`）与 `records.*` 字段表（`:128`）仍由本系统拥有语义。其规则 18 中的「解锁」是概括写法，本 GDD `:354` 已按 ADR-0007 D3 限定为「本局奖励解锁」，两者不冲突。
+- **注册表**：`record_is_better`（`:931-944`）与 `milestone_met`（`:946-962`）的表达式、变量与输出域仍与本 GDD 公式节逐项一致，文件自上一轮未变（`0646d01…`）。
+- **完整性（standard）**：Overview / Detailed Rules / Formulas / Edge Cases / Dependencies / Acceptance Criteria 六项 PRESENT；Player Fantasy 与 Tuning Knobs 缺失，`standard` 下均为 advisory，不阻塞。
+
+### 新发现 — Blocking
+
+- 无。
+
+### Recommended Revisions
+
+1. **AC 35（`:462`）对 `AbortCode` 的描述过宽，且四码映射只存在于 ui-flow。** 原文「`AbortCode` 的成员带 `RECORDS_` 前缀，仅 `MILESTONE_CATALOGUE_INVALID` 同名」只对四个映射成员成立；枚举里还有 `RUN_ID_REUSED`、`INCONSISTENT_TRANSACTION_STATE`、`ORCHESTRATOR_BUSY`、`APPLY_REENTRANT`（ADR-0007 `:332-338`）没有该前缀。建议改为「四个失败对应的成员是 `RECORDS_INCONSISTENT` / `RECORDS_OVERFLOW` / `RECORDS_DATA_NOT_READY` / `MILESTONE_CATALOGUE_INVALID`」，与本 GDD 不依赖 ui-flow 即可读懂；也顺手落实上一轮 #2 修法里被省掉的「列出四个码」那半句。
+2. **AC 36（`:463`）的 `GIVEN` 仍未固定钱包状态。** 主句「载荷恰为 `{progression, records}` 两个命名空间」在 ADR-0007 D5（`:211`）的第二条缩键路径上也不成立：钱包返回 `ALREADY_APPLIED`、纪录返回 `APPLIED` 时，`commit` 恰一次但只含 `records`（「只补纪录，不重复加钱」）。本轮补了 `WALLET_OVERFLOW` 例外，未补这一条。建议主句加「**GIVEN** 钱包返回 `APPLIED` / `APPLIED_UNSAVED`」，或把该修复路径也写成第二种「载荷只含 `{records}`」的分支。
+3. **`pending_events` 仍无任何 AC（上一轮 #5 未处理）。** `:132` 定了「与实发信号同序同内容、`APPLIED` 可为空数组、失败恒空」，AC 20（`:440`）只断言信号顺序，AC 35–37（`:462-464`）只断言 `status` / `applied` / `change` / commit 次数。建议补两条：`APPLIED` 且既不破纪录也不得里程碑 → `pending_events == []`；有信号 → 与实发信号逐项同序同内容。
+4. **`load` 的参数类型与 ADR-0018 不一致（上一轮 #6 后半未处理）。** 本 GDD `:111` 为 `load(saved: Dictionary)`，ADR-0018 §1（`:106`）为 `load(saved: Variant)`，§3 允许 `null` → 空纪录。建议统一为 `Variant`（或在本 GDD 注明 `Dictionary` 是 `Variant` 的非空子集）。
+5. **ADR-0018 Validation Criteria 未随 AC 27a / 38–40 更新（ADR 侧，本轮按约束未改）。** `:590-592` 仍是「AC 1–31 / 32–34 / 35–37」，`27a` 与编码 AC 38–40 无映射行。Owner：ADR-0018。
+
+**遗留（上一轮已列，未新增、不计数）**：`Tuning Knobs` 无独立小节（`standard` 下 advisory）；AC 33（`:457`）的「不超过 `SAVE_BYTES_MAX`」近乎恒真；AC 5（`:422`）/ AC 16（`:436`）仍用产品中不存在的 `station_noodle`；`_last_applied_run_id` 仍未写进 schema 表（`:64-73`，仅在 `:113` 的接口说明中出现），实现者仍需猜它是内存态。另注（ADR / ui-flow 侧）：ADR-0007 `:225` 与 ui-flow 规则 10（`:63`）的中止枚举都未含 `INCONSISTENT_TRANSACTION_STATE`（D5 `:210` 会给该码，且 `:373` 对任何 `ABORTED` 都发事件），属列举不全而非冲突。
+
+### 文件头状态 vs 索引
+
+`records-and-milestones.md:3` 为 `Status: In Review`；`systems-index.md:71`（表序号 #14；Recommended Design Order 中的 #16 见 `:222`，与本 GDD `:406` 的「设计顺序 #16」对应）同为 `In Review`。**一致**，本轮未修改索引。若后续通过，索引可由 `In Review` 改为 `Approved`。
+
+### Verdict: APPROVED
+
+三条 round-2 blocker 都已在**正文**而非仅 AC 中修好：失败事件三处统一为 `settlement_aborted(run_id, code)` 且 `code` 明确为事务的 `int AbortCode`（不是 `status`、不是自由字符串），`unlocks` 全文只剩「未来预留槽位」的限定句、无任何必合并 mandate，ADR-0007 D6 的 `abort_code` 类型已与它自己的枚举对齐，ui-flow AC 12 的四码映射与 ADR 的枚举名逐字相同。AC 36 的 `WALLET_OVERFLOW` 分支经 ADR-0007 D4/D5 与 `meta-upgrades.md` 的钱包契约逐项核对属实（载荷只含 `{records}`、不中止、不回滚、收据仍盖新纪录印章并标「入账失败」）。编号、`pending_events`、`prepare_run` 所有权、`initialize()` / `reset_after_career_delete()`、存档侧两命名空间提交、注册表取值与索引状态均未见附带损伤。剩余 5 条均为 Recommended（`AbortCode` 描述的精度、钱包 `ALREADY_APPLIED` 修复路径、`pending_events` 的 AC、`load` 参数类型、ADR-0018 的 AC 映射），不影响验收——**APPROVED**。
+
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 42ead9feed8a3bc1b45225d3f584c77d66120ca8
+Reviewed-Content-Hash: design/gdd/ui-flow.md 6877268e1b9467a39c460f612d26f041799e3afe
+Reviewed-Content-Hash: design/gdd/meta-upgrades.md 3fa3e55b62e80ebcb1ed150a57577416f639faf9
+Reviewed-Content-Hash: design/registry/entities.yaml 0646d0161ee8488d78ec5454abe3a61d0d0a14f9
+Reviewed-Content-Hash: docs/architecture/adr-0007-run-state-settlement-transaction.md 27029b18c6265825a3ffb4def6849166fb5736aa
+Reviewed-Content-Hash: docs/architecture/adr-0018-records-milestones-career.md 51d04732502434867fe649ab73a8c1b335a18847
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43
+Reviewed-Content-Hash: design/gdd/save-system.md a7d54e3ba4d7f8a23be1d28a6c165bb422648abd
+Reviewed-Content-Hash: design/gdd/systems-index.md 5b994d97dce3c23ce4ec3c4afd0054b9663209e8
+Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
+Reviewed-Content-Hash: design/gdd/audio-feedback.md b02b3fa05db215dff9f4882849161e7651506ef4
+Reviewed-Content-Hash: .claude/rules/design-docs.md 638ca578625c5a3d24a5bafe0524777b351ab2f8

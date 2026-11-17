@@ -1296,3 +1296,43 @@ Reviewed-Content-Hash: docs/architecture/adr-0004-service-composition-signals.md
 Reviewed-Content-Hash: design/gdd/systems-index.md 4714602ef782db915793ed55ee8f3c1f089ee886
 Reviewed-Content-Hash: design/gdd/run-flow.md 56f6f4866e1b5ab7c8a5a8f04d22078e7d05e1cb
 Reviewed-Content-Hash: design/gdd/settlement-and-entry-fee.md e738123010c4be9b0687a356209235d25c9904d4
+
+---
+
+## Re-Review — 2026-11-06 (round 3)
+Review mode: lean · Workflow: standard
+Scope signal: L
+Specialists: none (lean)
+Prior verdict: APPROVED (2026-11-06)
+Fix commit verified: `af9cba7`
+Blocking items: 2 | Recommended: 3
+
+**What changed** (`af9cba7`, three lines in this file): header `:3` `Approved` → `In Review`; rule 10 `:63` gained a trailing 「其余中止触发」 paragraph; AC 12 `:570` replaced 「`code` 等于 `prepare_run` 的 `status`」 with an `AbortCode` mapping. The same commit touched `records-and-milestones.md` (rule 3, rule 22 `:48`, interface rows, status table, AC 35 `:462`, AC 36), ADR-0007 D6 `:241` (`abort_code` `StringName` → `int AbortCode`), and `systems-index.md` row 16 + counts. It closed the cross-document contradiction the records re-review found: `status` vs `AbortCode`.
+
+**The four-way mapping — correct, all four names exact.** ADR-0007 Key Interfaces `enum AbortCode` (`:332`–`:338`) is `NONE, RECORDS_INCONSISTENT, RECORDS_OVERFLOW, RECORDS_DATA_NOT_READY, MILESTONE_CATALOGUE_INVALID, RUN_ID_REUSED, INCONSISTENT_TRANSACTION_STATE, ORCHESTRATOR_BUSY, APPLY_REENTRANT`; `var abort_code: int` (`:354`); D6 (`:241`) states `int` (`AbortCode`; `NONE = 0`). AC 12 `:570` maps `INCONSISTENT_RESULT → RECORDS_INCONSISTENT`, `OVERFLOW → RECORDS_OVERFLOW`, `DATA_NOT_READY → RECORDS_DATA_NOT_READY`, `MILESTONE_CATALOGUE_INVALID → MILESTONE_CATALOGUE_INVALID`, and says `code` is not `status` — every member is a real enum member, `NONE = 0` is consistent with the snapshot field being an `int`, and the claim that the two enums differ in name (only `MILESTONE_CATALOGUE_INVALID` shared) is exactly right.
+
+**Cross-document agreement.** `records-and-milestones.md` rule 22 `:48`, the failure-events row `:143` and AC 35 `:462` all say the same thing: `code` is the transaction's `AbortCode`, not `RecordsApplyResult.status`; AC 35 adds the same asymmetry (「成员带 `RECORDS_` 前缀，仅 `MILESTONE_CATALOGUE_INVALID` 同名」). Records never restates the per-status mapping, so AC 12 `:570` is the only place it lives and nothing contradicts it. Both GDDs agree that `UIRoot` / 界面流程 emits the event exactly once.
+
+**Internal consistency.** Rule 9 `:61` (one receipt per `run_id`, `settlement_started` once before any animation) is untouched; rule 10 still carries 「同一 `run_id` 的重复 `RunResult` 不重复入账」 and AC 11 `:569` (same `R` again changes no call count) still holds; the four-fatal path keeps the 「结算数据异常，未入账、未记录」 copy at `:63`, `:385` and AC 12, and no new record seal; `WALLET_OVERFLOW` / write-failure are still non-aborts (`:63` steps ②–③).
+
+**`settlement_aborted(run_id, code)` sweep.** `:63`, `:93`, `:162`, `:170`, `:385`, `:436`, `:443`, `:456`, `:477`, `:533`, `:570` — every mention uses `(run_id, code)` or the bare name; no surviving `(run_id, status)` or two-argument mismatch.
+
+**No collateral regression.** AC list runs 1–48, unique and sequential (48 `GIVEN` lines, gap/duplicate check clean), AC 48 `:624` intact. Fee / teaching-price chain unchanged and coherent: `:57` → `:67` → `:500` → `:501` → `:623` → `:624`. Header `:3` `In Review` matches `systems-index.md` row 16 (`:73`); the index was not edited. Completeness: 6/6 sections required at `standard` present (Player Fantasy, Tuning Knobs absent — advisory); all 11 named dependency GDDs exist.
+
+**New findings**
+
+Blocking:
+- [BLOCKING] Rule 10 (`:63`) — 「其余三种不套用「结算数据异常」文案」 contradicts ADR-0007 D5's failure matrix (`:221`), which gives `ORCHESTRATOR_BUSY` (MetaUpgrades `BUSY`) exactly that copy 「结算数据异常，未入账、未记录」 — and that row does discard every sub-write, so the copy is apt there. Two implementers following the two documents render different player-facing text for the same abort. Fix one side: drop `BUSY` from the "not this copy" list, or change the ADR cell. D6 (`:241`) assigns player copy to `ui-flow`, so ui-flow may be the intended authority — but then ADR `:221` is the stale document and must be updated in the same pass; as committed the two disagree.
+- [BLOCKING] Rule 10 (`:63`) — 「同一 `run_id` 重入」 mislabels the trigger. D5 (`:220`) is 事务对象重入 (`_applying == true`) → `APPLY_REENTRANT`, which is not keyed on `run_id` identity; same-`run_id` re-delivery is the separate idempotency path (`:207`–`:209`) returning a cached snapshot, and `:225` says 「同一 `run_id` 的重复投递不重发任何信号」. Read literally, the sentence orders `settlement_aborted` on a duplicate delivery, contradicting rule 9 (`:61`), AC 11 (`:569`) and records AC 35's 「唯一」 signal claim. Fix the label (事务重入 / `APPLY_REENTRANT`); the rest of the paragraph can stand.
+
+Recommended:
+- [RECOMMENDED] Rule 10 (`:63`) enumerates three of the four extra abort codes: `INCONSISTENT_TRANSACTION_STATE` (D5 `:210`, an `ABORTED` outcome) is missing. ADR `:225` omits it too — the ADR's own signal bullet and its matrix disagree — so the prior round's recommendation is only half applied. Either add the code to both enumerations or state explicitly that this abort produces no receipt.
+- [RECOMMENDED] Bare `BUSY` (`:63`) is ambiguous inside this file: rule 22 (`:87`) already uses `BUSY` for the purchase path (copy 「正在处理上一笔」), which is not a settlement abort at all. Name the transaction-level code `ORCHESTRATOR_BUSY`.
+- [RECOMMENDED] 「收据内容与叫号行为按各自路径处理」 (`:63`) is a hand-wave, and `叫号` occurs nowhere else in the repo. For `RUN_ID_REUSED` D5 (`:209`) says 「不产生第二张收据」, so there is no receipt whose content could differ; say that, and give the per-code copy for the remaining paths, so the sentence becomes testable.
+
+Verdict: NEEDS REVISION
+
+Reviewed-Content-Hash: design/gdd/ui-flow.md 6877268e1b9467a39c460f612d26f041799e3afe
+Reviewed-Content-Hash: design/gdd/records-and-milestones.md 42ead9feed8a3bc1b45225d3f584c77d66120ca8
+Reviewed-Content-Hash: docs/architecture/adr-0007-run-state-settlement-transaction.md 27029b18c6265825a3ffb4def6849166fb5736aa
+Reviewed-Content-Hash: .claude/skills/design-review/SKILL.md a63d8fba9b7142eeb43791f061e2e1533c429b43

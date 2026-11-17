@@ -1,6 +1,6 @@
 # 首局引导（First-Run Onboarding）
 
-> **Status**: In Review
+> **Status**: Approved (2026-11-06)
 > **Author**: user + Claude（autonomous 模式；systems-designer 与 qa-lead 按 Lean 模式仅复核 Formulas 与 Acceptance Criteria）
 > **Last Updated**: 2026-11-06
 > **Last Verified**: 2026-11-03
